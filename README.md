@@ -19,8 +19,8 @@ need any other addon: it is built on the default Forever interface and nothing e
 
 > **Status.** This edition was written against the source of the Forever user interface (1.60.1) and
 > checked offline: static checks against that source and unit tests on a model of the client (see
-> [Verification](#verification)). **It has not been run in the game yet.** The stat weights are
-> estimates (see [Known limits](#known-limits)). If something looks wrong, `/eg status` and
+> [Verification](#verification)). **It has only been tried in the game briefly so far** (the group hints were
+> reported to work). The stat weights are estimates (see [Known limits](#known-limits)). If something looks wrong, `/eg status` and
 > `/eg parse` show what the addon sees.
 
 ---
@@ -35,11 +35,13 @@ need any other addon: it is built on the default Forever interface and nothing e
 - [Slots, weapons, rings](#slots-weapons-rings)
 - [Settings](#settings)
 - [Group hints](#group-hints)
+- [Marker look](#marker-look)
 - [Baganator and EllesmereUI](#baganator-and-ellesmereui)
 - [Troubleshooting](#troubleshooting)
 - [Verification](#verification)
 - [Known limits](#known-limits)
 - [The 3.3.5a edition](#the-335a-edition)
+- [Changes in 4.3.0](#changes-in-430)
 - [Changes in 4.2.0](#changes-in-420)
 - [Changes in 4.1.0](#changes-in-410)
 - [Changes in 4.0.0](#changes-in-400)
@@ -55,7 +57,7 @@ Restart the game or `/reload`. Saved settings are `EasyGearDB` (account) and `Ea
 From GitHub: *Code > Download ZIP*, unpack it, and copy the inner folder `EasyGear` - not the folder of the
 ZIP itself (`EasyGear-Forever-main`), which also holds the tests and tools.
 
-At login the chat shows `EasyGear 4.2.0 loaded.`
+At login the chat shows `EasyGear 4.3.0 loaded.`
 
 ## What you see
 
@@ -73,6 +75,9 @@ Items the client marks as unusable for you (wrong armor type, class) never get a
 
 A **violet star** in the same place means: no upgrade for you, but better for somebody in your group than what
 they wear - see [Group hints](#group-hints).
+
+This page describes the markers as they look when you leave them alone. **Shape and colour of each marker are your
+choice** - see [Marker look](#marker-look).
 
 **Comparison window** (`/eg`, `/eggui`, or the addon-compartment entry): drag an item onto the
 left slot, shift-click an item while the window is open, or type `/eg <item link>`. It shows the
@@ -92,6 +97,7 @@ on the right, both applied to the gear you are wearing. See [Profiles](#profiles
 | `/eg <item link or item ID>` | report in chat and in the window |
 | `/eg upgrades` | list every upgrade in your bags (and the open bank), best first |
 | `/eg group [on\|off\|scan\|raid\|inspect]` | the group: who was read and what is known; switch the hints, read again, include the raid, let the addon inspect |
+| `/eg marker [<kind> <shape> [RRGGBB]]` | shape and colour of the markers: list them, change one kind, or reset (kinds: `upgrade`, `level`, `group`, `pick`, `sell`) |
 | `/eg profile list` / `/eg profile <id>` / `/eg profile auto` | list, choose, or detect automatically |
 | `/eg weight <stat> <value>` | set a weight in your active *own* profile (`/eg weight CRIT 0.8`) |
 | `/eg autolevel [on\|off]` | below the maximum level use the Leveling profile of your class |
@@ -165,7 +171,8 @@ Stats the addon does not know can be weighted in a custom profile by their raw n
 ## Settings
 
 *Options > AddOns > EasyGear*: marker groups (bags/bank, vendors/loot/rolls/trade/mail, quest rewards,
-character window), group hints (the star, inspecting members, raid members), tooltip parts, enchants, Leveling profile, item level weight and scaling, minimum
+character window), group hints (the star, inspecting members, raid members), the look of the markers (shape and colour),
+tooltip parts, enchants, Leveling profile, item level weight and scaling, minimum
 gain, the profile choice and a reset button. Everything takes effect immediately - also when you change
 a value by chat command while the page is open.
 The addon-compartment entry on the minimap: left click opens the comparison window, right click the settings.
@@ -212,13 +219,41 @@ If the item is an upgrade for you as well, you get the green arrow, and the tool
 * `/eg group` lists the members, their profile (from talents or class default) and when they were read; `/eg group scan`
   reads everybody again.
 
+## Marker look
+
+*Options > AddOns > EasyGear > Marker look* lets you choose **shape and colour** of every marker. There are five kinds:
+
+| Kind (word for `/eg marker`) | Shows on | Original look |
+|---|---|---|
+| Upgrade for you (`upgrade`) | gear that beats what you wear | green arrow |
+| Upgrade, level too low (`level`) | would be an upgrade, but your level is not high enough yet | yellow arrow |
+| Better for the group (`group`) | no upgrade for you, but for a group member | violet star |
+| Best quest reward, upgrade (`pick`) | the largest upgrade among several quest rewards | green check mark |
+| Best quest reward, to sell (`sell`) | no upgrade among them: the highest vendor price | green check mark |
+
+* **Shape:** arrow, star, check mark, coin, circle, diamond, triangle, moon, square, cross, skull. The list shows each
+  shape with its picture.
+* **Colour:** the colour field of the interface (colour wheel and hex box). Any colour other than the original is put on
+  the grey picture of the shape, so every shape can take every colour; dark parts of a picture stay dark, and very
+  dark colours give dark marks.
+* The default of every kind is the original look, exactly as before - and choosing the original colour of a kind with
+  its original shape brings the original look back.
+* The choice holds wherever the markers show - bags, bank, vendors, loot, rolls, trade, mail, quest rewards, the
+  character window - and in the Baganator and EllesmereUI bags. A change shows up right away (while you drag in the
+  colour wheel, as soon as you pause).
+* *Reset marker look* puts every kind back (so does `/eg reset`, together with all other settings).
+* The same by chat: `/eg marker` lists kinds, shapes and what is chosen; `/eg marker group diamond ff8800` chooses a
+  shape and a colour (six hex digits `RRGGBB`; either one alone is enough, in any order); `/eg marker group reset` and
+  `/eg marker reset` put one kind or all of them back.
+* A value that does not exist (a hand-edited saved variable, a shape from another version) counts as the original.
+
 ## Baganator and EllesmereUI
 
 Neither is needed. When they are installed, the arrow shows up in their windows too; `/eg status` lists what
 EasyGear found.
 
 * **Baganator** (bags, bank, warband bank, other characters) draws its icons through *Icon Corners* that other
-  addons can fill. EasyGear registers one, **EasyGear upgrade arrow**, by default in the **top right** corner
+  addons can fill. EasyGear registers one, **EasyGear marker**, by default in the **top right** corner
   (Baganator's own layout puts the junk coin and the item level at the top left). Green means upgrade, yellow
   means upgrade as soon as your level reaches. Move or remove it under *Icon Corners* in Baganator's settings.
   EasyGear also registers as an upgrade source (*Upgrade detection*), so that Baganator's searches and categories
@@ -226,7 +261,7 @@ EasyGear found.
   (`/eg icons`) switches both off. Baganator needs its companion addon **Syndicator** to run at all; without it
   EasyGear registers nothing and `/eg status` says so.
   Baganator puts a new corner widget into the layout of the profile that is active at login only. In another Baganator
-  profile, pick **EasyGear upgrade arrow** yourself under *Icon Corners*.
+  profile, pick **EasyGear marker** yourself under *Icon Corners*.
 * **EllesmereUI**: its Bags module builds its own item buttons, which the hooks on the interface's functions do not
   see. It offers an overlay interface for other addons (`EUI_Bags.RegisterItemOverlayIcon`) that runs for every slot of
   the bags, the reagent bag and the bank, in the grid and in the list view, empty slots included. EasyGear paints its
@@ -262,8 +297,8 @@ and the exact text of any Lua error (`/console scriptErrors 1` shows them). For 
 Run from the root of this repository:
 
 ```
-lua5.1 tests/run.lua                 # unit tests on a model of the client (Lua 5.1 only), ~350 checks
-python3 tests/mutate.py              # mutation check: breaks the addon in ~350 small ways, the tests must notice
+lua5.1 tests/run.lua                 # unit tests on a model of the client (Lua 5.1 only), ~380 checks
+python3 tests/mutate.py              # mutation check: breaks the addon in ~420 small ways, the tests must notice
 tools/check.sh <Interface/AddOns of the Forever UI source>
                                      # luacheck against a std built from the UI source + checks that every
                                      # method, event, template, font, atlas and global the addon names exists
@@ -281,7 +316,7 @@ What this proves and what it does not:
 
 ## Known limits
 
-* Not run in the real game yet (see Status).
+* Tried in the real game only briefly so far (see Status).
 * **Weights are estimates.** They follow the common stat priorities of the classic ratings systems and are
   normalised to the main attribute of each profile. Forever's own itemisation and balance may differ;
   tune the weights in a custom profile.
@@ -301,6 +336,10 @@ What this proves and what it does not:
   member is not known - without them the class default decides. They need inspecting, so members out of range or
   who never came close are not rated.
 * Heirlooms, gem or enchant recommendations and automatic equipping do not exist by design.
+* Marker look: the shape list in the options shows every shape in its own colours (the marker itself takes the colour
+  you chose), and the colour is laid on the grey picture of the shape - for shapes with dark parts the result is
+  darker than, and only close to, the colour you picked. The tooltip lines (the violet heading of the group hint, the
+  green line of the quest pick) keep their colours.
 * Texts: English and German are complete; other languages are partly translated (missing texts show in English).
 * Baganator and EllesmereUI are connected through their public interfaces (corner widgets and upgrade source; item
   overlay interface of the Bags module), tested against models of them. If an arrow does not show there, `/eg status`
@@ -312,6 +351,16 @@ What this proves and what it does not:
 The addon for the old Wrath client (interface 30300, with ElvUI/Bagnon/Immersion support and the GM
 heirloom tools) lives in its own repository, [nexartgroup/EasyGear](https://github.com/nexartgroup/EasyGear).
 This edition is a new codebase for the Forever client, not an update of that one.
+
+## Changes in 4.3.0
+
+* **Marker look:** shape and colour of every marker are chosen in the options (*Marker look*) or by `/eg marker`:
+  upgrade for you, upgrade with a level that is too low, better for the group, and the best quest reward - split into
+  the one chosen as an upgrade and the one chosen **to sell**. Eleven shapes, any colour from the interface's colour
+  field. The defaults are the original look, so nothing changes until you choose something.
+* The look holds in bags, bank, vendors, loot, rolls, trade, mail, quest rewards, the character window, and in the
+  Baganator and EllesmereUI bags; a change redraws open windows at once.
+* New command `/eg marker`, new button *Reset marker look*. The *Group hints* option no longer names the star.
 
 ## Changes in 4.2.0
 
@@ -369,7 +418,8 @@ braucht kein weiteres Addon: es baut allein auf der Standard-Oberfläche von For
 
 > **Stand.** Diese Ausgabe wurde gegen den Quelltext der Forever-Oberfläche (1.60.1) geschrieben und
 > offline geprüft: statische Prüfungen gegen diesen Quelltext und Tests auf einem Modell des Clients
-> (siehe [Prüfung](#prüfung)). **Im Spiel wurde sie noch nicht ausgeführt.** Die Gewichte sind
+> (siehe [Prüfung](#prüfung)). **Im Spiel wurde sie bisher nur kurz ausprobiert** (die Gruppenhinweise liefen
+> laut Rückmeldung). Die Gewichte sind
 > Schätzwerte (siehe [Bekannte Grenzen](#bekannte-grenzen)). Wirkt etwas falsch, zeigen `/eg status`
 > und `/eg parse`, was das Addon sieht.
 
@@ -399,6 +449,9 @@ als unbrauchbar für dich kennzeichnet (falsche Rüstungsart, Klasse), bekommen 
 Ein **violetter Stern** an derselben Stelle heißt: keine Verbesserung für dich, aber für jemanden in deiner Gruppe besser
 als das, was er trägt - siehe [Gruppenhinweise](#gruppenhinweise).
 
+Hier steht, wie die Markierungen aussehen, solange du nichts änderst. **Form und Farbe jeder Markierung wählst du selbst**
+- siehe [Aussehen der Markierungen](#aussehen-der-markierungen).
+
 **Vergleichsfenster** (`/eg`, `/eggui` oder der Eintrag im Addon-Fach): ein Item auf das linke Feld ziehen,
 bei offenem Fenster mit Umschalt anklicken oder `/eg <Itemlink>` eingeben. Es zeigt die volle Rechnung beider
 Items (Attribut, Wert, Gewicht, Punkte) und das Urteil. Ringe, Schmuck und Einhandwaffen haben je einen Reiter
@@ -412,7 +465,7 @@ Ausrüstung angewandt, die du gerade trägst.
 `/eg` oder `/easygear`; `/eggui` öffnet das Fenster, `/egprofile` das Profilfenster. Die Befehle sind oben in
 der englischen Tabelle aufgeführt und in jeder Sprache gleich; `/eg help` erklärt sie in deiner Sprache.
 Wichtig sind `/eg upgrades` (alle Verbesserungen in den Taschen), `/eg group` (die Gruppe: wer gelesen ist, was für wen besser wäre), `/eg profile ...` (Profil wählen),
-`/eg weight <Wert> <Gewicht>` (Gewicht im eigenen Profil), `/eg status` (Profil, erkannte Talentpunkte,
+`/eg marker` (Form und Farbe der Markierungen), `/eg weight <Wert> <Gewicht>` (Gewicht im eigenen Profil), `/eg status` (Profil, erkannte Talentpunkte,
 Zustand jeder Oberflächen-Anbindung), `/eg parse <Itemlink>` (was aus einem Item gelesen wurde) und
 `/eg unknown` (Werte, die das Addon nicht kennt).
 
@@ -464,7 +517,7 @@ Einzigartige Items: das zweite Exemplar ersetzt das erste. Hemd und Wappenrock w
 
 ## Einstellungen
 
-*Optionen > AddOns > EasyGear*: Markierungsgruppen, Gruppenhinweise (Stern, Mitglieder untersuchen, Schlachtzug), Tooltip-Teile, Verzauberungen, Leveln-Profil, Stufengewicht
+*Optionen > AddOns > EasyGear*: Markierungsgruppen, Gruppenhinweise (Stern, Mitglieder untersuchen, Schlachtzug), Aussehen der Markierungen (Form und Farbe), Tooltip-Teile, Verzauberungen, Leveln-Profil, Stufengewicht
 und -skalierung, Mindestzugewinn, Profilwahl und ein Zurücksetzen-Knopf. Alles wirkt sofort - auch wenn du einen
 Wert per Chatbefehl änderst, während die Seite offen ist.
 Der Eintrag im Addon-Fach der Minimap: Linksklick Vergleichsfenster, Rechtsklick Einstellungen.
@@ -512,13 +565,42 @@ Ist das Item auch für dich besser, bekommst du den grünen Pfeil; der Tooltip n
 * `/eg group` listet die Mitglieder, ihr Profil (aus Talenten oder Klassenstandard) und wann sie gelesen wurden;
   `/eg group scan` liest alle neu.
 
+## Aussehen der Markierungen
+
+*Optionen > AddOns > EasyGear > Aussehen der Markierungen* lässt dich **Form und Farbe** jeder Markierung wählen. Es gibt
+fünf Arten:
+
+| Art (Wort für `/eg marker`) | Erscheint an | Original |
+|---|---|---|
+| Verbesserung für dich (`upgrade`) | Ausrüstung, die besser ist als die getragene | grüner Pfeil |
+| Verbesserung, Stufe noch zu niedrig (`level`) | wäre eine Verbesserung, aber deine Stufe reicht noch nicht | gelber Pfeil |
+| Besser für die Gruppe (`group`) | keine Verbesserung für dich, aber für ein Gruppenmitglied | violetter Stern |
+| Beste Questbelohnung, Verbesserung (`pick`) | die größte Verbesserung unter mehreren Questbelohnungen | grüner Haken |
+| Beste Questbelohnung, zum Verkaufen (`sell`) | keine Verbesserung darunter: der höchste Händlerpreis | grüner Haken |
+
+* **Form:** Pfeil, Stern, Haken, Münze, Kreis, Raute, Dreieck, Mond, Quadrat, Kreuz, Totenkopf. Die Liste zeigt jede Form
+  mit ihrem Bild.
+* **Farbe:** das Farbfeld der Oberfläche (Farbkreis und Hex-Feld). Jede Farbe außer der ursprünglichen wird auf das graue
+  Bild der Form gelegt, so kann jede Form jede Farbe annehmen; dunkle Teile eines Bildes bleiben dunkel, und sehr dunkle
+  Farben ergeben dunkle Markierungen.
+* Standard jeder Art ist das ursprüngliche Aussehen, genau wie zuvor - und wer die ursprüngliche Farbe einer Art mit ihrer
+  ursprünglichen Form wählt, hat das Original zurück.
+* Die Wahl gilt überall, wo die Markierungen erscheinen - Taschen, Bank, Händler, Beute, Würfeln, Handel, Post,
+  Questbelohnungen, Charakterfenster - und in den Taschen von Baganator und EllesmereUI. Eine Änderung ist sofort zu sehen
+  (beim Ziehen im Farbkreis, sobald du kurz innehältst).
+* *Aussehen zurücksetzen* stellt alle Arten zurück (`/eg reset` auch, zusammen mit allen anderen Einstellungen).
+* Dasselbe im Chat: `/eg marker` zeigt Arten, Formen und die Wahl; `/eg marker group diamond ff8800` wählt Form und Farbe
+  (sechs Hexziffern `RRGGBB`; eines von beiden genügt, in beliebiger Reihenfolge); `/eg marker group reset` und `/eg marker reset` stellen
+  eine Art oder alle zurück.
+* Ein Wert, den es nicht gibt (von Hand geänderte Einstellungsdatei, eine Form aus einer anderen Fassung), gilt als Original.
+
 ## Baganator und EllesmereUI
 
 Beide werden nicht gebraucht. Sind sie installiert, erscheint der Pfeil auch in ihren Fenstern; `/eg status` listet, was
 EasyGear gefunden hat.
 
 * **Baganator** (Taschen, Bank, Kriegsmeute-Bank, andere Charaktere) zeichnet seine Symbole über *Icon-Ecken*, die andere
-  Addons füllen können. EasyGear meldet eine an, den **EasyGear-Verbesserungspfeil**, voreingestellt in der Ecke **oben
+  Addons füllen können. EasyGear meldet eine an, den **EasyGear-Markierung**, voreingestellt in der Ecke **oben
   rechts** (Baganator legt oben links Müllsymbol und Gegenstandsstufe ab). Grün heißt Verbesserung, gelb heißt: eine
   Verbesserung, sobald deine Stufe reicht. In Baganators Einstellungen unter *Icon-Ecken* lässt er sich verschieben oder
   entfernen. Außerdem meldet sich EasyGear als Quelle für die *Erkennung von Upgrades* an, damit Baganators Suche und
@@ -526,7 +608,7 @@ EasyGear gefunden hat.
   für Taschenmarkierungen (`/eg icons`) schaltet beides ab. Baganator läuft nur mit seinem Begleiter-Addon **Syndicator**;
   fehlt der, meldet EasyGear nichts an und sagt es in `/eg status`.
   Ein neues Eckenelement fügt Baganator nur in das Profil ein, das beim Anmelden aktiv ist. In einem anderen
-  Baganator-Profil wählst du den **EasyGear-Verbesserungspfeil** selbst unter *Icon-Ecken*.
+  Baganator-Profil wählst du den **EasyGear-Markierung** selbst unter *Icon-Ecken*.
 * **EllesmereUI**: sein Taschenmodul baut eigene Gegenstandsknöpfe, die die Haken auf die Funktionen der Oberfläche nicht
   sehen. Es bietet anderen Addons eine Overlay-Schnittstelle (`EUI_Bags.RegisterItemOverlayIcon`), die für jeden Platz der
   Taschen, der Reagenzientasche und der Bank läuft, in der Gitter- wie in der Listenansicht, auch für leere Plätze. EasyGear
@@ -565,7 +647,7 @@ im Spiel**.
 
 ## Bekannte Grenzen
 
-* Im Spiel noch nicht ausgeführt.
+* Im Spiel bisher nur kurz ausprobiert.
 * **Die Gewichte sind Schätzwerte** nach den üblichen Prioritäten klassischer Wertungssysteme. Itemisierung und
   Balance von Forever können abweichen; im eigenen Profil nachstellen.
 * Die drei Talentbäume werden in der Reihenfolge angenommen, in der der Client sie zeigt. Wählt die Erkennung ein
@@ -579,6 +661,10 @@ im Spiel**.
   Stufenaufstieg oder `/reload`.
 * Das Auktionshaus wird nicht markiert. Heirlooms, Edelstein- oder Verzauberungsempfehlungen und automatisches
   Anlegen gibt es absichtlich nicht.
+* Aussehen der Markierungen: die Formliste in den Optionen zeigt jede Form in ihren eigenen Farben (die Markierung selbst
+  nimmt die gewählte Farbe), und die Farbe wird auf das graue Bild der Form gelegt - bei Formen mit dunklen Teilen ist
+  das Ergebnis dunkler als die gewählte Farbe und ihr nur nahe. Die Tooltip-Zeilen (die violette Überschrift der
+  Gruppenhinweise, die grüne Zeile der Questwahl) behalten ihre Farben.
 * Die Gruppenhinweise sind Schätzungen: es gelten die Profilgewichte, Rüstungs- und Waffenarten folgen den klassischen
   Regeln in `Classes.lua` (dort ändern, wenn Forever abweicht), und ob der Client die Talente eines untersuchten
   Mitglieds herausgibt, ist nicht bekannt - ohne sie entscheidet der Klassenstandard. Sie brauchen das Untersuchen:

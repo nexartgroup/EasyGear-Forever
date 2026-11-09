@@ -1,5 +1,5 @@
 --[[---------------------------------------------------------------------------
-    EasyGear 4.2.0 - Forever
+    EasyGear 4.3.0 - Forever
     Ausruestungsbewertung, Upgrade-Erkennung und Vergleich fuer WoW Forever
 
     Dieses Addon vergleicht und empfiehlt, mehr nicht: es verschickt keine
@@ -48,7 +48,7 @@ do
     if C_AddOns and C_AddOns.GetAddOnMetadata then
         meta = C_AddOns.GetAddOnMetadata(EG.name, "Version")
     end
-    EG.version = meta or "4.2.0"
+    EG.version = meta or "4.3.0"
 end
 
 -- WoW Forever meldet sich ueber WOW_PROJECT_ID == WOW_PROJECT_CAMELOT (Blizzard_ProjectConstants).
@@ -210,6 +210,18 @@ local DEFAULTS = {
     showGroupHints    = true,   -- violetter Stern und Tooltip-Zeilen: besser fuer ein Gruppenmitglied
     groupInspect      = true,   -- Gruppenmitglieder dafuer selbst untersuchen (sonst nur mitnehmen, was ohnehin gelesen wird)
     groupRaid         = false,  -- auch die Mitglieder eines Schlachtzugs (sonst nur die Gruppe)
+    -- Aussehen der Markierungen (Marks.lua): Form (Kennung aus Marks.SHAPES) und Farbe ("aarrggbb") je Art.
+    -- Die Standardwerte sind das urspruengliche Aussehen: gruener Pfeil, gelber Pfeil, violetter Stern, gruener Haken
+    markUpgradeShape  = "arrow",    -- Verbesserung fuer dich
+    markUpgradeColor  = "ff40ff40",
+    markLevelShape    = "arrow",    -- Verbesserung, sobald die Stufe reicht
+    markLevelColor    = "ffffd100",
+    markGroupShape    = "star",     -- besser fuer ein Gruppenmitglied
+    markGroupColor    = "ffbf66ff",
+    markPickShape     = "check",    -- beste Questbelohnung: groesste Verbesserung
+    markPickColor     = "ff40ff40",
+    markSellShape     = "check",    -- beste Questbelohnung: hoechster Verkaufspreis
+    markSellColor     = "ff40ff40",
     showTooltip       = true,
     showTooltipStats  = true,   -- Platz- und Vergleichszeile im Tooltip
     tooltipDiff       = true,   -- Attribut-Unterschiede im Tooltip

@@ -5,6 +5,7 @@
       /eg <Link|ID>       Bericht im Chat und im Fenster
       /eg upgrades        alle Verbesserungen in den Taschen
       /eg group           Gruppenmitglieder: was gelesen ist, was fuer sie besser waere
+      /eg marker          Form und Farbe der Markierungen
       /eggui              Vergleichsfenster
       /egprofile          Profilvergleich
       /eg help            alle Befehle
@@ -306,6 +307,26 @@ function Slash.PrintStatus()
     end
 end
 
+-- Eine Farbe ("ffrrggbb") als Text in dieser Farbe: "#RRGGBB"
+local function ColorText(color)
+    return "|c" .. color .. "#" .. supper(string.sub(color, 3)) .. C.reset
+end
+
+-- Aussehen der Markierungen: je Art Form und Farbe, dazu die Formen zur Auswahl
+function Slash.PrintMarkers()
+    local Marks = EG.Marks
+    EG:Raw(C.title .. "EasyGear - " .. L.OPT_SEC_LOOK .. C.reset)
+    for _, kind in ipairs(Marks.KINDS) do
+        local shapeId, color = Marks.Choice(kind.id)
+        EG:Raw(sformat("  %s%s%s  %s: %s  %s", C.value, slower(kind.id), C.reset, L[kind.name],
+            L[Marks.Shape(shapeId).name], ColorText(color)))
+    end
+    local ids = {}
+    for _, shape in ipairs(Marks.SHAPES) do ids[#ids + 1] = shape.id end
+    EG:Raw(L.MARKER_SHAPES .. ": " .. C.value .. tconcat(ids, ", ") .. C.reset)
+    EG:Raw(C.grey .. L.MARKER_USAGE .. C.reset)
+end
+
 -- Die Gruppe: Schalter und je Mitglied, was gelesen ist
 function Slash.PrintGroup()
     local Group = EG.Group
@@ -386,6 +407,7 @@ local HELP = {
     { "/eg <itemlink | itemID>",              "H_EG_LINK" },
     { "/eg upgrades",                         "H_UPGRADES" },
     { "/eg group [on|off|scan|raid|inspect]", "H_GROUP" },
+    { "/eg marker [<kind> <shape> [RRGGBB]]", "H_MARKER" },
     { "/eggui",                               "H_GUI" },
     { "/egprofile",                           "H_PROFILE_WIN" },
     { "/eg profile list",                     "H_PROFILE_LIST" },
@@ -466,6 +488,63 @@ local function GroupCommand(rest)
     else
         Slash.PrintGroup()
     end
+end
+
+--[[ /eg marker                          Form und Farbe aller Arten
+     /eg marker <Art>                    Form und Farbe dieser Art
+     /eg marker <Art> <Form> [RRGGBB]    Form (und Farbe) einer Art waehlen; Form und Farbe in beliebiger Reihenfolge
+     /eg marker <Art> <RRGGBB>           nur die Farbe waehlen
+     /eg marker <Art> reset              eine Art auf das urspruengliche Aussehen
+     /eg marker reset                    alle Arten
+     Arten: upgrade, level, group, pick, sell (die Kennungen in Marks.KINDS in Kleinbuchstaben). Eine Farbe sind genau sechs
+     Hexziffern, mit oder ohne "#": die achtstellige Form des Farbfelds (AARRGGBB) liesse sich mit RRGGBBAA verwechseln.  ]]
+local function ChatColor(token)
+    if smatch(token, "^#?%x%x%x%x%x%x$") then return EG.Marks.NormalizeColor(token) end
+    return nil
+end
+
+local function MarkerCommand(rest)
+    local Marks = EG.Marks
+    local words = {}
+    for word in string.gmatch(rest or "", "%S+") do words[#words + 1] = slower(word) end
+    local word = words[1] or ""
+    if word == "" or word == "list" then
+        Slash.PrintMarkers()
+        return
+    end
+    if word == "reset" or word == "default" then
+        Marks.ResetChoice()
+        EG:Print(L.MARKER_RESET)
+        return
+    end
+    local kind = Marks.Kind(supper(word))
+    if not kind then
+        EG:Print(C.bad .. sformat(L.MARKER_UNKNOWN_KIND, word) .. C.reset)
+        Slash.PrintMarkers()
+        return
+    end
+
+    if #words == 2 and (words[2] == "reset" or words[2] == "default") then
+        Marks.ResetChoice(kind.id)
+    else
+        -- jedes weitere Wort ist eine Form oder eine Farbe, je hoechstens eine; sonst aendert sich nichts
+        local shape, color
+        for i = 2, #words do
+            local token = words[i]
+            if not shape and Marks.Shape(token) then
+                shape = token
+            elseif not color and ChatColor(token) then
+                color = token
+            else
+                EG:Print(C.bad .. sformat(L.MARKER_UNKNOWN_SHAPE, token) .. C.reset)
+                Slash.PrintMarkers()
+                return
+            end
+        end
+        if shape or color then Marks.SetChoice(kind.id, shape, color) end
+    end
+    local shapeId, current = Marks.Choice(kind.id)
+    EG:Print(sformat(L.MARKER_SET, L[kind.name], L[Marks.Shape(shapeId).name], ColorText(current)))
 end
 
 local function ShowProfile(spec)
@@ -562,6 +641,8 @@ function Slash.Handle(msg)
         Slash.PrintUpgrades()
     elseif cmd == "group" or cmd == "gruppe" then
         GroupCommand(rest)
+    elseif cmd == "marker" or cmd == "marks" then
+        MarkerCommand(rest)
     elseif cmd == "profile" or cmd == "profiles" then
         ProfileCommand(rest)
     elseif cmd == "weight" then

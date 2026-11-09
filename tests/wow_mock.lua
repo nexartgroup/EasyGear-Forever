@@ -135,13 +135,21 @@ function Region:SetAllPoints() end
 function Region:SetAlpha(a) self.__alpha = a end
 function Region:SetScale(s) self.__scale = s end
 function Region:GetScale() return self.__scale end
-function Region:SetAtlas(a) self.__atlas = a end
+function Region:SetAtlas(a) self.__atlas = a self.__texture = nil self.__texcoord = { 0.25, 0.75, 0.25, 0.75 } end   -- an atlas shows a part of its file
 function Region:GetAtlas() return self.__atlas end
-function Region:SetTexture(t) self.__texture = t end
+function Region:SetTexture(t) self.__texture = t self.__atlas = nil end
 function Region:GetTexture() return self.__texture end
 function Region:SetColorTexture(r, g, b, a) self.__color = { r, g, b, a } end
-function Region:SetVertexColor(r, g, b, a) self.__vertex = { r, g, b, a or 1 } end
-function Region:SetDesaturated(v) self.__desaturated = v and true or false end
+function Region:SetVertexColor(r, g, b, a)
+    assert(type(r) == "number" and type(g) == "number" and type(b) == "number", "SetVertexColor: three numbers expected")
+    self.__vertex = { r, g, b, a or 1 }
+end
+function Region:SetTexCoord(l, r, t, b) self.__texcoord = { l, r, t, b } end
+function Region:GetTexCoord() local c = self.__texcoord or { 0, 1, 0, 1 } return c[1], c[2], c[3], c[4] end
+function Region:SetDesaturated(v)
+    assert(type(v) == "boolean", "SetDesaturated: a boolean expected, got " .. type(v))
+    self.__desaturated = v
+end
 function Region:IsDesaturated() return self.__desaturated end
 function Region:SetText(t) self.__text = t == nil and "" or t end
 function Region:GetText() return self.__text end
@@ -670,6 +678,7 @@ function Mock.new(opts)
     env.C_Texture = {
         GetAtlasInfo = function(name)
             if opts.noAtlas then return nil end
+            if opts.missingAtlas and opts.missingAtlas[name] then return nil end
             return { width = 16, height = 16 }
         end,
     }
@@ -773,6 +782,7 @@ function Mock.new(opts)
     Settings.CreateCheckbox = control("checkbox")
     Settings.CreateSlider = control("slider")
     Settings.CreateDropdown = control("dropdown")
+    Settings.CreateColorSwatch = control("swatch")
     Settings.RegisterAddOnCategory = function(cat) cat.registered = true end
     Settings.OpenToCategory = function(id) self.opened[#self.opened + 1] = id end
     Settings.NotifyUpdate = function(variable)
@@ -815,6 +825,7 @@ function Mock.new(opts)
     ------------------------------------------------------------ switches that remove parts of the client
     if opts.noTooltipProcessor then env.TooltipDataProcessor = nil end
     if opts.noSettings then env.Settings = nil end
+    if opts.noColorSwatch and env.Settings then env.Settings.CreateColorSwatch = nil end
     if opts.noDropdown then
         local create = env.CreateFrame
         env.CreateFrame = function(kind, name, parent, template)

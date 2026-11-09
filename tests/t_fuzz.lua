@@ -453,7 +453,7 @@ return function(T)
             end
 
             for step = 1, 25 do
-                local action = rnd(12)
+                local action = rnd(13)
                 local members = {}
                 for unit in pairs(G.members) do members[#members + 1] = unit end
                 table.sort(members)
@@ -494,10 +494,24 @@ return function(T)
                     W.setLevel(pick({ 30, 45, 60 }))
                 elseif action == 11 and unit then
                     G.inspectByHand(unit)
+                elseif action == 12 then
+                    -- the look of the marks, valid or not
+                    local kind = pick(W.EG.Marks.KINDS)
+                    local shapes = { "arrow", "star", "check", "coin", "circle", "diamond", "triangle", "moon", "square", "cross",
+                                     "skull", "bogus", "", 7, false }
+                    local colors = { "ff40ff40", "ff000000", "ffffffff", "ff123456", "80ff8800", "#abcdef", "nope", "", 12, true }
+                    if rnd(2) == 1 then W.EG:Set(kind.shapeKey, pick(shapes)) else W.EG:Set(kind.colorKey, pick(colors)) end
                 else
                     for _, key in ipairs(sample()) do W.tooltipFor(W.bagButton(0, 1), key) end
                 end
                 W.flush()
+                for _, kind in ipairs(W.EG.Marks.KINDS) do
+                    local tex = W.env.CreateFrame("Frame"):CreateTexture()
+                    W.EG.Marks.Paint(tex, kind.id)
+                    T.ok(tex:GetAtlas() or tex:GetTexture(), "a picture for every kind, whatever the settings say")
+                    T.eq(type(tex.__desaturated), "boolean")
+                    for i = 1, 3 do T.ok(tex.__vertex[i] >= 0 and tex.__vertex[i] <= 1, "a color between 0 and 1") end
+                end
 
                 T.eq(W.EG.lastError, nil, "no internal error, run " .. run .. ", step " .. step .. ": " .. tostring(W.EG.lastError and W.EG.lastError.err))
                 local Gp = W.EG.Group

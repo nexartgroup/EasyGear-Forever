@@ -106,10 +106,11 @@ local function Verdict(itemLink, details)
     return false
 end
 
--- Eckenelement: das Bild wird einmal je Knopf angelegt (Baganator haengt es um und verankert es in der Ecke)
+-- Eckenelement: das Bild wird einmal je Knopf angelegt (Baganator haengt es um und verankert es in der Ecke); Form und
+-- Farbe waehlt der Spieler in den Optionen (Marks.lua) und gelten hier wie auf den Knoepfen der Standard-Taschen
 local function InitWidget(itemButton)
     local tex = itemButton:CreateTexture(nil, "OVERLAY")
-    Marks.StyleArrow(tex, "UPGRADE", WIDGET_SIZE)
+    Marks.Style(tex, "UPGRADE", WIDGET_SIZE)
     tex:Hide()
     return tex
 end
@@ -119,7 +120,7 @@ local function UpdateWidget(widget, details)
     local state = Verdict(type(details) == "table" and details.itemLink or nil, details)
     if state == nil then return nil end
     if state == false then return false end
-    Marks.TintArrow(widget, state)
+    Marks.Paint(widget, state)
     return true
 end
 

@@ -3,7 +3,8 @@
 
     Die Seite benutzt die Einstellungs-API der Standard-Oberflaeche (senkrechtes Layout), sieht also aus
     wie die uebrigen Seiten und ist ueber die Suche der Optionen auffindbar. Aenderungen gelten sofort
-    und liegen in EasyGearDB. Das Addon-Fach an der Minimap (Eintrag "EasyGear") oeffnet mit Linksklick
+    und liegen in EasyGearDB. Form und Farbe der Markierungen (Abschnitt "Aussehen") waehlt man mit einer
+    Liste und dem Farbfeld der Oberflaeche. Das Addon-Fach an der Minimap (Eintrag "EasyGear") oeffnet mit Linksklick
     das Vergleichsfenster, mit Rechtsklick diese Seite.
 -----------------------------------------------------------------------------]]
 
@@ -13,6 +14,7 @@ EG.Options = Options
 
 local L = EG.L
 local Profiles = EG.Profiles
+local Marks = EG.Marks
 
 local ipairs, type, pcall, tostring = ipairs, type, pcall, tostring
 local sformat = string.format
@@ -38,6 +40,7 @@ Options.CHECKS = {
     { key = "showGroupHints",   name = "OPT_GROUP",         tip = "OPT_GROUP_TIP" },
     { key = "groupInspect",     name = "OPT_GROUP_INSPECT", tip = "OPT_GROUP_INSPECT_TIP" },
     { key = "groupRaid",        name = "OPT_GROUP_RAID",    tip = "OPT_GROUP_RAID_TIP" },
+    { look = true },                -- Aussehen der Markierungen: Form und Farbe je Art (AddLook)
     { section = "OPT_SEC_TOOLTIP" },
     { key = "showTooltip",      name = "OPT_TOOLTIP",      tip = "OPT_TOOLTIP_TIP" },
     { key = "showTooltipStats", name = "OPT_TOOLTIP_STATS", tip = "OPT_TOOLTIP_STATS_TIP" },
@@ -66,9 +69,11 @@ local function Track(variable, read)
 end
 
 -- Rueckruf einer Einstellung der Seite. Der Wert ist der der Seite; waehrend die Seite nur nachgezogen wird (siehe
--- unten) ist es kein neuer Wert, und die Auswertung darf nicht noch einmal anlaufen.
-local function ChangedFor(variable)
+-- unten) ist es kein neuer Wert, und die Auswertung darf nicht noch einmal anlaufen. Mit `read` gilt als Wert der
+-- Seite, was der Leser liefert: die Farbfelder reichen einen Text weiter, den die Einstellungen normiert ablegen.
+local function ChangedFor(variable, read)
     return EG:Guard("settings", function(_, value)
+        if read then value = read() end
         shown[variable] = value
         if notifying then return end
         EG:InvalidateAll()
@@ -134,6 +139,59 @@ local function AddButton(layout, name, text, onClick, tip)
     end
 end
 
+------------------------------------------------------------------------------
+-- Aussehen der Markierungen
+------------------------------------------------------------------------------
+
+--[[ Je Art von Markierung (Marks.KINDS) zwei Zeilen: die Form aus einer Liste und die Farbe im Farbfeld der Oberflaeche.
+     Beide laufen ueber Stellvertreter-Einstellungen: der Leser liefert immer einen gueltigen Wert (das Farbfeld bricht bei
+     einem ungueltigen Text ab), der Schreiber weist Ungueltiges ab. Das Neuzeichnen loest der Rueckruf der Zeile aus.  ]]
+local function AddShape(cat, kind)
+    local variable = "EasyGear_" .. kind.shapeKey
+    local function GetValue() return (Marks.Choice(kind.id)) end
+    local function SetValue(value) Marks.WriteChoice(kind.id, value, nil) end
+    local setting = Settings.RegisterProxySetting(cat, variable, Settings.VarType.String,
+        sformat(L.OPT_MARK_SHAPE, L[kind.name]), EG.DEFAULTS[kind.shapeKey], GetValue, SetValue)
+    Track(variable, GetValue)
+    setting:SetValueChangedCallback(ChangedFor(variable, GetValue))
+    local function GetOptions()
+        local container = Settings.CreateControlTextContainer()
+        for _, shape in ipairs(Marks.SHAPES) do
+            container:Add(shape.id, Marks.ShapeLabel(shape))
+        end
+        return container:GetData()
+    end
+    Settings.CreateDropdown(cat, setting, GetOptions, L[kind.tip])
+end
+
+local function AddColor(cat, kind)
+    local variable = "EasyGear_" .. kind.colorKey
+    local function GetValue()
+        local _, color = Marks.Choice(kind.id)
+        return color
+    end
+    local function SetValue(value) Marks.WriteChoice(kind.id, nil, value) end
+    local setting = Settings.RegisterProxySetting(cat, variable, Settings.VarType.String,
+        sformat(L.OPT_MARK_COLOR, L[kind.name]), EG.DEFAULTS[kind.colorKey], GetValue, SetValue)
+    Track(variable, GetValue)
+    setting:SetValueChangedCallback(ChangedFor(variable, GetValue))
+    Settings.CreateColorSwatch(cat, setting, L[kind.tip])
+end
+
+local function ResetLook()
+    Marks.ResetChoice()
+    EG:Print(L.MARKER_RESET)
+end
+
+local function AddLook(cat, layout)
+    Header(layout, "OPT_SEC_LOOK")
+    for _, kind in ipairs(Marks.KINDS) do
+        AddShape(cat, kind)
+        if Settings.CreateColorSwatch then AddColor(cat, kind) end      -- ohne Farbfeld bleibt der Chatbefehl /eg marker
+    end
+    AddButton(layout, L.OPT_MARK_RESET, L.OPT_MARK_RESET, ResetLook, L.OPT_MARK_RESET_TIP)
+end
+
 local function ConfirmReset()
     local function Do()
         EG:ResetDB()
@@ -159,6 +217,8 @@ function Options.Build()
     for _, def in ipairs(Options.CHECKS) do
         if def.section then
             Header(layout, def.section)
+        elseif def.look then
+            AddLook(cat, layout)
         else
             AddCheck(cat, def)
         end

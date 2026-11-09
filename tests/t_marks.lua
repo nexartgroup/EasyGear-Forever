@@ -425,4 +425,323 @@ return function(T)
         W.env.SetItemButtonQuality(b, 3, 7001)
         T.eq(arrow(b), true, "item ids from the quest log are used as they are")
     end)
+
+    ------------------------------------------------------------------ marker look: shape and color
+    local RAID = "Interface\\TargetingFrame\\UI-RaidTargetingIcon_"
+    -- what a fresh texture shows once the addon has painted it for this kind
+    local function paintOf(W, kind)
+        local tex = W.env.CreateFrame("Frame"):CreateTexture()
+        W.EG.Marks.Paint(tex, kind)
+        return tex
+    end
+    local function vertex(tex) local v = tex.__vertex return v[1], v[2], v[3] end
+
+    T.test("look: the defaults are the original look of every kind", function()
+        local W = world()
+        local expect = {
+            UPGRADE = { atlas = "bags-greenarrow",       desat = false, r = 1,    g = 1,    b = 1 },
+            LEVEL   = { atlas = "bags-greenarrow",       desat = true,  r = 1,    g = 0.82, b = 0 },
+            GROUP   = { atlas = "tradeskills-star",      desat = true,  r = 0.75, g = 0.40, b = 1 },
+            PICK    = { atlas = "common-icon-checkmark", desat = false, r = 0.25, g = 1,    b = 0.25 },
+            SELL    = { atlas = "common-icon-checkmark", desat = false, r = 0.25, g = 1,    b = 0.25 },
+        }
+        for kind, e in pairs(expect) do
+            local tex = paintOf(W, kind)
+            T.eq(tex:GetAtlas(), e.atlas, kind) T.eq(tex.__desaturated, e.desat, kind)
+            local r, g, b = vertex(tex)
+            T.near(r, e.r, 1e-9, kind) T.near(g, e.g, 1e-9, kind) T.near(b, e.b, 1e-9, kind)
+        end
+        T.eq(#W.EG.Marks.KINDS, 5) T.eq(#W.EG.Marks.SHAPES, 11)
+        local tex = paintOf(W, "no such kind")
+        T.eq(tex:GetAtlas(), "bags-greenarrow", "an unknown kind is painted like an upgrade")
+    end)
+
+    T.test("look: another shape changes the picture; the color stays the kind's own, drawn from the grey picture", function()
+        local W = world()
+        local b = W.bagButton(0, 1)
+        W.env.SetItemButtonQuality(b, 3, W.I.better)
+        local tex = b.EasyGearArrow
+        W.EG:Set("markUpgradeShape", "diamond") W.flush()
+        T.eq(arrow(b), true)
+        T.eq(tex:GetAtlas(), nil) T.eq(tex:GetTexture(), RAID .. "3")
+        T.eq(tex.__desaturated, true)
+        local r, g, bl = vertex(tex)
+        T.near(r, 0x40 / 255, 1e-9) T.near(g, 1, 1e-9) T.near(bl, 0x40 / 255, 1e-9)
+        local l, rr, t, bb = tex:GetTexCoord()
+        T.eq(l, 0) T.eq(rr, 1) T.eq(t, 0) T.eq(bb, 1, "a file picture shows all of its texture")
+        T.eq(tex:GetWidth(), 18) T.eq(tex:GetHeight(), 18)
+
+        W.EG:Set("markUpgradeShape", "coin") W.flush()
+        T.eq(tex:GetAtlas(), "bags-junkcoin") T.eq(tex:GetTexture(), nil)
+        W.EG:Set("markUpgradeShape", "arrow") W.flush()
+        T.eq(tex:GetAtlas(), "bags-greenarrow") T.eq(tex.__desaturated, false, "back to the original")
+        T.near((select(1, vertex(tex))), 1, 1e-9)
+        T.eq(W.EG.lastError, nil)
+    end)
+
+    T.test("look: another color tints the grey picture; the color of the original keeps the original look", function()
+        local W = world()
+        local b = W.bagButton(0, 1)
+        W.env.SetItemButtonQuality(b, 3, W.I.better)
+        local tex = b.EasyGearArrow
+        W.EG:Set("markUpgradeColor", "ff0000ff") W.flush()
+        T.eq(tex:GetAtlas(), "bags-greenarrow", "same shape") T.eq(tex.__desaturated, true)
+        local r, g, bl = vertex(tex)
+        T.near(r, 0) T.near(g, 0) T.near(bl, 1)
+        W.EG:Set("markUpgradeColor", "ffff8000") W.flush()
+        r, g, bl = vertex(tex)
+        T.near(r, 1) T.near(g, 128 / 255, 1e-9) T.near(bl, 0)
+        for _, same in ipairs({ "ff40ff40", "FF40FF40", "#40ff40", "40FF40", "0040ff40" }) do
+            W.EG:Set("markUpgradeColor", "ffff8000") W.flush()
+            W.EG:Set("markUpgradeColor", same) W.flush()
+            T.eq(tex.__desaturated, false, same .. " is the color of the original")
+            r, g, bl = vertex(tex)
+            T.eq(r, 1, same) T.eq(g, 1, same) T.eq(bl, 1, same)
+        end
+        T.eq(W.EG.lastError, nil)
+    end)
+
+    T.test("look: a color a hair away from the original counts as the original (the color field rounds)", function()
+        local W = world()
+        local b = W.bagButton(0, 1)
+        W.env.SetItemButtonQuality(b, 3, W.I.better)
+        local tex = b.EasyGearArrow
+        for _, near in ipairs({ "ff41ff3f", "ff3effff", "ff42ff3e", "ff40ff40", "ff40ff42", "ff3e3e3e" }) do
+            W.EG:Set("markUpgradeColor", "ff0000ff") W.flush()
+            W.EG:Set("markUpgradeColor", near) W.flush()
+            if near == "ff3e3e3e" then
+                T.eq(tex.__desaturated, true, near .. " is far from the original in green and blue")
+            elseif near == "ff3effff" then
+                T.eq(tex.__desaturated, true, near .. " is far from the original in the blue channel")
+            else
+                T.eq(tex.__desaturated, false, near .. " is within two steps in every channel")
+                T.eq(tex.__vertex[1], 1) T.eq(tex.__vertex[2], 1) T.eq(tex.__vertex[3], 1)
+            end
+        end
+        for _, far in ipairs({ "ff43ff40", "ff40fc40", "ff40ff3d", "ff3dff40", "ff40ff44" }) do
+            W.EG:Set("markUpgradeColor", far) W.flush()
+            T.eq(tex.__desaturated, true, far .. " is three steps away in one channel")
+        end
+        W.EG:Set("markUpgradeShape", "star") W.EG:Set("markUpgradeColor", "ff40ff40") W.flush()
+        T.eq(tex.__desaturated, true, "the original color of another shape is still a tinted shape")
+        W.EG:Set("markUpgradeShape", "arrow") W.EG:Set("markLevelColor", "ffffd002") W.flush()
+        local level = paintOf(W, "LEVEL")
+        T.near(level.__vertex[2], 0.82, 1e-9, "the level arrow: within two steps of its own original too")
+        T.eq(W.EG.lastError, nil)
+    end)
+
+    T.test("look: a level arrow follows its own look", function()
+        local W = world()
+        local b = W.bagButton(0, 2)
+        W.env.SetItemButtonQuality(b, 3, W.I.late)
+        W.EG:Set("markLevelShape", "square") W.EG:Set("markLevelColor", "ff800000") W.flush()
+        local tex = b.EasyGearArrow
+        T.eq(arrow(b), true) T.eq(tex:GetTexture(), RAID .. "6") T.eq(tex.__desaturated, true)
+        local r, g, bl = vertex(tex)
+        T.near(r, 128 / 255, 1e-9) T.near(g, 0) T.near(bl, 0)
+        W.env.SetItemButtonQuality(b, 3, W.I.better)
+        T.eq(tex:GetAtlas(), "bags-greenarrow", "the next item is an upgrade for now: the arrow of that kind")
+    end)
+
+    T.test("look: values that do not exist count as the default and raise nothing", function()
+        local W = world()
+        for _, bad in ipairs({ "bogus", "", "STAR", " star", 5, true, false, {}, 0 / 0 }) do
+            W.EG:Set("markGroupShape", bad)
+            local tex = paintOf(W, "GROUP")
+            T.eq(tex:GetAtlas(), "tradeskills-star", "shape " .. tostring(bad))
+        end
+        for _, bad in ipairs({ "zzz", "", "ff40ff4", "ff40ff40ff", "ff 40ff4", "gg0000", 5, true, false, {} }) do
+            W.EG:Set("markGroupColor", bad)
+            local tex = paintOf(W, "GROUP")
+            local r, g, b = vertex(tex)
+            T.eq(tex.__desaturated, true, "color " .. tostring(bad))
+            T.near(r, 0.75, 1e-9, "the original color, not its rounded hex value") T.near(g, 0.40, 1e-9) T.near(b, 1, 1e-9)
+        end
+        W.EG:Set("markGroupShape", nil) W.EG:Set("markGroupColor", nil)
+        T.eq(paintOf(W, "GROUP"):GetAtlas(), "tradeskills-star", "settings that are gone altogether")
+        T.eq(W.EG.lastError, nil)
+    end)
+
+    T.test("look: every kind has its own shape and color", function()
+        local W = world()
+        W.EG:Set("markGroupShape", "moon") W.EG:Set("markGroupColor", "ffff0000")
+        W.EG:Set("markSellShape", "coin")
+        local up, gr, pick, sell = paintOf(W, "UPGRADE"), paintOf(W, "GROUP"), paintOf(W, "PICK"), paintOf(W, "SELL")
+        T.eq(up:GetAtlas(), "bags-greenarrow") T.eq(up.__desaturated, false)
+        T.eq(gr:GetTexture(), RAID .. "5") T.near((select(1, vertex(gr))), 1) T.near((select(2, vertex(gr))), 0)
+        T.eq(pick:GetAtlas(), "common-icon-checkmark") T.eq(pick.__desaturated, false)
+        T.eq(sell:GetAtlas(), "bags-junkcoin") T.eq(sell.__desaturated, true)
+        local r, g, b = vertex(sell)
+        T.near(r, 0x40 / 255, 1e-9) T.near(g, 1) T.near(b, 0x40 / 255, 1e-9)
+    end)
+
+    T.test("look: without atlases every shape comes from its file; a single missing atlas only costs its own shape", function()
+        local W = world(nil, { noAtlas = true })
+        local FILES = {
+            arrow = "Interface\\Buttons\\UI-CheckBox-Check", star = RAID .. "1", check = "Interface\\Buttons\\UI-CheckBox-Check",
+            coin = "Interface\\MoneyFrame\\UI-GoldIcon", circle = RAID .. "2", diamond = RAID .. "3", triangle = RAID .. "4",
+            moon = RAID .. "5", square = RAID .. "6", cross = RAID .. "7", skull = RAID .. "8",
+        }
+        local count = 0
+        for _, shape in ipairs(W.EG.Marks.SHAPES) do
+            W.EG:Set("markUpgradeShape", shape.id)
+            local tex = paintOf(W, "UPGRADE")
+            T.eq(tex:GetAtlas(), nil, shape.id) T.eq(tex:GetTexture(), shape.file, shape.id)
+            T.eq(shape.file, FILES[shape.id], shape.id .. " has the file it should have")
+            count = count + 1
+        end
+        T.eq(count, 11)
+        local W2 = world(nil, { missingAtlas = { ["bags-junkcoin"] = true } })
+        W2.EG:Set("markUpgradeShape", "coin")
+        T.eq(paintOf(W2, "UPGRADE"):GetTexture(), "Interface\\MoneyFrame\\UI-GoldIcon")
+        W2.EG:Set("markUpgradeShape", "star")
+        T.eq(paintOf(W2, "UPGRADE"):GetAtlas(), "tradeskills-star")
+        W2.EG:Set("markUpgradeShape", "skull")
+        T.eq(paintOf(W2, "UPGRADE"):GetTexture(), RAID .. "8", "a shape that has only a file")
+    end)
+
+    T.test("look: the check mark follows the look of the upgrade pick and of the sell pick", function()
+        local W = world(function(w)
+            w.I.a = F.gear(w, 7050, "Reward A", "INVTYPE_CHEST", 36, { STR = 25 }, { armor = 400 })
+            w.I.b = F.gear(w, 7051, "Reward B", "INVTYPE_CHEST", 40, { STR = 30 }, { armor = 500 })
+        end)
+        W.EG:Set("markPickShape", "star") W.EG:Set("markPickColor", "ff3366ff")
+        W.EG:Set("markSellShape", "coin") W.EG:Set("markSellColor", "ffffd100")
+        local b = quest(W, { W.I.a, W.I.b })
+        local tex = b[2].EasyGearCheck
+        T.eq(check(b[2]), true)
+        T.eq(select(2, W.EG.Contexts.IsRecommended(b[2])), "UPGRADE")
+        T.eq(tex:GetAtlas(), "tradeskills-star") T.eq(tex.__desaturated, true)
+        local r, g, bl = vertex(tex)
+        T.near(r, 0x33 / 255, 1e-9) T.near(g, 0x66 / 255, 1e-9) T.near(bl, 1, 1e-9)
+        T.eq(tex:GetWidth(), 20) T.eq(tex:GetHeight(), 20, "the check keeps its size whatever its shape")
+
+        local V = world(function(w)
+            w.I.a = F.gear(w, 7052, "Junk A", "INVTYPE_CHEST", 5, { STR = 1 }, { sellPrice = 10 })
+            w.I.b = F.gear(w, 7053, "Junk B", "INVTYPE_CHEST", 5, { STR = 1 }, { sellPrice = 30 })
+        end)
+        V.EG:Set("markPickShape", "star") V.EG:Set("markSellShape", "coin") V.EG:Set("markSellColor", "ffffd100")
+        local vb = quest(V, { V.I.a, V.I.b })
+        T.eq(check(vb[2]), true) T.eq(select(2, V.EG.Contexts.IsRecommended(vb[2])), "VENDOR")
+        tex = vb[2].EasyGearCheck
+        T.eq(tex:GetAtlas(), "bags-junkcoin", "chosen for its price: the sell look")
+        r, g, bl = vertex(tex)
+        T.near(r, 1) T.near(g, 0xd1 / 255, 1e-9) T.near(bl, 0)
+        -- the other pick keeps the original when only the sell look was changed
+        local W2 = world(function(w)
+            w.I.a = F.gear(w, 7054, "Reward A", "INVTYPE_CHEST", 36, { STR = 25 }, { armor = 400 })
+            w.I.b = F.gear(w, 7055, "Reward B", "INVTYPE_CHEST", 40, { STR = 30 }, { armor = 500 })
+        end)
+        W2.EG:Set("markSellShape", "coin")
+        local b2 = quest(W2, { W2.I.a, W2.I.b })
+        T.eq(b2[2].EasyGearCheck:GetAtlas(), "common-icon-checkmark")
+        T.eq(b2[2].EasyGearCheck.__desaturated, false)
+    end)
+
+    T.test("look: a change in the settings redraws the visible buttons at once, hidden ones when they show again", function()
+        local W = world()
+        local shown, hidden = W.bagButton(0, 1), W.bagButton(0, 2)
+        W.env.SetItemButtonQuality(shown, 3, W.I.better)
+        W.env.SetItemButtonQuality(hidden, 3, W.I.better)
+        hidden:Hide()
+        W.EG:Set("markUpgradeColor", "ff00ffff") W.flush()
+        T.near((select(1, vertex(shown.EasyGearArrow))), 0)
+        T.near((select(1, vertex(hidden.EasyGearArrow))), 1, 1e-9, "hidden: not redrawn yet")
+        hidden:Show() W.env.SetItemButtonQuality(hidden, 3, W.I.better)
+        T.near((select(1, vertex(hidden.EasyGearArrow))), 0, 1e-9, "drawn with the new look when it is set again")
+    end)
+
+    T.test("look: WriteChoice and SetChoice accept valid values only, ResetChoice restores the original", function()
+        local W = world()
+        local M, db = W.EG.Marks, W.env.EasyGearDB
+        T.eq(M.WriteChoice("UPGRADE", "bogus"), false) T.eq(M.WriteChoice("NOPE", "star"), false)
+        T.eq(M.WriteChoice("UPGRADE", nil, "xyz"), false) T.eq(M.WriteChoice(nil, "star"), false)
+        T.eq(M.WriteChoice("UPGRADE", "star", "zzz"), false)
+        T.eq(db.markUpgradeShape, "arrow", "a half valid call writes nothing") T.eq(db.markUpgradeColor, "ff40ff40")
+        T.eq(M.WriteChoice("UPGRADE", "star", "#FF8800"), true)
+        T.eq(db.markUpgradeShape, "star") T.eq(db.markUpgradeColor, "ffff8800", "stored in the form the color field uses")
+        T.eq(M.WriteChoice("UPGRADE", "skull"), true) T.eq(db.markUpgradeColor, "ffff8800", "shape only: the color stays")
+        T.eq(M.WriteChoice("UPGRADE", nil, "00ff00"), true) T.eq(db.markUpgradeShape, "skull", "color only: the shape stays")
+        T.eq(M.WriteChoice("UPGRADE"), true, "nothing to change is fine")
+
+        local calls = 0
+        W.EG:Listen("INVALIDATED", function() calls = calls + 1 end)
+        T.eq(M.SetChoice("GROUP", "bogus"), false) T.eq(calls, 0, "refused: nothing to redraw")
+        T.eq(M.SetChoice("GROUP", "moon", "ff00ff"), true) T.eq(calls, 1, "one redraw for both values")
+
+        M.ResetChoice("UPGRADE")
+        T.eq(db.markUpgradeShape, "arrow") T.eq(db.markUpgradeColor, "ff40ff40") T.eq(db.markGroupShape, "moon", "the others stay")
+        M.ResetChoice()
+        T.eq(db.markGroupShape, "star") T.eq(db.markGroupColor, "ffbf66ff")
+        for _, kind in ipairs(M.KINDS) do
+            T.eq(db[kind.shapeKey], W.EG.DEFAULTS[kind.shapeKey], kind.id) T.eq(db[kind.colorKey], W.EG.DEFAULTS[kind.colorKey], kind.id)
+        end
+    end)
+
+    T.test("look: colors are read as AARRGGBB or RRGGBB, with or without a hash", function()
+        local W = world()
+        local M = W.EG.Marks
+        T.eq(M.NormalizeColor("ff8800"), "ffff8800") T.eq(M.NormalizeColor("#FF8800"), "ffff8800")
+        T.eq(M.NormalizeColor("80ff8800"), "ffff8800", "the opacity does not count") T.eq(M.NormalizeColor("#80FF8800"), "ffff8800")
+        T.eq(M.NormalizeColor("ffFF8800"), "ffff8800")
+        for _, bad in ipairs({ "", "ff88", "ff88001", "ff8800001", "gg8800", "ff 800", "##ff8800", "ff8800 ", " ff8800" }) do
+            T.eq(M.NormalizeColor(bad), nil, "'" .. bad .. "'")
+        end
+        T.eq(M.NormalizeColor(nil), nil) T.eq(M.NormalizeColor(123456), nil) T.eq(M.NormalizeColor({}), nil)
+        local r, g, b = M.ColorRGB("ff8800")
+        T.near(r, 1) T.near(g, 136 / 255, 1e-9) T.near(b, 0)
+        T.eq(M.ColorRGB("nope"), nil)
+    end)
+
+    T.test("look: the defaults in the settings are valid, complete and the original look", function()
+        local W = world()
+        local M, defaults = W.EG.Marks, W.EG.DEFAULTS
+        local seenShape, seenColor = {}, {}
+        for _, kind in ipairs(M.KINDS) do
+            T.ok(M.Shape(defaults[kind.shapeKey]), kind.id .. " default shape exists")
+            T.eq(M.NormalizeColor(defaults[kind.colorKey]), defaults[kind.colorKey], kind.id .. " default color is in normal form")
+            T.ok(not seenShape[kind.shapeKey] and not seenColor[kind.colorKey], "no key is used twice")
+            seenShape[kind.shapeKey], seenColor[kind.colorKey] = true, true
+            T.eq(M.Kind(kind.id), kind)
+            local shape, color = M.Choice(kind.id)
+            T.eq(shape, defaults[kind.shapeKey]) T.eq(color, defaults[kind.colorKey])
+        end
+        local ids = {}
+        for _, shape in ipairs(M.SHAPES) do
+            T.no(ids[shape.id], "shape " .. shape.id .. " is listed once") ids[shape.id] = true
+            T.eq(M.Shape(shape.id), shape)
+            T.ok(shape.file, shape.id .. " has a file for clients without the atlas")
+        end
+        T.eq(M.Kind("NOPE"), nil) T.eq(M.Shape("nope"), nil)
+    end)
+
+    T.test("look: the entries of the shape list show the picture and the name", function()
+        local W = world()
+        local M = W.EG.Marks
+        T.eq(M.ShapeLabel(M.Shape("arrow")), "|A:bags-greenarrow:16:16|a Arrow")
+        T.eq(M.ShapeLabel(M.Shape("circle")), "|T" .. RAID .. "2:16:16|t Circle")
+        T.eq(M.ShapeLabel(M.Shape("skull"), 24), "|T" .. RAID .. "8:24:24|t Skull")
+        local N = world(nil, { noAtlas = true })
+        T.eq(N.EG.Marks.ShapeLabel(N.EG.Marks.Shape("arrow")), "|TInterface\\Buttons\\UI-CheckBox-Check:16:16|t Arrow")
+    end)
+
+    T.test("look: every kind and shape has a name in English and German, every kind a tip", function()
+        local W = world()
+        local env = { EasyGearLocales = {} }
+        for _, code in ipairs({ "enUS", "deDE" }) do
+            local chunk = assert(loadfile(T.dir .. "/Locales/" .. code .. ".lua"))
+            setfenv(chunk, env) chunk()
+        end
+        for _, code in ipairs({ "enUS", "deDE" }) do
+            local tbl = env.EasyGearLocales[code]
+            for _, kind in ipairs(W.EG.Marks.KINDS) do
+                T.ok(tbl[kind.name] and tbl[kind.name] ~= "", code .. " " .. kind.name)
+                T.ok(tbl[kind.tip] and #tbl[kind.tip] > 20, code .. " " .. kind.tip)
+            end
+            for _, shape in ipairs(W.EG.Marks.SHAPES) do
+                T.ok(tbl[shape.name] and tbl[shape.name] ~= "", code .. " " .. shape.name)
+            end
+        end
+        T.eq(env.EasyGearLocales.deDE.SHAPE_CHECK, "Haken")
+    end)
 end

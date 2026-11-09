@@ -11,19 +11,20 @@ return function(T)
     end
     local function category(W) return W.state.settings[1] end
 
-    T.test("options: one category with checkboxes, sliders, a dropdown and buttons", function()
+    T.test("options: one category with checkboxes, sliders, dropdowns, color fields and buttons", function()
         local W = world()
         local cat = category(W)
         T.ok(cat, "category registered") T.eq(cat.name, "EasyGear") T.eq(cat.registered, true)
         local kinds = {}
         for _, c in ipairs(cat.controls) do kinds[c.kind] = (kinds[c.kind] or 0) + 1 end
-        T.eq(kinds.checkbox, 13) T.eq(kinds.slider, 2) T.eq(kinds.dropdown, 1)
+        T.eq(kinds.checkbox, 13) T.eq(kinds.slider, 2) T.eq(kinds.dropdown, 6, "the profile and a shape list for each of the 5 kinds")
+        T.eq(kinds.swatch, 5, "a color field for each kind")
         local headers, buttons = 0, 0
         for _, init in ipairs(cat.initializers) do
             if init.kind == "header" then headers = headers + 1 end
             if init.kind == "button" then buttons = buttons + 1 end
         end
-        T.eq(headers, 5) T.eq(buttons, 1, "just the reset button")
+        T.eq(headers, 6) T.eq(buttons, 2, "reset the marker look, reset all settings")
         T.eq(W.EG.hookStatus.settings.ok, true)
     end)
 
@@ -226,5 +227,148 @@ return function(T)
         W.slash("ilvl 0.9")
         W.slash("tooltip off")
         for var, st in pairs(W.state.settingByVariable) do T.eq(st.notified or 0, 0, var) end
+    end)
+
+    ------------------------------------------------------------------ marker look
+    local RAID = "Interface\\TargetingFrame\\UI-RaidTargetingIcon_"
+    local function control(W, key)
+        for _, c in ipairs(category(W).controls) do
+            if c.setting.variable == "EasyGear_" .. key then return c end
+        end
+    end
+
+    T.test("options: a section for the marker look sits after the group, a shape list and a color field for every kind", function()
+        local W = world()
+        local L, M = W.EG.L, W.EG.Marks
+        local headers = {}
+        for i, init in ipairs(category(W).initializers) do
+            if init.kind == "header" then headers[#headers + 1] = { name = init.name, at = i } end
+        end
+        local names = {}
+        for _, h in ipairs(headers) do names[#names + 1] = h.name end
+        T.eq(table.concat(names, "|"), "Markers|Group|Marker look|Tooltip|Scoring|Profile")
+
+        -- between the header of the look and the next one: shape, color, shape, color ... and the reset button
+        local run = {}
+        for i = headers[3].at + 1, headers[4].at - 1 do run[#run + 1] = category(W).initializers[i] end
+        T.eq(#run, 11)
+        for i, kind in ipairs(M.KINDS) do
+            local shape, color = run[2 * i - 1], run[2 * i]
+            T.eq(shape.kind, "dropdown", kind.id) T.eq(shape.setting.variable, "EasyGear_" .. kind.shapeKey)
+            T.eq(color.kind, "swatch", kind.id) T.eq(color.setting.variable, "EasyGear_" .. kind.colorKey)
+            T.eq(shape.setting.name, L[kind.name] .. ": shape") T.eq(color.setting.name, L[kind.name] .. ": color")
+            T.eq(shape.tooltip, L[kind.tip]) T.eq(color.tooltip, L[kind.tip])
+            T.ok(#shape.tooltip > 20 and shape.tooltip ~= kind.tip, "the tip is a text")
+            T.eq(shape.setting.default, W.EG.DEFAULTS[kind.shapeKey]) T.eq(color.setting.default, W.EG.DEFAULTS[kind.colorKey])
+            T.eq(shape.setting.vtype, "string") T.eq(color.setting.vtype, "string")
+        end
+        T.eq(run[11].kind, "button") T.eq(run[11].text, "Reset marker look") T.eq(run[11].name, "Reset marker look")
+        T.ok(run[11].tooltip and #run[11].tooltip > 20)
+        T.eq(W.EG.hookStatus.settings.ok, true)
+    end)
+
+    T.test("options: the shape list offers every shape with its picture and its name", function()
+        local W = world()
+        local M = W.EG.Marks
+        local opts = control(W, "markGroupShape").getOptions()
+        T.eq(#opts, #M.SHAPES)
+        for i, shape in ipairs(M.SHAPES) do
+            T.eq(opts[i].value, shape.id) T.eq(opts[i].label, M.ShapeLabel(shape))
+        end
+        T.eq(opts[1].label, "|A:bags-greenarrow:16:16|a Arrow")
+        T.eq(opts[5].label, "|T" .. RAID .. "2:16:16|t Circle")
+        T.eq(control(W, "markGroupShape").setting:GetValue(), "star", "the list shows the current shape")
+    end)
+
+    T.test("options: choosing a shape or a color on the page changes the marks and is stored in the form the color field uses", function()
+        local W = world()
+        W.state.settingsOpen = true
+        local b = W.bagButton(0, 1)
+        W.env.SetItemButtonQuality(b, 3, W.I.better)
+        local shape, color = W.state.settingByVariable.EasyGear_markUpgradeShape, W.state.settingByVariable.EasyGear_markUpgradeColor
+        T.eq(shape:GetValue(), "arrow") T.eq(color:GetValue(), "ff40ff40")
+
+        shape:SetValue("diamond") W.flush()
+        T.eq(W.env.EasyGearDB.markUpgradeShape, "diamond")
+        T.eq(b.EasyGearArrow:GetTexture(), RAID .. "3", "the marker follows at once")
+        color:SetValue("80FF8800") W.flush()
+        T.eq(color:GetValue(), "ffff8800", "the page reads back the normal form") T.eq(W.env.EasyGearDB.markUpgradeColor, "ffff8800")
+        T.near(b.EasyGearArrow.__vertex[2], 136 / 255, 1e-9)
+        T.eq(shape.notified, nil, "the page's own choices are not told back") T.eq(color.notified, nil)
+
+        shape:SetValue("not a shape") W.flush()
+        T.eq(shape:GetValue(), "diamond", "a value the settings refuse does not arrive")
+        color:SetValue("not a color") W.flush()
+        T.eq(color:GetValue(), "ffff8800")
+        T.eq(W.EG.lastError, nil)
+    end)
+
+    T.test("options: a stored value that does not exist never reaches the page", function()
+        local W = world(function(w) w.env.EasyGearDB = { markUpgradeShape = "nope", markUpgradeColor = "bogus", markGroupColor = 12, markGroupShape = {} } end)
+        local s = W.state.settingByVariable
+        T.eq(s.EasyGear_markUpgradeShape:GetValue(), "arrow") T.eq(s.EasyGear_markUpgradeColor:GetValue(), "ff40ff40")
+        T.eq(s.EasyGear_markGroupShape:GetValue(), "star") T.eq(s.EasyGear_markGroupColor:GetValue(), "ffbf66ff")
+        for _, kind in ipairs(W.EG.Marks.KINDS) do
+            T.eq(#s["EasyGear_" .. kind.colorKey]:GetValue(), 8, "the color field needs exactly eight digits")
+        end
+        W.state.settingsOpen = true
+        W.EG:InvalidateAll()
+        for var, st in pairs(s) do T.eq(st.notified or 0, 0, var .. " is not stale") end
+    end)
+
+    T.test("options: a look changed elsewhere reaches an open page - only the rows that changed", function()
+        local W = world()
+        W.state.settingsOpen = true
+        local s = W.state.settingByVariable
+        W.slash("marker group diamond ff8800")
+        T.eq(s.EasyGear_markGroupShape.notified, 1) T.eq(s.EasyGear_markGroupColor.notified, 1)
+        T.eq(s.EasyGear_markGroupShape:GetValue(), "diamond") T.eq(s.EasyGear_markGroupColor:GetValue(), "ffff8800")
+        T.eq(s.EasyGear_markUpgradeShape.notified, nil) T.eq(s.EasyGear_markLevelColor.notified, nil)
+        W.slash("marker group diamond")
+        T.eq(s.EasyGear_markGroupShape.notified, 1, "nothing changed, nobody is told")
+        W.slash("marker group 112233")
+        T.eq(s.EasyGear_markGroupShape.notified, 1) T.eq(s.EasyGear_markGroupColor.notified, 2, "only the color changed")
+        W.slash("reset")
+        T.eq(s.EasyGear_markGroupShape.notified, 2) T.eq(s.EasyGear_markGroupColor.notified, 3)
+        T.eq(s.EasyGear_markGroupShape:GetValue(), "star")
+    end)
+
+    T.test("options: the reset button of the look resets the look and nothing else", function()
+        local W = world()
+        local btn
+        for _, init in ipairs(category(W).initializers) do
+            if init.kind == "button" and not btn then btn = init end
+        end
+        T.eq(btn.name, "Reset marker look")
+        W.state.settingsOpen = true
+        W.EG:Set("tooltipDiff", false)
+        W.slash("marker group moon ff0000") W.slash("marker sell skull 0000ff")
+        local shape = W.state.settingByVariable.EasyGear_markGroupShape
+        T.eq(shape.notified, 1) T.eq(shape:GetValue(), "moon")
+        W.clearChat()
+        btn.onClick()
+        local db = W.env.EasyGearDB
+        T.eq(db.markGroupShape, "star") T.eq(db.markGroupColor, "ffbf66ff") T.eq(db.markSellShape, "check") T.eq(db.markSellColor, "ff40ff40")
+        T.eq(db.tooltipDiff, false, "the other settings are left alone")
+        T.has(W.chatText(), "Marker look reset to the original.")
+        T.eq(shape:GetValue(), "star") T.eq(shape.notified, 2, "the open page shows it")
+        T.eq(W.state.settingByVariable.EasyGear_markUpgradeShape.notified, nil, "and only what changed")
+    end)
+
+    T.test("options: the settings reset also restores the look", function()
+        local W = world()
+        W.slash("marker group moon ff0000")
+        W.slash("reset")
+        T.eq(W.env.EasyGearDB.markGroupShape, "star") T.eq(W.env.EasyGearDB.markGroupColor, "ffbf66ff")
+    end)
+
+    T.test("options: without the color field of the interface the shape lists stay and the page still builds", function()
+        local W = world(nil, { noColorSwatch = true })
+        local kinds = {}
+        for _, c in ipairs(category(W).controls) do kinds[c.kind] = (kinds[c.kind] or 0) + 1 end
+        T.eq(kinds.swatch, nil) T.eq(kinds.dropdown, 6)
+        T.eq(W.EG.hookStatus.settings.ok, true)
+        W.slash("marker group moon")
+        T.eq(W.env.EasyGearDB.markGroupShape, "moon", "and the chat command remains")
     end)
 end
