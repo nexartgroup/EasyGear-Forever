@@ -105,6 +105,13 @@ EasyGearLocales["deDE"] = {
     OPT_TOOLTIP_STATS_TIP = "Zeigt Platz und Wertung des Items, das ersetzt würde.",
     OPT_TOOLTIP_TIP = "Fügt Item-Tooltips die EasyGear-Wertung, das Urteil und den Zugewinn hinzu.",
     OPT_UNAVAILABLE = "Die Einstellungsseite ist nicht verfügbar (die Einstellungsoberfläche des Clients fehlt).",
+    OPT_SEC_GROUP = "Gruppe",
+    OPT_GROUP = "Gruppenhinweise (violetter Stern)",
+    OPT_GROUP_TIP = "Markiert Gegenstände, die für dich keine Verbesserung sind, aber für ein Gruppenmitglied besser wären als das, was es trägt, und nennt es im Tooltip. Die Mitglieder werden dazu untersucht.",
+    OPT_GROUP_INSPECT = "Gruppenmitglieder untersuchen",
+    OPT_GROUP_INSPECT_TIP = "Liest die Ausrüstung der Mitglieder durch Untersuchen: in Reichweite, außerhalb des Kampfes, höchstens alle 2,5 Sekunden. Aus: nur Untersuchungen, die du selbst startest, zählen.",
+    OPT_GROUP_RAID = "Auch Schlachtzugsmitglieder",
+    OPT_GROUP_RAID_TIP = "Prüft auch die Mitglieder eines Schlachtzugs, nicht nur einer Gruppe. In einem Schlachtzug ist fast jeder Gegenstand für irgendwen besser, der Stern erscheint dann an den meisten Gegenständen.",
 
     ---------- chat output
     SET_PROFILE = "Aktives Profil: %s",
@@ -157,6 +164,24 @@ EasyGearLocales["deDE"] = {
     WEIGHT_NEED_CUSTOM = "Das aktive Profil ist fest eingebaut. Lege zuerst in /egprofile ein eigenes an (Bearbeiten, Als neues Profil speichern) und aktiviere es.",
     WEIGHT_USAGE = "Aufruf: /eg weight <Attribut> <Gewicht>, z. B. /eg weight CRIT 0.8",
     NUM_RANGE = "Bitte eine Zahl von %s bis %s eingeben.",
+    H_GROUP = "Gruppenmitglieder: was gelesen ist und wer gewinnen würde; on/off, scan = neu lesen, raid / inspect = Schalter",
+
+    ---------- group hints
+    GROUP_BETTER = "Besser für die Gruppe:",
+    GROUP_AT_LEVEL = "ab Stufe %d",
+    GROUP_MORE = "... und %d weitere",
+    GROUP_NONE = "Du bist in keiner Gruppe.",
+    GROUP_RAID_OFF = "Du bist in einem Schlachtzug; seine Mitglieder werden nicht geprüft (/eg group raid on).",
+    GROUP_OFF = "Die Gruppenhinweise sind aus (/eg group on).",
+    GROUP_SCANNED = "gelesen vor %d s, %d Gegenstände",
+    GROUP_STATE_DISCONNECTED = "offline",
+    GROUP_STATE_RANGE = "außerhalb der Reichweite zum Untersuchen",
+    GROUP_STATE_WAITING = "wartet auf das Untersuchen",
+    GROUP_STATE_BLOCKED = "gerade nicht (Kampf, oder ein Untersuchen-Fenster ist offen)",
+    GROUP_STATE_OFF = "Untersuchen ist aus, noch nichts gelesen",
+    GROUP_FROM_TALENTS = "Talente",
+    GROUP_CLASS_DEFAULT = "Klassenstandard",
+    GROUP_RESCAN = "Die Gruppe wird neu gelesen.",
 
     ---------- profiles
     SPEC_LEVELING = "Levelphase (neutral)",

@@ -393,6 +393,17 @@ function Profiles.WeightsFor(spec)
     return Derive(Profiles.RawWeights(spec), spec)
 end
 
+-- Gewichte eines Profils fuer einen bestimmten Talentbaum (die Variante dieses Baums), unabhaengig vom Spieler:
+-- die Gruppenhinweise bewerten damit die Ausruestung anderer Klassen
+function Profiles.WeightsForTab(spec, tab)
+    if not spec then return {} end
+    local w = spec.w or spec.weights or {}
+    if tab and spec.variants and spec.variants[tab] then w = spec.variants[tab].w or w end
+    local out = {}
+    for k, v in pairs(w) do out[k] = v end
+    return Derive(out, spec)
+end
+
 local resolved = nil
 
 function Profiles.Invalidate()

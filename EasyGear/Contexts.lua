@@ -267,7 +267,14 @@ local function OnItemButton(button, _, idOrLink)
     end
 
     local link = ResolveLink(ctx, button, idOrLink)
-    Marks.Set(button, link, { ctx = ctx, best = false })
+    -- Das Fach bei Taschen und Bank: die Gruppenhinweise brauchen es, um gebundene Gegenstaende auszusortieren
+    local bag, slot
+    if ctx == "bag" then
+        bag, slot = button:GetBagID(), button:GetID()
+    elseif ctx == "bank" then
+        bag, slot = button:GetBankTabID(), button:GetContainerSlotID()
+    end
+    Marks.Set(button, link, { ctx = ctx, best = false, bag = bag, slot = slot })
     if ctx == "quest" then ScheduleQuestBest() end
 end
 

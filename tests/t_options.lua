@@ -17,13 +17,13 @@ return function(T)
         T.ok(cat, "category registered") T.eq(cat.name, "EasyGear") T.eq(cat.registered, true)
         local kinds = {}
         for _, c in ipairs(cat.controls) do kinds[c.kind] = (kinds[c.kind] or 0) + 1 end
-        T.eq(kinds.checkbox, 10) T.eq(kinds.slider, 2) T.eq(kinds.dropdown, 1)
+        T.eq(kinds.checkbox, 13) T.eq(kinds.slider, 2) T.eq(kinds.dropdown, 1)
         local headers, buttons = 0, 0
         for _, init in ipairs(cat.initializers) do
             if init.kind == "header" then headers = headers + 1 end
             if init.kind == "button" then buttons = buttons + 1 end
         end
-        T.eq(headers, 4) T.eq(buttons, 1, "just the reset button")
+        T.eq(headers, 5) T.eq(buttons, 1, "just the reset button")
         T.eq(W.EG.hookStatus.settings.ok, true)
     end)
 

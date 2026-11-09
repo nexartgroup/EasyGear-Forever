@@ -78,12 +78,31 @@ local function BaganatorAPI()
     return nil
 end
 
--- Ist fuer diesen Gegenstand ein Pfeil faellig?  Rueckgabe: "UPGRADE" | "LEVEL" | false | nil (Daten fehlen noch)
-local function Verdict(itemLink)
+--[[ Das Fach eines Gegenstands aus den Daten, die Baganator mitgibt: nur bei Gegenstaenden in den Taschen und der Bank
+     dieses Charakters ist es da (itemLocation); Gegenstaende anderer Charaktere und der Gildenbank gibt man nicht ab. ]]
+local function SlotOf(details)
+    local location = type(details) == "table" and details.itemLocation or nil
+    if type(location) == "table" and type(location.bagID) == "number" and type(location.slotIndex) == "number" then
+        return location.bagID, location.slotIndex
+    end
+    return nil
+end
+
+--[[ Ist fuer diesen Gegenstand eine Markierung faellig?
+     Rueckgabe: "UPGRADE" | "LEVEL" | "GROUP" | false | nil (Daten fehlen noch)
+     "GROUP" (violetter Stern, besser fuer ein Gruppenmitglied) nur mit details: die Quelle fuer Baganators Suche
+     fragt ohne und meldet nur echte Verbesserungen.                                                            ]]
+local function Verdict(itemLink, details)
     if not itemLink or not EG:Get("showBagIcons") then return false end
     local state, loading = Score.UpgradeState(itemLink)
     if state then return state end
     if loading then return nil end
+    local bag, slot = SlotOf(details)
+    if bag and EG.Group then
+        local group, waiting = EG.Group.State(itemLink, "bag", bag, slot)
+        if group then return group end
+        if waiting then return nil end
+    end
     return false
 end
 
@@ -97,7 +116,7 @@ end
 
 -- true = zeigen, false = nicht zeigen, nil = die Gegenstandsdaten sind noch nicht da (Baganator fragt spaeter noch einmal)
 local function UpdateWidget(widget, details)
-    local state = Verdict(type(details) == "table" and details.itemLink or nil)
+    local state = Verdict(type(details) == "table" and details.itemLink or nil, details)
     if state == nil then return nil end
     if state == false then return false end
     Marks.TintArrow(widget, state)
@@ -183,6 +202,7 @@ function Compat.RegisterBaganator()
     EG:HookResult("baganator", true)
     EG:Listen("INVALIDATED", ScheduleRefresh)
     EG:Listen("ITEMS_LOADED", ScheduleRefresh)
+    EG:Listen("GROUP", ScheduleRefresh)             -- neue Ausruestung eines Gruppenmitglieds (Group.lua)
     return true
 end
 
@@ -213,7 +233,11 @@ end
 local function PaintEllesmere(btn, data)
     local link = type(data) == "table" and data.itemLink or nil
     local overlay = btn._textOverlay
-    Marks.Set(btn, link, { ctx = "bag", anchor = overlay, corner = "TOPRIGHT", arrowSize = EllesmereArrowSize(overlay) })
+    local bag, slot
+    if type(data) == "table" and type(data.bag) == "number" and type(data.slot) == "number" then bag, slot = data.bag, data.slot end
+    Marks.Set(btn, link, {
+        ctx = "bag", anchor = overlay, corner = "TOPRIGHT", arrowSize = EllesmereArrowSize(overlay), bag = bag, slot = slot,
+    })
 end
 
 function Compat.RegisterEllesmere()

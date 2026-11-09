@@ -14,6 +14,11 @@
 
     Auf dem Charakterfenster und in den Vergleichs-Tooltips steht nur die Wertung: einen Gegenstand
     mit sich selbst zu vergleichen ist sinnlos.
+
+    Darunter, wenn er fuer ein Gruppenmitglied besser waere als dessen Ausruestung (Group.lua):
+
+        Besser fuer die Gruppe:
+        Bob (Waffen)                          +12.3%
 -----------------------------------------------------------------------------]]
 
 local _, EG = ...
@@ -261,6 +266,13 @@ function Tooltip.OnItem(tooltip, data)
         if not result then return end
     end
     Emit(tooltip, Tooltip.BuildLines(item, result, mode, extra))
+
+    -- Fuer wen in der Gruppe waere der Gegenstand besser als das, was er traegt?  (nur im vollen Tooltip: nicht auf dem
+    -- Charakterfenster und nicht in den Vergleichs-Tooltips)
+    if mode == "FULL" and item.isGear and EG.Group then
+        local group = EG.Group.TooltipLines(item.link)
+        if group then Emit(tooltip, group) end
+    end
 end
 
 ------------------------------------------------------------------------------

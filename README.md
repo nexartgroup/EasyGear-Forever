@@ -34,11 +34,13 @@ need any other addon: it is built on the default Forever interface and nothing e
 - [Profiles](#profiles)
 - [Slots, weapons, rings](#slots-weapons-rings)
 - [Settings](#settings)
+- [Group hints](#group-hints)
 - [Baganator and EllesmereUI](#baganator-and-ellesmereui)
 - [Troubleshooting](#troubleshooting)
 - [Verification](#verification)
 - [Known limits](#known-limits)
 - [The 3.3.5a edition](#the-335a-edition)
+- [Changes in 4.2.0](#changes-in-420)
 - [Changes in 4.1.0](#changes-in-410)
 - [Changes in 4.0.0](#changes-in-400)
 
@@ -53,7 +55,7 @@ Restart the game or `/reload`. Saved settings are `EasyGearDB` (account) and `Ea
 From GitHub: *Code > Download ZIP*, unpack it, and copy the inner folder `EasyGear` - not the folder of the
 ZIP itself (`EasyGear-Forever-main`), which also holds the tests and tools.
 
-At login the chat shows `EasyGear 4.1.0 loaded.`
+At login the chat shows `EasyGear 4.2.0 loaded.`
 
 ## What you see
 
@@ -68,6 +70,9 @@ At login the chat shows `EasyGear 4.1.0 loaded.`
 
 A **yellow** arrow means: it would be an upgrade, but your level is too low for it yet.
 Items the client marks as unusable for you (wrong armor type, class) never get an arrow.
+
+A **violet star** in the same place means: no upgrade for you, but better for somebody in your group than what
+they wear - see [Group hints](#group-hints).
 
 **Comparison window** (`/eg`, `/eggui`, or the addon-compartment entry): drag an item onto the
 left slot, shift-click an item while the window is open, or type `/eg <item link>`. It shows the
@@ -86,6 +91,7 @@ on the right, both applied to the gear you are wearing. See [Profiles](#profiles
 | `/eg` | open or close the comparison window |
 | `/eg <item link or item ID>` | report in chat and in the window |
 | `/eg upgrades` | list every upgrade in your bags (and the open bank), best first |
+| `/eg group [on\|off\|scan\|raid\|inspect]` | the group: who was read and what is known; switch the hints, read again, include the raid, let the addon inspect |
 | `/eg profile list` / `/eg profile <id>` / `/eg profile auto` | list, choose, or detect automatically |
 | `/eg weight <stat> <value>` | set a weight in your active *own* profile (`/eg weight CRIT 0.8`) |
 | `/eg autolevel [on\|off]` | below the maximum level use the Leveling profile of your class |
@@ -159,10 +165,48 @@ Stats the addon does not know can be weighted in a custom profile by their raw n
 ## Settings
 
 *Options > AddOns > EasyGear*: marker groups (bags/bank, vendors/loot/rolls/trade/mail, quest rewards,
-character window), tooltip parts, enchants, Leveling profile, item level weight and scaling, minimum
+character window), group hints (the star, inspecting members, raid members), tooltip parts, enchants, Leveling profile, item level weight and scaling, minimum
 gain, the profile choice and a reset button. Everything takes effect immediately - also when you change
 a value by chat command while the page is open.
 The addon-compartment entry on the minimap: left click opens the comparison window, right click the settings.
+
+## Group hints
+
+An item that is **no upgrade for you** but would be **better for a group member than what he wears** gets a
+**violet star** - in your bags, the bank, loot windows and roll windows (where the arrow shows). The tooltip says who
+gains:
+
+```
+Better for the group:
+Bob (Shadow)                      +12.3%
+Eve (All-round)                   nothing equipped
+```
+
+If the item is an upgrade for you as well, you get the green arrow, and the tooltip still names the members.
+
+* **Who counts:** your party. *Include raid members* adds a raid, but in a raid almost every item is better for somebody,
+  so it is off by default.
+* **What they wear:** the addon inspects members the way the inspect window does. At most one request every 2.5 seconds,
+  only members in range, never in combat and never while you have an inspect window open. Every inspection that you or
+  another addon starts is used as well. A member is read again after five minutes or when his equipment changes; out of
+  range or offline, the last reading stays. *Inspect group members* off: only inspections you start yourself count.
+* **Which profile:** the talents of the inspected member if the client hands them out; otherwise the class default - the
+  All-round profile, below the maximum level the Leveling profile of the class.
+* **How it is rated:** like your own items (member's profile, level and worn gear), with the thresholds of your settings
+  and at least 3 %: the weights are estimates, and a star should mean something.
+* **Who can use it:** the class line of the item tooltip, armor type (a plate wearer is not offered cloth), weapon types
+  of the class (`Classes.lua`, the classic rules) and level. The member must be able to use it **or be at most one level
+  short** - the tooltip then adds `from level N`.
+* **Weapons** are compared with weapons of the same kind only: one-hand with one-hand (an off hand counts half), two-hand
+  with two-hand, shield with shield, held item with held item. Whether somebody should change his style is not decided.
+* **An empty slot** counts only when the reading of the member is complete (eight or more worn pieces): an unfinished
+  reading says nothing about a missing ring.
+* **Bound items** in your bags and bank get no star - you cannot hand them over - unless their trade time (looted
+  items, in the tooltip) is still running.
+* **Baganator and EllesmereUI** show the star in the same place as the arrow; Baganator only for items of this
+  character's bags and bank.
+* `/eg group` lists the members, their profile (from talents or class default) and when they were read; `/eg group scan`
+  reads everybody again.
 
 ## Baganator and EllesmereUI
 
@@ -206,15 +250,16 @@ stats that are read but not scored.
 
 **Reporting a problem:** please include the output of `/eg status` (it names the client version, the
 detected talent points and which interface hooks work), plus `/eg parse <item link>` for a wrongly scored item
-and the exact text of any Lua error (`/console scriptErrors 1` shows them).
+and the exact text of any Lua error (`/console scriptErrors 1` shows them). For group hints add the output of
+`/eg group`: it shows for every member whether and when he was read, and why not.
 
 ## Verification
 
 Run from the root of this repository:
 
 ```
-lua5.1 tests/run.lua                 # unit tests on a model of the client (Lua 5.1 only), ~275 checks
-python3 tests/mutate.py              # mutation check: breaks the addon in ~200 small ways, the tests must notice
+lua5.1 tests/run.lua                 # unit tests on a model of the client (Lua 5.1 only), ~340 checks
+python3 tests/mutate.py              # mutation check: breaks the addon in ~325 small ways, the tests must notice
 tools/check.sh <Interface/AddOns of the Forever UI source>
                                      # luacheck against a std built from the UI source + checks that every
                                      # method, event, template, font, atlas and global the addon names exists
@@ -247,6 +292,10 @@ What this proves and what it does not:
   tooltip when the addon first looks at the item; it is not re-evaluated when you gain reputation or a skill
   until the next level-up or `/reload`.
 * The auction house is not marked; own trade items and sent mail are not marked.
+* Group hints are estimates: the weights are the profile weights, armor and weapon types follow the classic rules in
+  `Classes.lua` (change them there if Forever differs), and whether the client hands out the talents of an inspected
+  member is not known - without them the class default decides. They need inspecting, so members out of range or
+  who never came close are not rated.
 * Heirlooms, gem or enchant recommendations and automatic equipping do not exist by design.
 * Texts: English and German are complete; other languages are partly translated (missing texts show in English).
 * Baganator and EllesmereUI are connected through their public interfaces (corner widgets and upgrade source; item
@@ -259,6 +308,15 @@ What this proves and what it does not:
 The addon for the old Wrath client (interface 30300, with ElvUI/Bagnon/Immersion support and the GM
 heirloom tools) lives in its own repository, [nexartgroup/EasyGear](https://github.com/nexartgroup/EasyGear).
 This edition is a new codebase for the Forever client, not an update of that one.
+
+## Changes in 4.2.0
+
+* **Group hints**: a violet star on items that are no upgrade for you but better for a group member than what they wear,
+  and the members named in the tooltip. Members are inspected (gently: one request per 2.5 seconds, in range, not in
+  combat), rated with their own profile, level and gear, and must be able to use the item or be at most one level short.
+  Bound items without trade time get no star. Works in bags, bank, loot and rolls, and in Baganator and EllesmereUI.
+* New settings *Group hints*, *Inspect group members*, *Include raid members*; new command `/eg group`.
+* Armor and weapon types of the nine classes (`Classes.lua`); the class line of item tooltips is read.
 
 ## Changes in 4.1.0
 
@@ -330,6 +388,9 @@ selbst (`EasyGear-Forever-main`), in dem auch Tests und Werkzeuge liegen.
 Ein **gelber** Pfeil heißt: wäre eine Verbesserung, aber deine Stufe reicht noch nicht. Items, die der Client
 als unbrauchbar für dich kennzeichnet (falsche Rüstungsart, Klasse), bekommen nie einen Pfeil.
 
+Ein **violetter Stern** an derselben Stelle heißt: keine Verbesserung für dich, aber für jemanden in deiner Gruppe besser
+als das, was er trägt - siehe [Gruppenhinweise](#gruppenhinweise).
+
 **Vergleichsfenster** (`/eg`, `/eggui` oder der Eintrag im Addon-Fach): ein Item auf das linke Feld ziehen,
 bei offenem Fenster mit Umschalt anklicken oder `/eg <Itemlink>` eingeben. Es zeigt die volle Rechnung beider
 Items (Attribut, Wert, Gewicht, Punkte) und das Urteil. Ringe, Schmuck und Einhandwaffen haben je einen Reiter
@@ -342,7 +403,7 @@ Ausrüstung angewandt, die du gerade trägst.
 
 `/eg` oder `/easygear`; `/eggui` öffnet das Fenster, `/egprofile` das Profilfenster. Die Befehle sind oben in
 der englischen Tabelle aufgeführt und in jeder Sprache gleich; `/eg help` erklärt sie in deiner Sprache.
-Wichtig sind `/eg upgrades` (alle Verbesserungen in den Taschen), `/eg profile ...` (Profil wählen),
+Wichtig sind `/eg upgrades` (alle Verbesserungen in den Taschen), `/eg group` (die Gruppe: wer gelesen ist, was für wen besser wäre), `/eg profile ...` (Profil wählen),
 `/eg weight <Wert> <Gewicht>` (Gewicht im eigenen Profil), `/eg status` (Profil, erkannte Talentpunkte,
 Zustand jeder Oberflächen-Anbindung), `/eg parse <Itemlink>` (was aus einem Item gelesen wurde) und
 `/eg unknown` (Werte, die das Addon nicht kennt).
@@ -395,10 +456,49 @@ Einzigartige Items: das zweite Exemplar ersetzt das erste. Hemd und Wappenrock w
 
 ## Einstellungen
 
-*Optionen > AddOns > EasyGear*: Markierungsgruppen, Tooltip-Teile, Verzauberungen, Leveln-Profil, Stufengewicht
+*Optionen > AddOns > EasyGear*: Markierungsgruppen, Gruppenhinweise (Stern, Mitglieder untersuchen, Schlachtzug), Tooltip-Teile, Verzauberungen, Leveln-Profil, Stufengewicht
 und -skalierung, Mindestzugewinn, Profilwahl und ein Zurücksetzen-Knopf. Alles wirkt sofort - auch wenn du einen
 Wert per Chatbefehl änderst, während die Seite offen ist.
 Der Eintrag im Addon-Fach der Minimap: Linksklick Vergleichsfenster, Rechtsklick Einstellungen.
+
+## Gruppenhinweise
+
+Ein Item, das **für dich keine Verbesserung** ist, aber **für ein Gruppenmitglied besser als das, was es trägt**, bekommt
+einen **violetten Stern** - in deinen Taschen, der Bank, Beutefenstern und Würfelfenstern (dort, wo der Pfeil erscheint).
+Der Tooltip nennt, wer gewinnt:
+
+```
+Besser für die Gruppe:
+Bob (Schatten)                    +12.3%
+Eve (Allround)                    nichts angelegt
+```
+
+Ist das Item auch für dich besser, bekommst du den grünen Pfeil; der Tooltip nennt die Mitglieder trotzdem.
+
+* **Wer zählt:** deine Gruppe. *Auch Schlachtzugsmitglieder* nimmt einen Schlachtzug dazu; dort ist fast jedes Item für
+  irgendwen besser, deshalb ist es standardmäßig aus.
+* **Was sie tragen:** das Addon untersucht Mitglieder wie das Untersuchen-Fenster. Höchstens eine Anfrage alle 2,5 Sekunden,
+  nur Mitglieder in Reichweite, nie im Kampf und nie bei offenem Untersuchen-Fenster. Jede Untersuchung, die du oder ein
+  anderes Addon startest, wird mitgenommen. Ein Mitglied wird nach fünf Minuten oder bei einem Wechsel seiner Ausrüstung
+  neu gelesen; außer Reichweite oder offline bleibt der letzte Stand. *Gruppenmitglieder untersuchen* aus: nur
+  Untersuchungen, die du selbst startest, zählen.
+* **Welches Profil:** die Talente des untersuchten Mitglieds, wenn der Client sie herausgibt; sonst der Klassenstandard -
+  das Allround-Profil, unter der Höchststufe das Leveln-Profil der Klasse.
+* **Wie bewertet wird:** wie bei deinen eigenen Items (Profil, Stufe und getragene Ausrüstung des Mitglieds), mit den
+  Schwellen deiner Einstellungen und mindestens 3 %: die Gewichte sind Schätzwerte, und ein Stern soll etwas heißen.
+* **Wer es nutzen kann:** die Klassenzeile des Tooltips, die Rüstungsart (ein Plattenträger bekommt keinen Stoff
+  angeboten), die Waffenarten der Klasse (`Classes.lua`, die klassischen Regeln) und die Stufe. Das Mitglied muss es
+  nutzen können **oder höchstens eine Stufe zu niedrig sein** - der Tooltip ergänzt dann `ab Stufe N`.
+* **Waffen** werden nur mit gleichartigen verglichen: Einhand mit Einhand (die Nebenhand zählt halb), Zweihand mit
+  Zweihand, Schild mit Schild, Halteitem mit Halteitem. Ob jemand seine Haltung wechseln sollte, entscheidet das Addon nicht.
+* **Ein leerer Platz** zählt nur, wenn der Stand des Mitglieds vollständig ist (acht oder mehr getragene Teile): ein
+  unfertiger Stand sagt nichts über einen fehlenden Ring.
+* **Gebundene Items** in deinen Taschen und der Bank bekommen keinen Stern - du kannst sie nicht abgeben -, es sei denn,
+  ihre Tauschfrist (bei erbeuteten Items, steht im Tooltip) läuft noch.
+* **Baganator und EllesmereUI** zeigen den Stern an derselben Stelle wie den Pfeil; Baganator nur bei Items in den
+  Taschen und der Bank dieses Charakters.
+* `/eg group` listet die Mitglieder, ihr Profil (aus Talenten oder Klassenstandard) und wann sie gelesen wurden;
+  `/eg group scan` liest alle neu.
 
 ## Baganator und EllesmereUI
 
@@ -438,7 +538,8 @@ Funktion aus ist. Dazu die erkannten Talentpunkte und der letzte interne Fehler.
 
 **Fehler melden:** bitte die Ausgabe von `/eg status` mitschicken (Clientversion, erkannte Talentpunkte, welche
 Anbindungen funktionieren), bei falsch bewerteten Items `/eg parse <Itemlink>` und den genauen Text eines
-Lua-Fehlers (`/console scriptErrors 1` zeigt sie an).
+Lua-Fehlers (`/console scriptErrors 1` zeigt sie an). Bei den Gruppenhinweisen zusätzlich die Ausgabe von
+`/eg group`: sie zeigt je Mitglied, ob und wann er gelesen wurde und warum nicht.
 
 ## Prüfung
 
@@ -466,6 +567,10 @@ im Spiel**.
   Stufenaufstieg oder `/reload`.
 * Das Auktionshaus wird nicht markiert. Heirlooms, Edelstein- oder Verzauberungsempfehlungen und automatisches
   Anlegen gibt es absichtlich nicht.
+* Die Gruppenhinweise sind Schätzungen: es gelten die Profilgewichte, Rüstungs- und Waffenarten folgen den klassischen
+  Regeln in `Classes.lua` (dort ändern, wenn Forever abweicht), und ob der Client die Talente eines untersuchten
+  Mitglieds herausgibt, ist nicht bekannt - ohne sie entscheidet der Klassenstandard. Sie brauchen das Untersuchen:
+  Mitglieder, die nie in Reichweite kamen, werden nicht bewertet.
 * Texte: Englisch und Deutsch vollständig; andere Sprachen teilweise übersetzt (Fehlendes erscheint englisch).
 * Baganator und EllesmereUI sind über ihre öffentlichen Schnittstellen angebunden (Eckenelemente und Upgrade-Quelle;
   Overlay-Schnittstelle des Taschenmoduls) und gegen Modelle von ihnen getestet. Zeigt sich dort kein Pfeil, sagt

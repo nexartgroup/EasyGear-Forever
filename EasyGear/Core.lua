@@ -1,5 +1,5 @@
 --[[---------------------------------------------------------------------------
-    EasyGear 4.1.0 - Forever
+    EasyGear 4.2.0 - Forever
     Ausruestungsbewertung, Upgrade-Erkennung und Vergleich fuer WoW Forever
 
     Dieses Addon vergleicht und empfiehlt, mehr nicht: es verschickt keine
@@ -15,6 +15,8 @@
       Items.lua          Gegenstandsdaten (mit Zwischenspeicher)
       Score.lua          Bewertung, Plaetze, Vergleich
       Recommend.lua      Empfehlungen: Upgrades in Taschen, beste Questbelohnung
+      Classes.lua        Ruestungs- und Waffenarten der neun Klassen
+      Group.lua          Gruppenhinweise: was fuer ein Gruppenmitglied besser waere (Untersuchen, Bewertung)
       Tooltip.lua        Zeilen im Gegenstands-Tooltip
       Marks.lua          Markierungen auf Gegenstandssymbolen
       Contexts.lua       Anbindung: Taschen, Bank, Haendler, Beute, Wuerfeln, Quests, ...
@@ -46,7 +48,7 @@ do
     if C_AddOns and C_AddOns.GetAddOnMetadata then
         meta = C_AddOns.GetAddOnMetadata(EG.name, "Version")
     end
-    EG.version = meta or "4.1.0"
+    EG.version = meta or "4.2.0"
 end
 
 -- WoW Forever meldet sich ueber WOW_PROJECT_ID == WOW_PROJECT_CAMELOT (Blizzard_ProjectConstants).
@@ -205,6 +207,9 @@ local DEFAULTS = {
     showItemIcons     = true,   -- Haendler, Beute, Wuerfeln, Handel, Post
     showQuestIcons    = true,   -- beste Questbelohnung
     showCharIcons     = true,   -- Hinweis am Charakterfenster: in den Taschen liegt etwas Besseres
+    showGroupHints    = true,   -- violetter Stern und Tooltip-Zeilen: besser fuer ein Gruppenmitglied
+    groupInspect      = true,   -- Gruppenmitglieder dafuer selbst untersuchen (sonst nur mitnehmen, was ohnehin gelesen wird)
+    groupRaid         = false,  -- auch die Mitglieder eines Schlachtzugs (sonst nur die Gruppe)
     showTooltip       = true,
     showTooltipStats  = true,   -- Platz- und Vergleichszeile im Tooltip
     tooltipDiff       = true,   -- Attribut-Unterschiede im Tooltip

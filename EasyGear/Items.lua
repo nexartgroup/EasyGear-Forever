@@ -13,6 +13,7 @@
       dps         Waffen-DPS (Nahkampf: handKind "MELEE", Fernkampf/Zauberstab: "RANGED")
       isGear      kann in einen Ausruestungsplatz
       usable      false, wenn der Client den Gegenstand fuer diesen Spieler als unbrauchbar kennzeichnet
+      classesText die Klassenzeile des Tooltips ("Krieger, Paladin"), wenn der Gegenstand klassengebunden ist
 
     Ist der Gegenstand noch nicht im Client-Zwischenspeicher, gibt Get nil und "loading" zurueck und
     stoesst das Laden an; GET_ITEM_INFO_RECEIVED meldet das Ergebnis ueber das interne Ereignis
@@ -188,6 +189,7 @@ function Items.Get(linkOrID)
         data.sockets = withExtras and sockets or 0
         data.hasExtraStats = next(extra) ~= nil
         data.unique = scan.unique and true or false
+        data.classesText = scan.classesText
         data.scan = scan
 
         -- Waffen-DPS: aus GetItemStats, sonst aus dem Tooltip-Text

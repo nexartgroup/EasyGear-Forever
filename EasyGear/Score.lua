@@ -41,11 +41,11 @@ EG:RegisterCache(compareCache)
 --[[ Der Anteil der Gegenstandsstufe waechst mit der Charakterstufe und erreicht erst auf der
      Hoechststufe das volle Gewicht: auf niedrigen Stufen tragen Gegenstaende kleine Werte, und ein
      fester Punktwert je Stufe uebertoente sonst die eigentlichen Attribute. Abschaltbar (/eg ilvlscale). ]]
-function Score.EffectiveIlvlWeight()
+function Score.EffectiveIlvlWeight(level)
     local w = tonumber(EG:Get("ilvlWeight")) or EG.DEFAULTS.ilvlWeight
     if EG:Get("ilvlScaling") == false then return w, w, 1 end
     local maxLevel = Profiles.MaxLevel()
-    local level = mmin(Profiles.PlayerLevel(), maxLevel)
+    level = mmin(level or Profiles.PlayerLevel(), maxLevel)
     local factor = level / maxLevel
     return w * factor, w, factor
 end
@@ -54,8 +54,8 @@ local GEM_PRIMARY = { "STR", "AGI", "INT", "SP", "STA" }
 
 --[[ Wert eines freien Sockelplatzes: ein typischer Stein der Stufe (ca. 0.22 Punkte je Stufe) mal dem
      staerksten Hauptattributgewicht des Profils, mit 10 % Abschlag fuer nicht passende Farbe.
-     Ein fester Wert laesst sich mit /eg socket <zahl> setzen.                                     ]]
-function Score.SocketPoints(weights)
+     Ein fester Wert laesst sich mit /eg socket <zahl> setzen. level: die Stufe des Charakters (Standard: der Spieler). ]]
+function Score.SocketPoints(weights, level)
     local override = tonumber(EG:Get("socketValue"))
     if override then return override end
     weights = weights or Profiles.Resolve().weights
@@ -64,7 +64,7 @@ function Score.SocketPoints(weights)
         local w = weights[key]
         if w and w > best then best = w end
     end
-    local level = mmin(Profiles.PlayerLevel(), Profiles.MaxLevel())
+    level = mmin(level or Profiles.PlayerLevel(), Profiles.MaxLevel())
     return level * 0.22 * best * 0.9
 end
 
@@ -85,14 +85,16 @@ end
 
 --[[ Wertung + vollstaendige Berechnungsgrundlage.
      rows = Liste von { key, label, value, weight, points }
-     slot ist nur bei Nebenhand-Waffen von Belang (halbe DPS).                                 ]]
-function Score.Breakdown(item, slot, weights)
+     slot ist nur bei Nebenhand-Waffen von Belang (halbe DPS).
+     weights und level sind die des bewerteten Charakters (Standard: der Spieler); die Gruppenhinweise
+     bewerten damit Gegenstaende fuer andere Klassen und Stufen.                                 ]]
+function Score.Breakdown(item, slot, weights, level)
     local rows, total = {}, 0
     if not item then return rows, 0 end
     weights = weights or Profiles.Resolve().weights
 
     -- 1) Basis aus der Gegenstandsstufe
-    local ilvlWeight = Score.EffectiveIlvlWeight()
+    local ilvlWeight = Score.EffectiveIlvlWeight(level)
     local ilvlPoints = (item.ilvl or 0) * ilvlWeight
     if ilvlWeight > 0 then
         rows[#rows + 1] = Row("ILVL", L.BASE_ILVL, item.ilvl or 0, ilvlWeight, ilvlPoints)
@@ -134,7 +136,7 @@ function Score.Breakdown(item, slot, weights)
 
     -- 4) Freie Sockelplaetze (gefuellte stehen schon in den Attributen)
     if item.sockets and item.sockets > 0 then
-        local w = Score.SocketPoints(weights)
+        local w = Score.SocketPoints(weights, level)
         if w ~= 0 then
             local pts = item.sockets * w
             total = total + pts

@@ -27,7 +27,8 @@ local WEAPON = { INVTYPE_WEAPON = true, INVTYPE_2HWEAPON = true, INVTYPE_WEAPONM
 
 --[[ F.gear(W, id, name, loc, ilvl, stats, extra) -> link
      stats uses the addon's short keys (STR, STA, ...); extra: armor, dps, minLevel, unique, badType, sockets,
-     uncached, cosmetic, sellPrice, lines                                                           ]]
+     uncached, cosmetic, sellPrice, lines, quality, subclassID (armor: 1 cloth 2 leather 3 mail 4 plate 6 shield;
+     weapon: 0 axe 4 mace 7 sword 15 dagger ...), classID, classes (the "Classes:" line, e.g. "Priest, Mage")   ]]
 function F.gear(W, id, name, loc, ilvl, stats, extra)
     extra = extra or {}
     local d = {
@@ -46,9 +47,10 @@ function F.gear(W, id, name, loc, ilvl, stats, extra)
     end
     if extra.armor then d.armor = extra.armor d.stats.RESISTANCE0_NAME = extra.armor end
     for _, k in ipairs({ "dps", "minLevel", "unique", "badType", "sockets", "uncached", "cosmetic", "sellPrice",
-                         "lines", "effectiveIlvl" }) do
+                         "lines", "effectiveIlvl", "subclassID", "classes" }) do
         d[k] = extra[k]
     end
+    if extra.classID then d.classID = extra.classID end
     return (W.item(d))
 end
 

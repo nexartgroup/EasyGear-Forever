@@ -301,6 +301,16 @@ Stats.IsRed, Stats.IsGrey = IsRed, IsGrey
 -- Kopfzeile eines Ausruestungssets: "Name (2/5)"
 local SET_HEADER_PATTERN = "^.+%s%((%d+)/(%d+)%)$"
 
+-- Der Anfang der Klassenzeile ("Klassen: %s" -> "Klassen: "); sie steht im Tooltip unabhaengig davon, ob der Spieler
+-- zu den genannten Klassen gehoert (die Gruppenhinweise brauchen sie fuer die Klassen der Mitglieder)
+local function ClassesPrefix()
+    local tpl = _G.ITEM_CLASSES_ALLOWED
+    if type(tpl) ~= "string" then tpl = "Classes: %s" end
+    local prefix = smatch(tpl, "^([^%%]+)%%")
+    if prefix and prefix ~= "" then return prefix end
+    return nil
+end
+
 local function IsUniqueLine(text)
     return text == (_G.ITEM_UNIQUE or "Unique")
         or text == (_G.ITEM_UNIQUE_EQUIPPABLE or "Unique-Equipped")
@@ -320,6 +330,7 @@ end
        validSlot  EquipSlot-Zeile: passt der Platz? (nil = unbekannt)
        reason     Text der ersten roten Anforderungszeile (ohne Stufe)
        reqLevel   benoetigte Stufe laut Zeile
+       classesText  Klassenzeile ("Klassen: A, B" ohne den Anfang), wenn der Gegenstand klassengebunden ist
        slotText, typeText   Platz und Art als Text                                                    ]]
 function Stats.ScanLines(lines)
     local res = { base = {}, extra = {}, hasStats = false }
@@ -341,11 +352,16 @@ function Stats.ScanLines(lines)
     local enchantPattern = _G.ENCHANTED_TOOLTIP_LINE and ("^" .. TemplateToPattern(_G.ENCHANTED_TOOLTIP_LINE, "(.+)") .. "$")
     local socketBonusPattern = "^" .. TemplateToPattern(_G.ITEM_SOCKET_BONUS or "Socket Bonus: %s", "(.+)") .. "$"
     local stopAtSet = false
+    local classesPrefix = ClassesPrefix()
 
     for i = 1, #lines do
         local line = lines[i]
         local ltype = line.type
         local text = line.leftText
+
+        if classesPrefix and not res.classesText and type(text) == "string" and sfind(text, classesPrefix, 1, true) == 1 then
+            res.classesText = EG.Trim(ssub(text, #classesPrefix + 1))
+        end
 
         if ltype == T.EquipSlot then
             res.validType = line.isValidItemType

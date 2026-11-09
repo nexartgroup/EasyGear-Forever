@@ -4,6 +4,7 @@
       /eg                 Vergleichsfenster
       /eg <Link|ID>       Bericht im Chat und im Fenster
       /eg upgrades        alle Verbesserungen in den Taschen
+      /eg group           Gruppenmitglieder: was gelesen ist, was fuer sie besser waere
       /eggui              Vergleichsfenster
       /egprofile          Profilvergleich
       /eg help            alle Befehle
@@ -283,6 +284,9 @@ function Slash.PrintStatus()
         .. " | " .. L.OPT_CHARHINT .. ": " .. OnOff(EG:Get("showCharIcons")))
     EG:Raw(L.OPT_TOOLTIP .. ": " .. OnOff(EG:Get("showTooltip"))
         .. " | " .. L.OPT_DIFF .. ": " .. OnOff(EG:Get("tooltipDiff")))
+    if EG.Group then
+        for _, line in ipairs(EG.Group.StatusLines()) do EG:Raw(line) end
+    end
 
     local names = {}
     for name in pairs(EG.hookStatus) do names[#names + 1] = name end
@@ -300,6 +304,16 @@ function Slash.PrintStatus()
     if EG.lastError then
         EG:Raw(C.bad .. L.ST_LASTERROR .. ": [" .. tostring(EG.lastError.label) .. "] " .. tostring(EG.lastError.err) .. C.reset)
     end
+end
+
+-- Die Gruppe: Schalter und je Mitglied, was gelesen ist
+function Slash.PrintGroup()
+    local Group = EG.Group
+    EG:Raw(C.title .. "EasyGear - " .. L.OPT_SEC_GROUP .. C.reset .. "  "
+        .. L.OPT_GROUP .. ": " .. OnOff(EG:Get("showGroupHints") ~= false)
+        .. " | " .. L.OPT_GROUP_INSPECT .. ": " .. OnOff(EG:Get("groupInspect") ~= false)
+        .. " | " .. L.OPT_GROUP_RAID .. ": " .. OnOff(EG:Get("groupRaid") == true))
+    for _, line in ipairs(Group.ReportLines()) do EG:Raw(line) end
 end
 
 function Slash.PrintLocale()
@@ -371,6 +385,7 @@ local HELP = {
     { "/eg",                                  "H_EG" },
     { "/eg <itemlink | itemID>",              "H_EG_LINK" },
     { "/eg upgrades",                         "H_UPGRADES" },
+    { "/eg group [on|off|scan|raid|inspect]", "H_GROUP" },
     { "/eggui",                               "H_GUI" },
     { "/egprofile",                           "H_PROFILE_WIN" },
     { "/eg profile list",                     "H_PROFILE_LIST" },
@@ -420,6 +435,37 @@ local function Toggle(cmd, rest)
     local value = ParseSwitch(rest, EG:Get(def[1]))
     EG:Set(def[1], value)
     EG:Print(L[def[2]] .. ": " .. OnOff(value))
+end
+
+--[[ /eg group            Mitglieder und Stand
+     /eg group on|off     Gruppenhinweise ein- und ausschalten
+     /eg group scan       alle Mitglieder neu lesen
+     /eg group raid       auch den Schlachtzug einbeziehen (on|off)
+     /eg group inspect    Mitglieder selbst untersuchen (on|off)                                                ]]
+local function GroupCommand(rest)
+    local Group = EG.Group
+    local sub, value = smatch(rest or "", "^(%S*)%s*(.-)$")
+    sub = slower(sub or "")
+    if sub == "" or sub == "list" or sub == "status" then
+        Slash.PrintGroup()
+    elseif sub == "on" or sub == "off" or sub == "an" or sub == "aus" then
+        local v = ParseSwitch(sub, EG:Get("showGroupHints") ~= false)
+        EG:Set("showGroupHints", v)
+        EG:Print(L.OPT_GROUP .. ": " .. OnOff(v))
+    elseif sub == "scan" then
+        Group.Rescan()
+        EG:Print(L.GROUP_RESCAN)
+    elseif sub == "raid" then
+        local v = ParseSwitch(value, EG:Get("groupRaid") == true)
+        EG:Set("groupRaid", v)
+        EG:Print(L.OPT_GROUP_RAID .. ": " .. OnOff(v))
+    elseif sub == "inspect" then
+        local v = ParseSwitch(value, EG:Get("groupInspect") ~= false)
+        EG:Set("groupInspect", v)
+        EG:Print(L.OPT_GROUP_INSPECT .. ": " .. OnOff(v))
+    else
+        Slash.PrintGroup()
+    end
 end
 
 local function ShowProfile(spec)
@@ -514,6 +560,8 @@ function Slash.Handle(msg)
         Slash.PrintLocale()
     elseif cmd == "upgrades" or cmd == "upgrade" or cmd == "bags" then
         Slash.PrintUpgrades()
+    elseif cmd == "group" or cmd == "gruppe" then
+        GroupCommand(rest)
     elseif cmd == "profile" or cmd == "profiles" then
         ProfileCommand(rest)
     elseif cmd == "weight" then

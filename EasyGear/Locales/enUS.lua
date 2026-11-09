@@ -115,6 +115,13 @@ EasyGearLocales["enUS"] = {
     OPT_TOOLTIP_STATS_TIP = "Shows the slot and the score of the item you would replace.",
     OPT_TOOLTIP_TIP = "Adds the EasyGear score, the verdict and the gain to item tooltips.",
     OPT_UNAVAILABLE = "The settings page is not available (the client's settings interface is missing).",
+    OPT_SEC_GROUP = "Group",
+    OPT_GROUP = "Group hints (purple star)",
+    OPT_GROUP_TIP = "Marks items that are no upgrade for you but would be better for a group member than what they wear, and names them in the tooltip. Group members are read by inspecting them.",
+    OPT_GROUP_INSPECT = "Inspect group members",
+    OPT_GROUP_INSPECT_TIP = "Reads what members wear by inspecting them: in range, out of combat, at most every 2.5 seconds. Off: only inspections you start yourself are used.",
+    OPT_GROUP_RAID = "Include raid members",
+    OPT_GROUP_RAID_TIP = "Also checks the members of a raid, not only a party. In a raid almost every item is better for somebody, so the star shows up on most items.",
 
     ---------- chat output
     SET_PROFILE = "Active profile: %s",
@@ -167,6 +174,24 @@ EasyGearLocales["enUS"] = {
     WEIGHT_NEED_CUSTOM = "The active profile is built in. Create your own first in /egprofile (Edit, Save as new profile) and activate it.",
     WEIGHT_USAGE = "Usage: /eg weight <stat> <weight>, e.g. /eg weight CRIT 0.8",
     NUM_RANGE = "Please enter a number from %s to %s.",
+    H_GROUP = "group members: what is read and who would gain; on/off, scan = read again, raid / inspect = switches",
+
+    ---------- group hints
+    GROUP_BETTER = "Better for the group:",
+    GROUP_AT_LEVEL = "from level %d",
+    GROUP_MORE = "... and %d more",
+    GROUP_NONE = "You are not in a group.",
+    GROUP_RAID_OFF = "You are in a raid; its members are not checked (/eg group raid on).",
+    GROUP_OFF = "Group hints are off (/eg group on).",
+    GROUP_SCANNED = "read %d s ago, %d items",
+    GROUP_STATE_DISCONNECTED = "offline",
+    GROUP_STATE_RANGE = "out of inspect range",
+    GROUP_STATE_WAITING = "waiting to be inspected",
+    GROUP_STATE_BLOCKED = "not now (combat, or an inspect window is open)",
+    GROUP_STATE_OFF = "inspecting is off, nothing read yet",
+    GROUP_FROM_TALENTS = "talents",
+    GROUP_CLASS_DEFAULT = "class default",
+    GROUP_RESCAN = "Reading the group again.",
 
     ---------- profiles
     SPEC_LEVELING = "Leveling (neutral)",

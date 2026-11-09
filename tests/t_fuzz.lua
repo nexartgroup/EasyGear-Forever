@@ -392,4 +392,148 @@ return function(T)
             end
         end
     end)
+
+    --[[ A group changes all the time: members join, leave, change gear, walk away, die; the player fights, opens the inspect
+         window, changes settings and gear. After every step the verdicts of the group must be the ones computed from
+         scratch, every named member must be in the group and really gain, and every request must have been made with
+         manners (not in combat, not with an inspect window open, only in range, 2.5 seconds apart).           ]]
+    local WEAPON_SUBS = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 13, 15, 16, 18, 19 }
+    T.test("fuzz: group verdicts stay right while members, gear, settings and time change at random", function()
+        local RUNS_G = math.max(3, math.floor(RUNS / 3))
+        local requestsChecked = 0
+        for run = 1, RUNS_G do
+            local class = pick(CLASSES)
+            local G, pool, locs = nil, {}, {}
+            local function groupItem(w)
+                nextId = nextId + 1
+                local loc = pick(LOCS)
+                local stats = {}
+                for _ = 1, rnd(5) do stats[pick(STATS)] = rnd(60) end
+                local weapon = loc:find("WEAPON") or loc == "INVTYPE_RANGED"
+                local extra = { armor = (rnd(3) == 1) and rnd(800) or nil, minLevel = (rnd(4) == 1) and rnd(60) or 0,
+                                unique = (rnd(12) == 1) and true or nil, quality = pick({ 0, 1, 2, 3, 4, 4 }),
+                                subclassID = weapon and pick(WEAPON_SUBS) or pick({ 0, 1, 1, 2, 2, 3, 4, 4, 6, 7 }),
+                                classes = (rnd(10) == 1) and pick({ "Priest, Mage", "Warrior", "Rogue, Druid" }) or nil }
+                if weapon then extra.dps = rnd(400) / 10 end
+                return F.gear(w, nextId, "Item" .. nextId, loc, rnd(120), stats, extra), loc
+            end
+            local function itemForSlot(slot)
+                local fits = {}
+                for i, loc in ipairs(locs) do
+                    if SLOT_OF[loc] == slot or (slot == 12 and SLOT_OF[loc] == 11) or (slot == 14 and SLOT_OF[loc] == 13) then
+                        fits[#fits + 1] = pool[i]
+                    end
+                end
+                if #fits == 0 then return nil end
+                return pick(fits)
+            end
+            local W = T.world({ class = class, level = pick({ 30, 60 }),
+                                talents = { mode = "specinfo", points = { rnd(41) - 1, rnd(41) - 1, rnd(41) - 1 } } },
+                              function(w)
+                G = w.installGroup()
+                for i = 1, 30 do pool[i], locs[i] = groupItem(w) end
+                for i = 1, rnd(4) do
+                    local gear = {}
+                    for _, slot in ipairs({ 1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18 }) do
+                        if rnd(4) > 1 then gear[slot] = itemForSlot(slot) end
+                    end
+                    G.add("party" .. i, { name = "M" .. i, class = pick(CLASSES), level = pick({ 20, 40, 60 }),
+                                          tab = (rnd(3) == 1) and nil or rnd(3), gear = gear, distance = pick({ 5, 5, 5, 50 }) })
+                end
+            end)
+            local function sample()
+                local out = {}
+                for _ = 1, 6 do out[#out + 1] = pick(pool) end
+                return out
+            end
+            local function names(list)
+                local out = {}
+                for _, e in ipairs(list or {}) do out[#out + 1] = e.member.guid .. ":" .. e.slot .. ":" .. string.format("%.6f", e.delta) end
+                return table.concat(out, ";")
+            end
+
+            for step = 1, 25 do
+                local action = rnd(12)
+                local members = {}
+                for unit in pairs(G.members) do members[#members + 1] = unit end
+                table.sort(members)
+                local unit = #members > 0 and pick(members) or nil
+                if action == 1 then
+                    W.advance(rnd(10))
+                elseif action == 2 and unit then
+                    local slot = pick({ 1, 3, 5, 7, 11, 13, 15, 16, 17, 18 })
+                    G.members[unit].gear[slot] = itemForSlot(slot)
+                    G.gearChanged(unit)
+                elseif action == 3 and unit then
+                    G.remove(unit) G.rosterChanged()
+                elseif action == 4 and #members < 4 then
+                    local free = "party" .. rnd(4)
+                    if not G.members[free] then
+                        G.add(free, { name = "N" .. step, class = pick(CLASSES), level = pick({ 20, 40, 60 }),
+                                      tab = (rnd(3) == 1) and nil or rnd(3), gear = { [5] = itemForSlot(5), [1] = itemForSlot(1) } })
+                        G.rosterChanged()
+                    end
+                elseif action == 5 then
+                    if rnd(2) == 1 then G.combat = not G.combat else G.lockdown = not G.lockdown end
+                elseif action == 6 then
+                    if rnd(2) == 1 then G.inspectFrameShown = not G.inspectFrameShown else G.talentInspect = not G.talentInspect end
+                elseif action == 7 and unit then
+                    local m = G.members[unit]
+                    m.distance = (m.distance > 28) and 5 or 50
+                    if rnd(5) == 1 then m.connected = not m.connected end
+                elseif action == 8 then
+                    local key = pick({ "minDelta", "minDeltaPercent", "groupInspect", "showGroupHints", "groupRaid", "includeEnchants" })
+                    if key == "minDelta" then W.EG:Set(key, pick({ 0, 5, 20 }))
+                    elseif key == "minDeltaPercent" then W.EG:Set(key, pick({ 0, 1, 5, 10 }))
+                    else W.EG:Set(key, rnd(3) ~= 1) end
+                elseif action == 9 then
+                    local slot = pick({ 5, 11, 13, 16 })
+                    W.equip(slot, itemForSlot(slot))
+                    W.fire("PLAYER_EQUIPMENT_CHANGED", slot)
+                elseif action == 10 then
+                    W.setLevel(pick({ 30, 45, 60 }))
+                elseif action == 11 and unit then
+                    G.inspectByHand(unit)
+                else
+                    for _, key in ipairs(sample()) do W.tooltipFor(W.bagButton(0, 1), key) end
+                end
+                W.flush()
+
+                T.eq(W.EG.lastError, nil, "no internal error, run " .. run .. ", step " .. step .. ": " .. tostring(W.EG.lastError and W.EG.lastError.err))
+                local Gp = W.EG.Group
+                for _, link in ipairs(sample()) do
+                    local cached = Gp.Beneficiaries(link)
+                    local before = names(cached)
+                    W.EG:InvalidateComparisons()                         -- drop everything that is cached ...
+                    local fresh = Gp.Beneficiaries(link)                 -- ... and compute it from scratch
+                    T.eq(names(fresh), before, "stale verdict (run " .. run .. ", step " .. step .. ")")
+                    local inGroup = {}
+                    for _, m in ipairs(Gp.list) do inGroup[m] = true end
+                    local itemData = W.EG.Items.Get(link)
+                    for _, e in ipairs(fresh or {}) do
+                        T.ok(inGroup[e.member], "only members of the group are named")
+                        T.ok((itemData.reqLevel or 0) <= e.member.level + 1, "at most one level too high for the member")
+                        T.ok(e.delta > 0, "a gain")
+                        T.ok(e.percent == nil or e.percent >= 3 - 1e-6, "at least three percent: " .. tostring(e.percent))
+                        T.ok(e.slot >= 1 and e.slot <= 18)
+                    end
+                    local state = Gp.State(link, "loot")
+                    T.eq(state, (fresh and #fresh > 0) and "GROUP" or nil, "state and list agree")
+                    if not Gp.Enabled() then T.eq(fresh, nil, "nothing when the hints are off") end
+                end
+            end
+
+            local last = nil
+            for _, r in ipairs(G.notified) do
+                T.eq(r.combat, false, "no request in combat") T.eq(r.lockdown, false, "no request in a lockdown")
+                T.eq(r.frame, false, "no request with an inspect window open") T.eq(r.talents, false)
+                T.ok(r.distance and r.distance <= 28, "only in range")
+                T.eq(r.connected, true) T.eq(r.visible, true)
+                if last then T.ok(r.at - last >= 2.5 - 1e-9, "requests are spaced out: " .. (r.at - last)) end
+                last = r.at
+                requestsChecked = requestsChecked + 1
+            end
+        end
+        T.ok(requestsChecked > 0, "the walk made requests")
+    end)
 end

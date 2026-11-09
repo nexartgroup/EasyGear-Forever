@@ -2,7 +2,8 @@
 return function(T)
     local F = require("fixtures")
 
-    -- flags: baganator = true | { broken = true } | { noWidgetAPI = true }, ellesmere = true | { noBags = true }
+    -- flags: baganator = true | { broken = true } | { noWidgetAPI = true }, ellesmere = true | { noBags = true },
+    --        group = function(W, G) that adds party members before the game starts
     local function world(flags)
         flags = flags or {}
         local models = {}
@@ -14,8 +15,9 @@ return function(T)
             w.I.potion = F.gear(w, 11004, "Potion", "", 1, {})
             if flags.baganator then models.B = w.installBaganator(type(flags.baganator) == "table" and flags.baganator or nil) end
             if flags.ellesmere then models.E = w.installEllesmere(type(flags.ellesmere) == "table" and flags.ellesmere or nil) end
+            if flags.group then models.G = w.installGroup() flags.group(w, models.G) end
         end)
-        return W, models.B, models.E
+        return W, models.B, models.E, models.G
     end
     local function arrow(b) return b.EasyGearArrow and b.EasyGearArrow:IsShown() or false end
 
@@ -535,6 +537,107 @@ return function(T)
         local slot = E.slot(1, 2)
         E.render(slot, W.I.better)
         T.eq(arrow(slot), true) T.eq(slot.cornerPlugins, nil)
+        T.eq(W.EG.lastError, nil)
+    end)
+
+    ------------------------------------------------------------------ the group star in the other bags
+    -- Bob, a priest in cloth, and a robe that is better for him and no upgrade for the warrior
+    local function withBob(w, g)
+        local gear = {}
+        local locs = { [1] = "INVTYPE_HEAD", [2] = "INVTYPE_NECK", [3] = "INVTYPE_SHOULDER", [5] = "INVTYPE_CHEST",
+                       [6] = "INVTYPE_WAIST", [7] = "INVTYPE_LEGS", [8] = "INVTYPE_FEET", [9] = "INVTYPE_WRIST",
+                       [10] = "INVTYPE_HAND" }
+        for slot, loc in pairs(locs) do
+            gear[slot] = F.gear(w, 40000 + slot, "Cloth" .. slot, loc, 30, { INT = 10, SP = 10 }, { subclassID = slot == 2 and 0 or 1 })
+        end
+        g.add("party1", { name = "Bob", class = "PRIEST", gear = gear })
+        w.I.robe = F.gear(w, 40100, "Robe", "INVTYPE_CHEST", 60, { INT = 30, SP = 80 }, { subclassID = 1 })
+        w.bag(0, 16, { [1] = w.I.robe })
+    end
+    local function starOf(widget) return widget.__atlas == "tradeskills-star" end
+    local HERE = { itemLocation = { bagID = 0, slotIndex = 1 } }
+
+    T.test("baganator: the widget shows the violet star for a group member's gain, the arrow again for your own", function()
+        local W, B = world({ baganator = true, group = withBob })
+        W.advance(30)
+        local b = B.button()
+        local widget = b.cornerPlugins.easygear
+        T.eq(B.update(b, W.I.robe, HERE), "easygear", "better for Bob, no upgrade for the warrior")
+        T.eq(starOf(widget), true) T.eq(widget.__desaturated, true) T.near(widget.__vertex[1], 0.75) T.near(widget.__vertex[3], 1.0)
+        T.eq(widget:GetWidth(), 15, "the size of the arrow in Baganator's corner")
+        T.eq(B.update(b, W.I.better, HERE), "easygear", "an upgrade for you")
+        T.eq(widget.__atlas, "bags-greenarrow") T.eq(widget.__desaturated, false)
+        T.eq(B.update(b, W.I.robe, HERE), "easygear")
+        T.eq(starOf(widget), true, "and back to the star: one widget shows both")
+        T.eq(B.isUpgrade(W.I.robe), false, "the upgrade source of Baganator's searches names only your own upgrades")
+        T.eq(B.isUpgrade(W.I.better), true)
+        T.eq(W.EG.lastError, nil)
+    end)
+
+    T.test("baganator: no star for items that are not in this character's bags, bound, or switched off", function()
+        local W, B = world({ baganator = true, group = withBob })
+        W.advance(30)
+        local b = B.button()
+        T.eq(B.update(b, W.I.robe), nil, "no location: another character's bags, the guild bank")
+        T.eq(B.update(b, W.I.robe, { itemLocation = { bagID = "x", slotIndex = 1 } }), nil)
+        T.eq(B.update(b, W.I.robe, HERE), "easygear")
+        W.bind(0, 1, false) W.EG:InvalidateAll() W.flush()
+        T.eq(B.update(b, W.I.robe, HERE), nil, "bound")
+        W.bind(0, 1, true) W.EG:InvalidateAll() W.flush()
+        T.eq(B.update(b, W.I.robe, HERE), "easygear", "bound but tradable")
+        W.EG:Set("showGroupHints", false) W.flush()
+        T.eq(B.update(b, W.I.robe, HERE), nil, "group hints off")
+        W.EG:Set("showGroupHints", true) W.advance(40)
+        W.EG:Set("showBagIcons", false)
+        T.eq(B.update(b, W.I.robe, HERE), nil, "bag markers off")
+        T.eq(B.update(b, nil, HERE), nil, "an empty slot")
+        T.eq(W.EG.lastError, nil)
+    end)
+
+    T.test("baganator: Baganator is asked to redraw when the gear of a member has been read", function()
+        local W, B, _, G = world({ baganator = true, group = withBob })
+        W.advance(30)
+        local before = #B.refreshes
+        G.gearChanged("party1")
+        W.advance(30)
+        T.ok(#B.refreshes > before, "new data of a member change the stars")
+        T.eq(B.refreshes[#B.refreshes][1], "item_widgets")
+    end)
+
+    T.test("ellesmere: the star sits where the arrow does - top right, on the layer the module gives to third parties", function()
+        local W, _, E = world({ ellesmere = true, group = withBob })
+        W.advance(30)
+        local b = E.slot(0, 1)
+        E.render(b, W.I.robe)
+        T.eq(starOf(b.EasyGearArrow), true) T.eq(b.EasyGearArrow:IsShown(), true)
+        local point, rel = b.EasyGearArrow:GetPoint(1)
+        T.eq(point, "TOPRIGHT") T.eq(rel, b._textOverlay)
+        T.eq(b.EasyGearArrow:GetWidth(), 16)
+        E.render(b, W.I.better)
+        T.eq(b.EasyGearArrow.__atlas, "bags-greenarrow", "an upgrade for you: the arrow")
+        local row = E.slot(0, 1, true)
+        E.render(row, W.I.robe)
+        T.eq(starOf(row.EasyGearArrow), true) T.eq(row.EasyGearArrow:GetWidth(), 10, "half as high as the row icon")
+        W.bind(0, 1, false) W.EG:InvalidateAll() W.flush()
+        E.render(b, W.I.robe)
+        T.eq(b.EasyGearArrow:IsShown(), false, "bound")
+        W.bind(0, 1, true) W.EG:InvalidateAll() W.flush()
+        E.render(b, W.I.robe)
+        T.eq(b.EasyGearArrow:IsShown(), true, "tradable")
+        E.render(b, nil)
+        T.eq(b.EasyGearArrow:IsShown(), false, "emptied")
+        T.eq(W.EG.lastError, nil) T.eq(#E.overlayErrors, 0)
+    end)
+
+    T.test("ellesmere: the stars follow the group without the bags drawing again", function()
+        local W, _, E, G = world({ ellesmere = true, group = withBob })
+        W.advance(30)
+        local b = E.slot(0, 1)
+        E.render(b, W.I.robe)
+        T.eq(b.EasyGearArrow:IsShown(), true)
+        G.remove("party1") G.rosterChanged() W.flush()
+        T.eq(b.EasyGearArrow:IsShown(), false, "Bob left the group")
+        G.add("party1", { name = "Bob", class = "PRIEST" })
         T.eq(W.EG.lastError, nil)
     end)
 end

@@ -6,6 +6,7 @@
 
         gruener Pfeil   echte Verbesserung gegenueber dem Angelegten
         gelber Pfeil    waere eine, aber die Charakterstufe reicht noch nicht
+        violetter Stern fuer dich keine Verbesserung, aber fuer ein Gruppenmitglied (Group.lua)
         Haken (rechts)  beste Wahl unter den Questbelohnungen
 
     Die Texturen sitzen auf einem eigenen Rahmen ueber dem Knopf (HostOf). Fremde Oberflaechen wie die
@@ -27,8 +28,9 @@ local pairs, pcall, type = pairs, pcall, type
 
 -- Atlas-Namen stehen im Client (die Taschen der Standard-Oberflaeche benutzen "bags-greenarrow");
 -- fehlt einer, faellt die Markierung auf eine feste Textur zurueck.
-local ARROW_ATLAS, CHECK_ATLAS = "bags-greenarrow", "common-icon-checkmark"
+local ARROW_ATLAS, CHECK_ATLAS, STAR_ATLAS = "bags-greenarrow", "common-icon-checkmark", "tradeskills-star"
 local ARROW_FILE, CHECK_FILE = "Interface\\Buttons\\UI-CheckBox-Check", "Interface\\Buttons\\UI-CheckBox-Check"
+local STAR_FILE = "Interface\\TargetingFrame\\UI-RaidTargetingIcon_1"
 local ARROW_SIZE, CHECK_SIZE = 18, 20
 local HOST_LEVEL = 8                  -- Rahmenebenen ueber dem Knopf
 
@@ -41,9 +43,20 @@ local function AtlasExists(name)
     return ok and info ~= nil
 end
 
---[[ Aussehen des Pfeils - fuer die Markierungen hier und fuer Eckenelemente fremder Taschen (Compat.lua):
-     Bild und Groesse, dann die Faerbung nach Zustand (gelb und entsaettigt: die Stufe reicht noch nicht)  ]]
+--[[ Aussehen der Markierung - fuer die Markierungen hier und fuer Eckenelemente fremder Taschen (Compat.lua):
+     Bild und Faerbung nach Zustand
+       "UPGRADE"  gruener Pfeil
+       "LEVEL"    gelber, entsaettigter Pfeil: die Stufe reicht noch nicht
+       "GROUP"    violetter Stern: besser fuer ein Gruppenmitglied
+     Das Bild wird bei jedem Aufruf gesetzt: ein Eckenelement von Baganator zeigt mal den Pfeil, mal den Stern.   ]]
 function Marks.TintArrow(tex, state)
+    if state == "GROUP" then
+        if AtlasExists(STAR_ATLAS) then tex:SetAtlas(STAR_ATLAS) else tex:SetTexture(STAR_FILE) end
+        tex:SetDesaturated(true)
+        tex:SetVertexColor(0.75, 0.40, 1.0)
+        return
+    end
+    if AtlasExists(ARROW_ATLAS) then tex:SetAtlas(ARROW_ATLAS) else tex:SetTexture(ARROW_FILE) end
     if state == "LEVEL" then
         tex:SetDesaturated(true)
         tex:SetVertexColor(1.0, 0.82, 0.0)
@@ -56,14 +69,9 @@ end
 function Marks.StyleArrow(tex, state, size)
     size = size or ARROW_SIZE
     tex:SetSize(size, size)
-    if AtlasExists(ARROW_ATLAS) then
-        tex:SetAtlas(ARROW_ATLAS)
-        tex:SetSize(size, size)
-    else
-        tex:SetTexture(ARROW_FILE)
-    end
-    tex:SetAlpha(1)
     Marks.TintArrow(tex, state)
+    tex:SetSize(size, size)             -- manche Bilder setzen ihre eigene Groesse
+    tex:SetAlpha(1)
 end
 
 -- Der Rahmen, auf dem die Markierungen eines Knopfes sitzen; scheitert das Anlegen, traegt der Knopf sie selbst.
@@ -176,6 +184,8 @@ function Marks.Update(button)
             state = hint and "UPGRADE" or nil
         elseif data.link then
             state = Score.UpgradeState(data.link)
+            -- Keine Verbesserung fuer dich: vielleicht fuer ein Gruppenmitglied (violetter Stern)
+            if state == nil and EG.Group then state = EG.Group.State(data.link, data.ctx, data.bag, data.slot) end
         end
         if data.best and Marks.Enabled(data.ctx) then show = true end
     end
@@ -191,6 +201,7 @@ end
 
 --[[ Ein Knopf zeigt jetzt diesen Link (nil = leer).
      opts: ctx (Pflicht), best (beste Questwahl), hint (Funktion -> Eintrag; nur fuer das Charakterfenster),
+           bag / slot (das Fach bei Taschen und Bank: die Gruppenhinweise pruefen daran, ob der Gegenstand noch tauschbar ist),
            corner / arrowSize / anchor (Lage, Groesse und Bezugsrahmen des Pfeils, wenn der Gastgeber des Knopfes
            sie vorgibt),
            iconRegion (das Symbol, wenn der Knopf breiter ist als das Symbol: der Pfeil sitzt dann dessen Ecke an,
@@ -214,6 +225,8 @@ function Marks.Set(button, link, opts)
     data.arrowSize = opts and opts.arrowSize or data.arrowSize
     data.anchor = opts and opts.anchor or data.anchor
     data.iconRegion = opts and opts.iconRegion or nil
+    data.bag = opts and opts.bag or nil
+    data.slot = opts and opts.slot or nil
     Marks.Update(button)
 end
 

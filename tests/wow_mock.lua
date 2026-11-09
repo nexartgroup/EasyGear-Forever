@@ -41,6 +41,7 @@ local GLOBAL_STRINGS = {
     ITEM_MIN_LEVEL = "Requires Level %d", DPS_TEMPLATE = "(%s damage per second)",
     ITEM_SOCKET_BONUS = "Socket Bonus: %s", ENCHANTED_TOOLTIP_LINE = "Enchanted: %s",
     ITEM_UNIQUE = "Unique", ITEM_UNIQUE_EQUIPPABLE = "Unique-Equipped", SPELL_STATALL = "All Stats",
+    ITEM_CLASSES_ALLOWED = "Classes: %s",
     HEADSLOT = "Head", NECKSLOT = "Neck", SHOULDERSLOT = "Shoulder", SHIRTSLOT = "Shirt", CHESTSLOT = "Chest",
     WAISTSLOT = "Waist", LEGSSLOT = "Legs", FEETSLOT = "Feet", WRISTSLOT = "Wrist", HANDSSLOT = "Hands",
     FINGER0SLOT = "Finger", FINGER1SLOT = "Finger", TRINKET0SLOT = "Trinket", TRINKET1SLOT = "Trinket",
@@ -357,6 +358,15 @@ function Mock.new(opts)
         WARRIOR = "Warrior", PALADIN = "Paladin", HUNTER = "Hunter", ROGUE = "Rogue", PRIEST = "Priest",
         SHAMAN = "Shaman", MAGE = "Mage", WARLOCK = "Warlock", DRUID = "Druid",
     }
+    env.LOCALIZED_CLASS_NAMES_FEMALE = {}
+    for k, v in pairs(env.LOCALIZED_CLASS_NAMES_MALE) do env.LOCALIZED_CLASS_NAMES_FEMALE[k] = v end
+    env.RAID_CLASS_COLORS = {
+        WARRIOR = { r = 0.78, g = 0.61, b = 0.43 }, PALADIN = { r = 0.96, g = 0.55, b = 0.73 },
+        HUNTER = { r = 0.67, g = 0.83, b = 0.45 }, ROGUE = { r = 1.00, g = 0.96, b = 0.41 },
+        PRIEST = { r = 1.00, g = 1.00, b = 1.00 }, SHAMAN = { r = 0.00, g = 0.44, b = 0.87 },
+        MAGE = { r = 0.25, g = 0.78, b = 0.92 }, WARLOCK = { r = 0.53, g = 0.53, b = 0.93 },
+        DRUID = { r = 1.00, g = 0.49, b = 0.04 },
+    }
     env.GetLocale = function() return opts.locale or "enUS" end
     env.GetBuildInfo = function() return "1.60.1", "70862", "Nov  7 2026", 16001 end
     env.GetTime = function() return self.now end
@@ -503,6 +513,12 @@ function Mock.new(opts)
                   isValidItemType = not it.badType, isValidInvSlot = true })
         end
         if it.unique then add({ type = 0, leftText = it.unique == "equip" and "Unique-Equipped" or "Unique", leftColor = COLOR.white }) end
+        if it.classes then
+            local mine = self.player.class:sub(1, 1) .. self.player.class:sub(2):lower()
+            add({ type = TOOLTIP_LINE_TYPE.UsageRequirement, requirementType = 0,
+                  leftText = sformat(GLOBAL_STRINGS.ITEM_CLASSES_ALLOWED, it.classes),
+                  leftColor = it.classes:find(mine, 1, true) and COLOR.white or COLOR.red })
+        end
         if (it.minLevel or 0) > 0 then
             local red = (it.minLevel or 0) > (self.player.level or 1)
             add({ type = TOOLTIP_LINE_TYPE.UsageRequirement, requirementType = 5,
@@ -537,6 +553,19 @@ function Mock.new(opts)
             local it = link and itemFromAny(link)
             if not it then return nil end
             return tooltipDataFor(it)
+        end,
+        -- the tooltip of a bag item; a soulbound item that may still be traded carries the trade time line
+        GetBagItem = function(bag, slot)
+            local b = self.bags[bag]
+            local link = b and b.items[slot]
+            local it = link and itemFromAny(link)
+            if not it then return nil end
+            local data = tooltipDataFor(it)
+            if b.trade and b.trade[slot] then
+                data.lines[#data.lines + 1] = { type = TOOLTIP_LINE_TYPE.TradeTimeRemaining,
+                                                leftText = "You may trade this item for the next 1 hour.", leftColor = COLOR.white }
+            end
+            return data
         end,
     }
 
@@ -586,7 +615,8 @@ function Mock.new(opts)
             local link = b and b.items[slot]
             if not link then return nil end
             local it = itemFromAny(link)
-            return { hyperlink = link, itemID = it and it.id, quality = it and it.quality }
+            return { hyperlink = link, itemID = it and it.id, quality = it and it.quality,
+                     isBound = (b.bound and b.bound[slot]) and true or false }
         end,
     }
     env.GetInventoryItemLink = function(unit, slot)
@@ -933,6 +963,160 @@ function Mock.new(opts)
         return b, element
     end
 
+    -- A bound item in a bag; with tradeWindow the item may still be traded (the loot trade time line is in its tooltip)
+    function H.bind(bag, slot, tradeWindow)
+        local b = self.bags[bag]
+        b.bound = b.bound or {}
+        b.trade = b.trade or {}
+        b.bound[slot] = true
+        b.trade[slot] = tradeWindow and true or nil
+    end
+
+    ------------------------------------------------------------ party, raid and inspecting
+    --[[ A party or raid and the inspect machinery of the client, reduced to what the addon touches (Blizzard_InspectUI):
+         unit tokens with guid, name, class and level; CanInspect, CheckInteractDistance, NotifyInspect and the event
+         INSPECT_READY(guid) that follows a request after a short latency - only for a member who is connected, visible
+         and within 28 yards. While the client holds the data of a member (he was inspected last), his equipment can
+         be read with GetInventoryItemLink(unit, slot) and his specialization with GetInspectSpecialization(unit).
+         member def: name, class, level, distance, connected, visible, gear = { [slot] = link }, tab (talent tree 1..3) ]]
+    local CLASS_IDS = { WARRIOR = 1, PALADIN = 2, HUNTER = 3, ROGUE = 4, PRIEST = 5, SHAMAN = 7, MAGE = 8, WARLOCK = 9,
+                        DRUID = 11 }
+    function H.installGroup()
+        local G = { members = {}, notified = {}, raid = false, combat = false, lockdown = false, inspectFrameShown = false,
+                    talentInspect = false, latency = 0.3, answers = true, failNotify = false, inspectedGUID = nil,
+                    unreadable = {} }
+        local counter = 0
+
+        function G.add(unit, def)
+            def = def or {}
+            counter = counter + 1
+            local class = def.class or "PRIEST"
+            local m = {
+                unit = unit, guid = def.guid or ("Player-1-" .. counter), name = def.name or ("Member" .. counter),
+                class = class, classID = CLASS_IDS[class], level = def.level or 60, connected = def.connected ~= false,
+                visible = def.visible ~= false, distance = def.distance or 10, gear = def.gear or {}, tab = def.tab,
+                className = def.className, isPlayer = def.isPlayer, npc = def.npc, inspectable = def.inspectable,
+            }
+            G.members[unit] = m
+            return m
+        end
+        function G.remove(unit) G.members[unit] = nil end
+        function G.setRaid(on) G.raid = on and true or false end
+        function G.rosterChanged() H.fire("GROUP_ROSTER_UPDATE") end
+        function G.gearChanged(unit) H.fire("UNIT_INVENTORY_CHANGED", unit) end
+        -- somebody inspects a member by hand (the player, or another addon): the client answers like it does for a request
+        function G.inspectByHand(unit)
+            local m = G.members[unit]
+            G.inspectedGUID = m.guid
+            H.fire("INSPECT_READY", m.guid)
+        end
+        function G.requests(unit)
+            local n = 0
+            for _, r in ipairs(G.notified) do if unit == nil or r.unit == unit then n = n + 1 end end
+            return n
+        end
+
+        local function count()
+            local n = 0
+            for _ in pairs(G.members) do n = n + 1 end
+            return n
+        end
+        env.IsInGroup = function() return next(G.members) ~= nil end
+        env.IsInRaid = function() return G.raid end
+        env.GetNumGroupMembers = function()
+            if G.raid then
+                local top = 0
+                for unit in pairs(G.members) do
+                    local i = tonumber(unit:match("^raid(%d+)$"))
+                    if i and i > top then top = i end
+                end
+                return top
+            end
+            return count() + 1
+        end
+        env.UnitExists = function(unit) return unit == "player" or G.members[unit] ~= nil end
+        env.UnitIsUnit = function(a, b)
+            if a == b then return true end
+            local ma, mb = G.members[a], G.members[b]
+            if a == "player" and mb and mb.isPlayer then return true end
+            if b == "player" and ma and ma.isPlayer then return true end
+            return false
+        end
+        env.UnitIsPlayer = function(unit)
+            local m = G.members[unit]
+            return unit == "player" or (m ~= nil and not m.npc)
+        end
+        env.UnitGUID = function(unit)
+            local m = G.members[unit]
+            if unit == "player" or (m and m.isPlayer) then return "Player-1-PLAYER" end
+            return m and m.guid or nil
+        end
+        env.UnitName = function(unit)
+            local m = G.members[unit]
+            if m then return m.name end
+            return "Player"
+        end
+        local baseClass, baseLevel = env.UnitClass, env.UnitLevel
+        env.UnitClass = function(unit)
+            local m = G.members[unit]
+            if unit == "player" or not m or m.isPlayer then return baseClass() end
+            return m.className or (m.class:sub(1, 1) .. m.class:sub(2):lower()), m.class, m.classID
+        end
+        env.UnitLevel = function(unit)
+            local m = G.members[unit]
+            if unit == "player" or not m or m.isPlayer then return baseLevel() end
+            return m.level
+        end
+        env.UnitIsConnected = function(unit) local m = G.members[unit] return m == nil or m.connected end
+        env.UnitIsVisible = function(unit) local m = G.members[unit] return m == nil or m.visible end
+        env.CanInspect = function(unit) local m = G.members[unit] return m ~= nil and m.inspectable ~= false end
+        env.CheckInteractDistance = function(unit, index)
+            local m = G.members[unit]
+            return m ~= nil and index == 1 and m.distance <= 28
+        end
+        env.InCombatLockdown = function() return G.lockdown end          -- the two differ in the client: the lockdown
+        env.UnitAffectingCombat = function() return G.combat end         -- of the interface and the state of the unit
+        env.InspectFrame = { IsShown = function() return G.inspectFrameShown end }
+        env.PlayerSpellsFrame = { IsInspecting = function() return G.talentInspect end }
+        env.NotifyInspect = function(unit)
+            if G.failNotify then error("NotifyInspect failed") end
+            local m = G.members[unit]
+            -- what the world looked like when the request was made (the fuzz test checks the manners of the addon)
+            G.notified[#G.notified + 1] = { unit = unit, at = self.now, combat = G.combat, lockdown = G.lockdown,
+                                            frame = G.inspectFrameShown, talents = G.talentInspect,
+                                            distance = m and m.distance, connected = m and m.connected,
+                                            visible = m and m.visible, inspectable = m and m.inspectable }
+            if not (m and m.connected and m.visible and m.distance <= 28 and G.answers) then return end
+            env.C_Timer.After(G.latency, function()
+                G.inspectedGUID = m.guid
+                H.fire("INSPECT_READY", m.guid)
+            end)
+        end
+
+        local baseLink = env.GetInventoryItemLink
+        env.GetInventoryItemLink = function(unit, slot)
+            if unit == "player" then return baseLink(unit, slot) end
+            local m = G.members[unit]
+            if m and G.inspectedGUID == m.guid and not G.unreadable[slot] then return m.gear[slot] end
+            return nil
+        end
+        env.GetInventoryItemID = function(unit, slot)
+            local m = G.members[unit]
+            local link = m and G.inspectedGUID == m.guid and m.gear[slot]
+            return link and tonumber(tostring(link):match("item:(%d+)")) or nil
+        end
+        env.GetSpecializationInfoForClassID = function(classID, index)
+            if not classID or index < 1 or index > 3 then return nil end
+            return 1000 * classID + index, "Tree" .. index
+        end
+        env.C_SpecializationInfo.GetInspectSpecialization = function(unit)
+            local m = G.members[unit]
+            if not (m and G.inspectedGUID == m.guid and m.tab) then return 0 end
+            return 1000 * m.classID + m.tab
+        end
+        return G
+    end
+
     ------------------------------------------------------------ other addons (models for the compatibility tests)
     --[[ Baganator, reduced to what its public interface promises (API/Main.lua of release 834): corner widgets - the game
          calls onInit once per button and onUpdate on every refresh, the first widget of a corner list that answers true
@@ -988,8 +1172,9 @@ function Mock.new(opts)
             return b
         end
         -- one refresh of a button. Returns the id of the widget that is shown (the first one of the corner list that says yes)
-        function model.update(b, link)
+        function model.update(b, link, details)
             b.BGR = { itemLink = link }
+            for k, v in pairs(details or {}) do b.BGR[k] = v end
             b:SetItemButtonQuality(1, link, false, false)
             for _, widget in pairs(b.cornerPlugins) do widget:Hide() end
             local shownBy, pending = nil, false
