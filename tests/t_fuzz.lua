@@ -195,6 +195,182 @@ return function(T)
         T.ok(checks >= 40 * RUNS_STATE, "enough checks: " .. checks)
     end)
 
+    -- the events that can change a verdict, as one step of a random walk (the walk flushes the timers afterwards)
+    local function randomEvent(W, pool, locs, class)
+        local action = rnd(8)
+        if action == 1 then
+            local i = rnd(#pool)
+            local slot = SLOT_OF[locs[i]]
+            if slot then W.equip(slot, pool[i]) W.fire("PLAYER_EQUIPMENT_CHANGED", slot) end
+        elseif action == 2 then
+            local slot = rnd(18)
+            W.equip(slot, nil)
+            W.fire("PLAYER_EQUIPMENT_CHANGED", slot)
+        elseif action == 3 then
+            local link, loc = randomItem(W)
+            local slot = SLOT_OF[loc]
+            if slot then W.equip(slot, link) W.fire("UNIT_INVENTORY_CHANGED", "player") end
+        elseif action == 4 then
+            W.setLevel(pick({ 30, 45, 60 }))
+        elseif action == 5 then
+            W.EG.Profiles.SetActive(rnd(3) == 1 and "AUTO" or pick(W.EG.Profiles.List(class)).id)
+        elseif action == 6 then
+            W.slash(pick({ "ilvl 0.7", "ilvl 0.5", "mindelta 3", "mindelta 0", "enchants off", "enchants on", "autolevel off", "autolevel on" }))
+        elseif action == 7 then
+            W.EG:Set("showBagIcons", rnd(3) ~= 1)
+        else
+            W.fire("GET_ITEM_INFO_RECEIVED", 100000 + rnd(40), rnd(2) == 1)
+        end
+    end
+
+    --[[ Baganator redraws a button only when it is told to. Whenever an event changes what the arrow of any button
+         should say, EasyGear must have asked for a redraw; after the redraw the widgets show the verdicts.        ]]
+    T.test("fuzz: Baganator is asked to redraw whenever a verdict changed, and its widgets follow the verdicts", function()
+        local RUNS_B = math.max(3, math.floor(RUNS / 3))
+        local walks = 0
+        for run = 1, RUNS_B do
+            local class = pick(CLASSES)
+            local Bm
+            local W = T.world({ class = class, level = pick({ 30, 60 }),
+                                talents = { mode = "specinfo", points = { rnd(41) - 1, rnd(41) - 1, rnd(41) - 1 } } },
+                              function(w) Bm = w.installBaganator() end)
+            local pool, locs, buttons = {}, {}, {}
+            for i = 1, 10 do pool[i], locs[i] = randomItem(W) end
+            for i = 1, 5 do
+                buttons[i] = Bm.button()
+                Bm.update(buttons[i], pool[i])
+            end
+            local function verdicts()
+                local out = {}
+                for i, b in ipairs(buttons) do
+                    local link = b.BGR and b.BGR.itemLink
+                    local state = (link and W.EG:Get("showBagIcons") ~= false) and W.EG.Score.UpgradeState(link) or nil
+                    out[i] = state or false
+                end
+                return out
+            end
+            for step = 1, 30 do
+                local before, asked = verdicts(), #Bm.refreshes
+                randomEvent(W, pool, locs, class)
+                W.flush()
+                local after = verdicts()
+                local changed = false
+                for i = 1, #buttons do if before[i] ~= after[i] then changed = true end end
+                if changed then T.ok(#Bm.refreshes > asked, "a verdict changed but Baganator was not asked (run " .. run .. ", step " .. step .. ")") end
+                if #Bm.refreshes > asked then                       -- what Baganator does on a request
+                    for _, b in ipairs(buttons) do Bm.update(b, b.BGR.itemLink) end
+                end
+                for i, b in ipairs(buttons) do
+                    T.eq(b.cornerPlugins.easygear:IsShown(), after[i] ~= false, "widget " .. i .. " follows its verdict (run " .. run .. ")")
+                end
+                local b = pick(buttons)                              -- a new item arrives in one of the buttons (or none)
+                local arrived = pick(pool)
+                if rnd(4) == 1 then arrived = nil end
+                Bm.update(b, arrived)
+                walks = walks + 1
+                T.eq(W.EG.lastError, nil, "no internal error: " .. tostring(W.EG.lastError and W.EG.lastError.err))
+            end
+        end
+        T.ok(walks >= 30 * RUNS_B)
+    end)
+
+    --[[ EllesmereUI's slots and list rows are filled and emptied by their owner without any notice to EasyGear except
+         the quality and the texture calls; the owner also resizes and raises its buttons. The arrows must follow the
+         items that are really in the slots, be half as high as the icon below (8 to 16 pixels) and sit on a frame
+         that stays above the layer they hang on.                                                                      ]]
+    T.test("fuzz: EllesmereUI's bag slots and list rows show the verdict of their item and nothing when emptied", function()
+        local RUNS_E = math.max(3, math.floor(RUNS / 3))
+        for run = 1, RUNS_E do
+            local class = pick(CLASSES)
+            local Em
+            local W = T.world({ class = class, level = pick({ 30, 60 }),
+                                talents = { mode = "specinfo", points = { rnd(41) - 1, rnd(41) - 1, rnd(41) - 1 } } },
+                              function(w) Em = w.installEllesmere() end)
+            local pool, locs, slots = {}, {}, {}
+            for i = 1, 10 do pool[i], locs[i] = randomItem(W) end
+            for i = 1, 6 do slots[i] = { button = Em.slot(0, i, i > 3) } end          -- three grid slots, three list rows
+            for step = 1, 30 do
+                local rec = pick(slots)                                  -- a slot is refilled or emptied
+                rec.link = pick(pool)
+                if rnd(4) == 1 then rec.link = nil end
+                local overlay = rec.button._textOverlay
+                if rnd(3) == 1 then overlay:SetHeight(pick({ 0, 10, 16, 17, 20, 24, 31, 32, 37, 48 })) end   -- resized ...
+                if rnd(3) == 1 then overlay:SetFrameLevel(rnd(200)) end                                        -- ... or raised
+                Em.render(rec.button, rec.link)
+                rec.height = overlay:GetHeight()
+                randomEvent(W, pool, locs, class)
+                W.flush()                                                -- the marks refresh after the debounce
+                for i, r in ipairs(slots) do
+                    local expected = false
+                    if r.link and W.EG:Get("showBagIcons") ~= false then expected = W.EG.Score.UpgradeState(r.link) ~= nil end
+                    local shown = r.button.EasyGearArrow and r.button.EasyGearArrow:IsShown() or false
+                    T.eq(shown, expected, "slot " .. i .. " (run " .. run .. ", step " .. step .. ")")
+                    if shown then
+                        local want = 16
+                        if r.height and r.height > 0 then want = math.max(8, math.min(16, math.floor(r.height * 0.5))) end
+                        T.eq(r.button.EasyGearArrow:GetWidth(), want, "size of the arrow in slot " .. i .. " (run " .. run .. ")")
+                        T.eq(r.button.EasyGearHost:GetFrameLevel(), r.button._textOverlay:GetFrameLevel() + 8,
+                             "level of the frame with the marks in slot " .. i .. " (run " .. run .. ")")
+                    end
+                end
+                T.eq(W.EG.lastError, nil, "no internal error: " .. tostring(W.EG.lastError and W.EG.lastError.err))
+            end
+        end
+    end)
+
+    --[[ The vendor window: a standard row (square button, the icon is the button's own) and a row in EllesmereUI's list
+         view (the button covers the row, the icon is the SlotTexture of the row). The stock text comes before the
+         quality in the standard window and after it in the list view. In every order, the arrow must show the verdict
+         at the corner of the right icon - the other corner while the stock text is shown.                         ]]
+    T.test("fuzz: vendor rows show the verdict at the icon, giving way to the stock text in either call order", function()
+        local RUNS_V = math.max(3, math.floor(RUNS / 3))
+        for run = 1, RUNS_V do
+            local class = pick(CLASSES)
+            local W = T.world({ class = class, level = pick({ 30, 60 }),
+                                talents = { mode = "specinfo", points = { rnd(41) - 1, rnd(41) - 1, rnd(41) - 1 } } })
+            local pool, locs, rows = {}, {}, {}
+            for i = 1, 10 do pool[i], locs[i] = randomItem(W) end
+            for i = 1, 6 do
+                local frame = W.env.CreateFrame("Frame")
+                frame.SlotTexture = frame:CreateTexture(nil, "BACKGROUND")
+                frame.ItemButton = W.namedButton("MerchantItem" .. i .. "ItemButton", i)
+                local wide = i > 3
+                if wide then frame.ItemButton:SetSize(pick({ 200, 300, 450 }), pick({ 20, 24, 32 }))
+                else frame.ItemButton:SetSize(37, 37) end
+                frame.ItemButton.Stock = W.env.CreateFrame("Frame", nil, frame.ItemButton)
+                frame.ItemButton.Stock:Hide()
+                rows[i] = { frame = frame, wide = wide, stock = 0 }
+            end
+            for step = 1, 40 do
+                local r = pick(rows)
+                local link, stock = pick(pool), pick({ 0, 0, 1, 5, 20 })
+                if rnd(5) == 1 then link = nil end
+                if rnd(2) == 1 then                                      -- the standard window: stock first, then quality
+                    W.env.SetItemButtonStock(r.frame.ItemButton, stock)
+                    W.env.MerchantFrameItem_UpdateQuality(r.frame, link, false)
+                else                                                     -- EllesmereUI's list: quality first, then stock
+                    W.env.MerchantFrameItem_UpdateQuality(r.frame, link, false)
+                    W.env.SetItemButtonStock(r.frame.ItemButton, stock)
+                end
+                r.link, r.stock = link, stock
+                if rnd(3) == 1 then randomEvent(W, pool, locs, class) W.flush() end
+                for i, row in ipairs(rows) do
+                    local b = row.frame.ItemButton
+                    local expected = false
+                    if row.link and W.EG:Get("showItemIcons") ~= false then expected = W.EG.Score.UpgradeState(row.link) ~= nil end
+                    local shown = b.EasyGearArrow and b.EasyGearArrow:IsShown() or false
+                    T.eq(shown, expected, "row " .. i .. " (run " .. run .. ", step " .. step .. ")")
+                    if shown then
+                        local point, rel = b.EasyGearArrow:GetPoint(1)
+                        T.eq(point, row.stock > 0 and "TOPRIGHT" or "TOPLEFT", "corner of row " .. i .. " (run " .. run .. ")")
+                        T.eq(rel, row.wide and row.frame.SlotTexture or (b.Icon or b.icon), "icon of row " .. i .. " (run " .. run .. ")")
+                    end
+                end
+                T.eq(W.EG.lastError, nil, "no internal error: " .. tostring(W.EG.lastError and W.EG.lastError.err))
+            end
+        end
+    end)
+
     T.test("fuzz: a copy of the worn item in a single-slot position never gains", function()
         local W = T.world(F.arms(), function(w) w.I = F.armsWarrior(w) end)
         local r = W.EG.Score.Compare(W.I.chest)

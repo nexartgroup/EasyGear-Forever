@@ -10,6 +10,12 @@
     Charakterfenster). Der Haendler ruft stattdessen die Methode des Knopfes auf und hat deshalb einen
     eigenen Haken (MerchantFrameItem_UpdateQuality); die Wuerfelfenster auch (GroupLootFrame_SetupItemDisplay).
 
+    Knoepfe fremder Taschen (Baganator, EllesmereUI Bags) setzen die Qualitaet ueber die Methode des Knopfes und
+    zeichnen ihre Symbole ueber eigene Schnittstellen; sie werden hier uebergangen und von Compat.lua bedient.
+
+    Die Haendler-Restmenge (SetItemButtonStock) hat einen eigenen Haken, weil die Listenansicht von EllesmereUI sie erst
+    nach der Qualitaet setzt: der Pfeil weicht ihr aus (Marks.ShowArrow) und muss dafuer noch einmal gezeichnet werden.
+
     Welche Art von Knopf es ist, zeigt der Knopf selbst:
         Taschen        GetBagID()                       (ContainerFrameItemButtonMixin)
         Bank           GetBankTabID()                   (BankPanelItemButtonMixin)
@@ -227,6 +233,18 @@ end
 ------------------------------------------------------------------------------
 
 local function OnItemButton(button, _, idOrLink)
+    -- Gehoert der Knopf einer fremden Tasche? Dann zeichnet Compat.lua ueber deren Schnittstelle, und hier bekommt er
+    -- nichts (sonst stuende der Pfeil doppelt dort). Geprueft wird bei jedem Aufruf: die Merkmale entstehen erst im
+    -- Laufe der Aktualisierung des Knopfes.
+    local Compat = EG.Compat
+    local host = Compat and Compat.HostOf(button)
+    if host then
+        -- Was hier vor dem Auftauchen der Merkmale gezeichnet wurde, geht bei Baganator weg; bei EllesmereUI gehoert die
+        -- Markierung dem Maler von Compat.lua und bleibt
+        if host == "baganator" and Marks.registry[button] then Marks.Clear(button) end
+        return
+    end
+
     local ctx = ctxOf[button]
     if ctx == nil then
         ctx = Classify(button)
@@ -253,10 +271,29 @@ local function OnItemButton(button, _, idOrLink)
     if ctx == "quest" then ScheduleQuestBest() end
 end
 
+--[[ Das Symbol einer Haendlerzeile, wenn der Knopf breiter ist als das Symbol: In der Listenansicht von EllesmereUI deckt der
+     Knopf die ganze Zeile, und das Symbol ist die Textur SlotTexture der Zeile (der Knopf selbst zeigt kein Bild). Der Pfeil
+     gehoert an deren Ecke, nicht an die rechte Zeilenkante (dort stuende der Preis). Beim Standardfenster ist der Knopf
+     quadratisch (SlotTexture ist dort der Hintergrund hinter ihm), und es bleibt beim Symbol des Knopfes.              ]]
+local function WideMerchantIcon(frame, button)
+    local slot = frame.SlotTexture
+    if type(slot) ~= "table" or not slot.GetObjectType then return nil end
+    if not (button.GetWidth and button.GetHeight) then return nil end
+    local w, h = button:GetWidth(), button:GetHeight()
+    if type(w) == "number" and type(h) == "number" and h > 0 and w > h * 1.5 then return slot end
+    return nil
+end
+
 local function OnMerchantItem(frame, link)
     local button = frame and frame.ItemButton
     if not button then return end
-    Marks.Set(button, IsLinkOrID(link) and link or nil, { ctx = "merchant" })
+    Marks.Set(button, IsLinkOrID(link) and link or nil, { ctx = "merchant", iconRegion = WideMerchantIcon(frame, button) })
+end
+
+-- Die Restmenge (Stock) kommt bei der Listenansicht von EllesmereUI erst NACH der Qualitaet an den Knopf (der Standard-
+-- Haendler setzt sie davor): der Pfeil wechselt auf die rechte Ecke, sobald die Zahl links steht
+local function OnItemStock(button)
+    Marks.Update(button)                     -- ein Knopf ohne Markierung bleibt unberuehrt (Marks.Update prueft das)
 end
 
 -- Der Link zu einem Wuerfelfenster: GetLootRollItemLink (so klickt auch das Fenster den Gegenstand an,
@@ -297,6 +334,7 @@ end
 EG:OnLoad("contexts", function()
     Hook("itembuttons", "SetItemButtonQuality", OnItemButton)
     Hook("merchant", "MerchantFrameItem_UpdateQuality", OnMerchantItem)
+    Hook("merchantstock", "SetItemButtonStock", OnItemStock)
     Hook("rolls", "GroupLootFrame_SetupItemDisplay", OnRollItem)
 end)
 

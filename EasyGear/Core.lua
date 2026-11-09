@@ -1,5 +1,5 @@
 --[[---------------------------------------------------------------------------
-    EasyGear 4.0.0 - Forever
+    EasyGear 4.1.0 - Forever
     Ausruestungsbewertung, Upgrade-Erkennung und Vergleich fuer WoW Forever
 
     Dieses Addon vergleicht und empfiehlt, mehr nicht: es verschickt keine
@@ -18,6 +18,7 @@
       Tooltip.lua        Zeilen im Gegenstands-Tooltip
       Marks.lua          Markierungen auf Gegenstandssymbolen
       Contexts.lua       Anbindung: Taschen, Bank, Haendler, Beute, Wuerfeln, Quests, ...
+      Compat.lua         Anbindung an Baganator und EllesmereUI (optional)
       Window.lua         Vergleichsfenster
       ProfileWindow.lua  Profilfenster
       Options.lua        Einstellungsseite (Optionen > AddOns) und Addon-Fach
@@ -45,7 +46,7 @@ do
     if C_AddOns and C_AddOns.GetAddOnMetadata then
         meta = C_AddOns.GetAddOnMetadata(EG.name, "Version")
     end
-    EG.version = meta or "4.0.0"
+    EG.version = meta or "4.1.0"
 end
 
 -- WoW Forever meldet sich ueber WOW_PROJECT_ID == WOW_PROJECT_CAMELOT (Blizzard_ProjectConstants).

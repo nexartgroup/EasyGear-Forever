@@ -34,6 +34,8 @@ CLIENT_STRINGS = {
 # what the addon defines itself (see .luacheckrc)
 OWN_GLOBALS = {"EasyGear", "EasyGearDB", "EasyGearCharDB", "EasyGearLocales"}
 OWN_PREFIXES = ("SLASH_EASYGEAR", "EasyGear_")
+# globals of optional third-party addons that Compat.lua reaches through _G (never required)
+THIRD_PARTY = {"Baganator", "Syndicator", "EllesmereUI", "EUI_Bags"}
 
 STRING_METHODS = {"find", "format", "gmatch", "gsub", "len", "lower", "match", "rep", "reverse", "sub", "upper", "byte"}
 # Methods of Lua tables from the standard library or of objects that are not UI objects
@@ -66,7 +68,7 @@ for p in sorted(lua_files):
         for m in re.finditer(r"_G\.([A-Za-z_]\w*)|_G\[\"([A-Za-z_]\w*)\"\]", line):
             name = m.group(1) or m.group(2)
             if (name not in ui_globals and name not in OWN_GLOBALS and name not in CLIENT_STRINGS
-                    and not name.startswith(OWN_PREFIXES)):
+                    and name not in THIRD_PARTY and not name.startswith(OWN_PREFIXES)):
                 bad.append("%s:%d: _G.%s is not a global of the UI source" % (rel, lineno, name))
         for m in re.finditer(r"hooksecurefunc\(\s*\"([A-Za-z_]\w*)\"|\bHook\(\s*\"[^\"]*\",\s*\"([A-Za-z_]\w*)\"", line):
             name = m.group(1) or m.group(2)

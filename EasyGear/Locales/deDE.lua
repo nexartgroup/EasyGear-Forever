@@ -290,4 +290,12 @@ EasyGearLocales["deDE"] = {
     HOOKS_FAILED = "Einige Teile der Spieloberfläche wurden nicht gefunden, deshalb sind manche Funktionen aus. Einzelheiten: /eg status",
     HAS_EXTRAS = "Enthält die Werte von Verzauberungen und Edelsteinen.",
     UPGRADE_AT_LEVEL = "VERBESSERUNG ab Stufe %d",
+    COMPAT_WIDGET = "EasyGear-Verbesserungspfeil",
+    COMPAT_NOT_FOUND = "nicht installiert",
+    COMPAT_BAGANATOR_OK = "Pfeil als Eckenelement (Voreinstellung: oben rechts) und als Verbesserungs-Quelle angemeldet",
+    COMPAT_BAGANATOR_NOAPI = "gefunden, aber seine Schnittstelle ist nicht nutzbar",
+    COMPAT_ELLESMERE_OK = "gefunden - die Markierungen sitzen auf einem eigenen Rahmen, die Fensterhaut kann sie nicht ausblenden.",
+    COMPAT_ELLESMERE_BAGS = "Taschenmodul: Pfeil über seine Overlay-Schnittstelle (oben rechts am Gegenstand).",
+    COMPAT_ELLESMERE_NOAPI = "Taschenmodul: geladen, aber ohne seine Overlay-Schnittstelle - dort kein Pfeil.",
+    COMPAT_ELLESMERE_NOBAGS = "Taschenmodul: nicht geladen.",
 }

@@ -294,6 +294,9 @@ function Slash.PrintStatus()
             or (C.bad .. name .. C.reset .. (s.note and (" (" .. s.note .. ")") or ""))
     end
     EG:Raw(L.ST_HOOKS .. ": " .. (#parts > 0 and tconcat(parts, ", ") or "-"))
+    if EG.Compat then
+        for _, line in ipairs(EG.Compat.StatusLines()) do EG:Raw(line) end
+    end
     if EG.lastError then
         EG:Raw(C.bad .. L.ST_LASTERROR .. ": [" .. tostring(EG.lastError.label) .. "] " .. tostring(EG.lastError.err) .. C.reset)
     end

@@ -79,7 +79,7 @@ end
 
 local files = {
     "t_load", "t_stats", "t_items", "t_specs", "t_profiles", "t_score", "t_recommend", "t_tooltip", "t_marks",
-    "t_windows", "t_options", "t_slash", "t_locales", "t_robust", "t_fuzz",
+    "t_compat", "t_windows", "t_options", "t_slash", "t_locales", "t_robust", "t_fuzz",
 }
 for _, f in ipairs(files) do
     local path = "tests/" .. f .. ".lua"

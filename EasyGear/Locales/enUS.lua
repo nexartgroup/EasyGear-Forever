@@ -300,4 +300,12 @@ EasyGearLocales["enUS"] = {
     HOOKS_FAILED = "Some parts of the game interface were not found, so some features are off. Details: /eg status",
     HAS_EXTRAS = "Includes the values of enchants and gems.",
     UPGRADE_AT_LEVEL = "UPGRADE from level %d",
+    COMPAT_WIDGET = "EasyGear upgrade arrow",
+    COMPAT_NOT_FOUND = "not installed",
+    COMPAT_BAGANATOR_OK = "arrow registered as a corner widget (default: top right) and as an upgrade source",
+    COMPAT_BAGANATOR_NOAPI = "found, but its interface is not usable",
+    COMPAT_ELLESMERE_OK = "found - the marks sit on a frame of their own, so its window skin cannot hide them.",
+    COMPAT_ELLESMERE_BAGS = "Bags module: arrow through its overlay interface (top right of each item).",
+    COMPAT_ELLESMERE_NOAPI = "Bags module: loaded, but without its overlay interface - no arrow there.",
+    COMPAT_ELLESMERE_NOBAGS = "Bags module: not loaded.",
 }

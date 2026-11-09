@@ -16,7 +16,7 @@ return function(T)
 
     T.test("marks: the hooks are installed and reported", function()
         local W = world()
-        for _, name in ipairs({ "itembuttons", "merchant", "rolls", "tooltip", "settings", "shiftclick" }) do
+        for _, name in ipairs({ "itembuttons", "merchant", "merchantstock", "rolls", "tooltip", "settings", "shiftclick" }) do
             T.eq(W.EG.hookStatus[name] and W.EG.hookStatus[name].ok, true, name)
         end
         T.eq(W.EG.hookStatus.quest, nil, "QuestInfo_ShowRewards is not hooked: its callers hold the function values")
@@ -330,8 +330,9 @@ return function(T)
         W.showRewards()
         local _, rel = b[2].EasyGearCheck:GetPoint(1)
         T.eq(rel, b[2].Icon, "anchored to the icon")
-        _, rel = b[1].EasyGearArrow:GetPoint(1)
-        T.eq(rel, b[1], "the arrow stays at the corner of the button")
+        local point
+        point, rel = b[1].EasyGearArrow:GetPoint(1)
+        T.eq(point, "TOPLEFT") T.eq(rel, b[1].icon, "the arrow follows the icon too (its top left corner)")
     end)
 
     T.test("quest: no upgrade among the choices - the most valuable one to sell is marked", function()

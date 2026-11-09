@@ -34,10 +34,12 @@ need any other addon: it is built on the default Forever interface and nothing e
 - [Profiles](#profiles)
 - [Slots, weapons, rings](#slots-weapons-rings)
 - [Settings](#settings)
+- [Baganator and EllesmereUI](#baganator-and-ellesmereui)
 - [Troubleshooting](#troubleshooting)
 - [Verification](#verification)
 - [Known limits](#known-limits)
 - [The 3.3.5a edition](#the-335a-edition)
+- [Changes in 4.1.0](#changes-in-410)
 - [Changes in 4.0.0](#changes-in-400)
 
 ---
@@ -51,7 +53,7 @@ Restart the game or `/reload`. Saved settings are `EasyGearDB` (account) and `Ea
 From GitHub: *Code > Download ZIP*, unpack it, and copy the inner folder `EasyGear` - not the folder of the
 ZIP itself (`EasyGear-Forever-main`), which also holds the tests and tools.
 
-At login the chat shows `EasyGear 4.0.0 loaded.`
+At login the chat shows `EasyGear 4.1.0 loaded.`
 
 ## What you see
 
@@ -162,11 +164,41 @@ gain, the profile choice and a reset button. Everything takes effect immediately
 a value by chat command while the page is open.
 The addon-compartment entry on the minimap: left click opens the comparison window, right click the settings.
 
+## Baganator and EllesmereUI
+
+Neither is needed. When they are installed, the arrow shows up in their windows too; `/eg status` lists what
+EasyGear found.
+
+* **Baganator** (bags, bank, warband bank, other characters) draws its icons through *Icon Corners* that other
+  addons can fill. EasyGear registers one, **EasyGear upgrade arrow**, by default in the **top right** corner
+  (Baganator's own layout puts the junk coin and the item level at the top left). Green means upgrade, yellow
+  means upgrade as soon as your level reaches. Move or remove it under *Icon Corners* in Baganator's settings.
+  EasyGear also registers as an upgrade source (*Upgrade detection*), so that Baganator's searches and categories
+  use the same verdict; Baganator selects it by itself when no other source is chosen. The setting for bag markers
+  (`/eg icons`) switches both off. Baganator needs its companion addon **Syndicator** to run at all; without it
+  EasyGear registers nothing and `/eg status` says so.
+  Baganator puts a new corner widget into the layout of the profile that is active at login only. In another Baganator
+  profile, pick **EasyGear upgrade arrow** yourself under *Icon Corners*.
+* **EllesmereUI**: its Bags module builds its own item buttons, which the hooks on the interface's functions do not
+  see. It offers an overlay interface for other addons (`EUI_Bags.RegisterItemOverlayIcon`) that runs for every slot of
+  the bags, the reagent bag and the bank, in the grid and in the list view, empty slots included. EasyGear paints its
+  arrow through it - at the **top right** of each item, because the top left carries the item level - and the arrow
+  disappears when a slot is emptied. It is half as high as the icon below it (16 pixels on a regular slot, 10 in the
+  list view, never less than 8). EllesmereUI's window skin fades the textures of the item buttons it restyles
+  (vendor, loot, mail, quest rewards, character sheet); EasyGear's marks therefore sit on a frame of their own above
+  each button and stay visible; the frame follows the frame levels that the bags give their buttons later. In the
+  vendor window's *Show As List* view the button covers the whole row, so the arrow goes to the corner of the row's
+  icon (and to the other corner when the stock number sits there).
+* Both were read from their source (Baganator release 834, EllesmereUI Bags 9.8.3) and built against their public
+  interfaces; **they were tested here with models of those interfaces, not in the game with the real addons**
+  (see [Known limits](#known-limits)).
+
 ## Troubleshooting
 
-`/eg status` shows the interface hooks the addon installed (`itembuttons`, `merchant`, `rolls`,
-`tooltip`, `settings`, `shiftclick`): a red name with a reason means that part of the client interface
-was not found and that feature is off. It also prints the detected talent points and the last internal error.
+`/eg status` shows the interface hooks the addon installed (`itembuttons`, `merchant`, `merchantstock`, `rolls`,
+`tooltip`, `settings`, `shiftclick`, plus `baganator` and `ellesmere` when those addons are installed): a red name
+with a reason means that part of the client interface was not found and that feature is off. It lists the other
+addons it found. It also prints the detected talent points and the last internal error.
 Internal errors are printed once in the chat as `EasyGear[label]: message`.
 
 If an item scores oddly, `/eg parse <item link>` shows the values read from it; `/eg unknown` shows
@@ -181,8 +213,8 @@ and the exact text of any Lua error (`/console scriptErrors 1` shows them).
 Run from the root of this repository:
 
 ```
-lua5.1 tests/run.lua                 # unit tests on a model of the client (Lua 5.1 only), ~240 checks
-python3 tests/mutate.py              # mutation check: breaks the addon in ~140 small ways, the tests must notice
+lua5.1 tests/run.lua                 # unit tests on a model of the client (Lua 5.1 only), ~275 checks
+python3 tests/mutate.py              # mutation check: breaks the addon in ~200 small ways, the tests must notice
 tools/check.sh <Interface/AddOns of the Forever UI source>
                                      # luacheck against a std built from the UI source + checks that every
                                      # method, event, template, font, atlas and global the addon names exists
@@ -217,12 +249,29 @@ What this proves and what it does not:
 * The auction house is not marked; own trade items and sent mail are not marked.
 * Heirlooms, gem or enchant recommendations and automatic equipping do not exist by design.
 * Texts: English and German are complete; other languages are partly translated (missing texts show in English).
+* Baganator and EllesmereUI are connected through their public interfaces (corner widgets and upgrade source; item
+  overlay interface of the Bags module), tested against models of them. If an arrow does not show there, `/eg status`
+  tells which part was found. EllesmereUI's offline views of other characters' bags are not painted. Other bag addons
+  (Bagnon, ElvUI bags, ...) are not supported specifically.
 
 ## The 3.3.5a edition
 
 The addon for the old Wrath client (interface 30300, with ElvUI/Bagnon/Immersion support and the GM
 heirloom tools) lives in its own repository, [nexartgroup/EasyGear](https://github.com/nexartgroup/EasyGear).
 This edition is a new codebase for the Forever client, not an update of that one.
+
+## Changes in 4.1.0
+
+* **Baganator**: the arrow is a corner widget of Baganator (default: top right) and Baganator's upgrade source.
+* **EllesmereUI**: its Bags module shows the arrow through its overlay interface (top right of the item, removed when a
+  slot is emptied); EllesmereUI's window skin can no longer fade the marks.
+* The marks sit on a frame of their own above each item button and follow its icon; skins that fade the textures of a
+  button cannot hide them. The frame follows the frame levels the bags give their buttons later.
+* EllesmereUI's vendor window in *Show As List* view: the arrow sits at the corner of the row's icon, not at the end of
+  the row, and moves to the other corner when the stock number appears (new hook `merchantstock`).
+* EllesmereUI's arrow is half as high as the icon below it (8 to 16 pixels) instead of a fixed 16, so it fits the list view.
+* Baganator is only connected when Syndicator is there, which Baganator itself needs; `/eg status` reports the case.
+* `/eg status` lists the other addons that were found.
 
 ## Changes in 4.0.0
 
@@ -351,10 +400,40 @@ und -skalierung, Mindestzugewinn, Profilwahl und ein Zurücksetzen-Knopf. Alles 
 Wert per Chatbefehl änderst, während die Seite offen ist.
 Der Eintrag im Addon-Fach der Minimap: Linksklick Vergleichsfenster, Rechtsklick Einstellungen.
 
+## Baganator und EllesmereUI
+
+Beide werden nicht gebraucht. Sind sie installiert, erscheint der Pfeil auch in ihren Fenstern; `/eg status` listet, was
+EasyGear gefunden hat.
+
+* **Baganator** (Taschen, Bank, Kriegsmeute-Bank, andere Charaktere) zeichnet seine Symbole über *Icon-Ecken*, die andere
+  Addons füllen können. EasyGear meldet eine an, den **EasyGear-Verbesserungspfeil**, voreingestellt in der Ecke **oben
+  rechts** (Baganator legt oben links Müllsymbol und Gegenstandsstufe ab). Grün heißt Verbesserung, gelb heißt: eine
+  Verbesserung, sobald deine Stufe reicht. In Baganators Einstellungen unter *Icon-Ecken* lässt er sich verschieben oder
+  entfernen. Außerdem meldet sich EasyGear als Quelle für die *Erkennung von Upgrades* an, damit Baganators Suche und
+  Kategorien dasselbe Urteil benutzen; Baganator wählt sie selbst, wenn noch keine Quelle gewählt ist. Die Einstellung
+  für Taschenmarkierungen (`/eg icons`) schaltet beides ab. Baganator läuft nur mit seinem Begleiter-Addon **Syndicator**;
+  fehlt der, meldet EasyGear nichts an und sagt es in `/eg status`.
+  Ein neues Eckenelement fügt Baganator nur in das Profil ein, das beim Anmelden aktiv ist. In einem anderen
+  Baganator-Profil wählst du den **EasyGear-Verbesserungspfeil** selbst unter *Icon-Ecken*.
+* **EllesmereUI**: sein Taschenmodul baut eigene Gegenstandsknöpfe, die die Haken auf die Funktionen der Oberfläche nicht
+  sehen. Es bietet anderen Addons eine Overlay-Schnittstelle (`EUI_Bags.RegisterItemOverlayIcon`), die für jeden Platz der
+  Taschen, der Reagenzientasche und der Bank läuft, in der Gitter- wie in der Listenansicht, auch für leere Plätze. EasyGear
+  malt seinen Pfeil darüber - **oben rechts** am Gegenstand, weil oben links die Gegenstandsstufe steht -, und er
+  verschwindet, wenn ein Platz geleert wird. Er ist halb so hoch wie das Symbol darunter (16 Pixel auf einem
+  normalen Platz, 10 in der Listenansicht, nie unter 8). Die Fensterhaut von EllesmereUI blendet die Texturen der
+  Gegenstandsknöpfe aus, die sie umgestaltet (Händler, Beute, Post, Questbelohnungen, Charakterfenster); die Markierungen
+  von EasyGear sitzen darum auf einem eigenen Rahmen über jedem Knopf und bleiben sichtbar; der Rahmen folgt den
+  Rahmenebenen, die die Taschen ihren Knöpfen später neu geben. In der Ansicht *Als Liste* des Händlerfensters deckt der
+  Knopf die ganze Zeile, darum sitzt der Pfeil an der Ecke des Zeilensymbols (und an der anderen Ecke, wenn dort die
+  Restmenge steht).
+* Beide wurden anhand ihres Quelltexts (Baganator Release 834, EllesmereUI Bags 9.8.3) und ihrer öffentlichen
+  Schnittstellen gebaut; **getestet wurde hier mit Modellen dieser Schnittstellen, nicht im Spiel mit den echten Addons**
+  (siehe [Bekannte Grenzen](#bekannte-grenzen)).
+
 ## Fehlersuche
 
-`/eg status` zeigt die Oberflächen-Anbindungen (`itembuttons`, `merchant`, `rolls`, `tooltip`, `settings`,
-`shiftclick`): ein roter Name mit Grund heißt, dass dieser Teil der Client-Oberfläche nicht gefunden wurde und die
+`/eg status` zeigt die Oberflächen-Anbindungen (`itembuttons`, `merchant`, `merchantstock`, `rolls`, `tooltip`, `settings`, `shiftclick`,
+bei installiertem Baganator bzw. EllesmereUI auch `baganator` und `ellesmere`): ein roter Name mit Grund heißt, dass dieser Teil der Client-Oberfläche nicht gefunden wurde und die
 Funktion aus ist. Dazu die erkannten Talentpunkte und der letzte interne Fehler. Interne Fehler erscheinen einmalig im Chat als `EasyGear[Name]: Meldung`.
 
 **Fehler melden:** bitte die Ausgabe von `/eg status` mitschicken (Clientversion, erkannte Talentpunkte, welche
@@ -388,6 +467,10 @@ im Spiel**.
 * Das Auktionshaus wird nicht markiert. Heirlooms, Edelstein- oder Verzauberungsempfehlungen und automatisches
   Anlegen gibt es absichtlich nicht.
 * Texte: Englisch und Deutsch vollständig; andere Sprachen teilweise übersetzt (Fehlendes erscheint englisch).
+* Baganator und EllesmereUI sind über ihre öffentlichen Schnittstellen angebunden (Eckenelemente und Upgrade-Quelle;
+  Overlay-Schnittstelle des Taschenmoduls) und gegen Modelle von ihnen getestet. Zeigt sich dort kein Pfeil, sagt
+  `/eg status`, welcher Teil gefunden wurde. Die Offline-Ansichten fremder Charaktere von EllesmereUI werden nicht bemalt.
+  Andere Taschen-Addons (Bagnon, ElvUI-Taschen, ...) werden nicht gezielt unterstützt.
 
 ## Die 3.3.5a-Ausgabe
 

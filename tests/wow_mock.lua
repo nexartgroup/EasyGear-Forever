@@ -157,7 +157,15 @@ function Region:ClearFocus() end
 function Region:HighlightText() self.__highlighted = true end
 function Region:SetBlendMode() end
 function Region:SetFrameStrata() end
-function Region:SetFrameLevel() end
+function Region:SetFrameLevel(l) self.__level = l end
+function Region:GetFrameLevel() return self.__level or 1 end
+function Region:SetParent(p) self.__parent = p end
+function Region:GetAlpha() return self.__alpha end
+function Region:GetRegions()
+    local out = {}
+    for _, c in ipairs(self.__children) do out[#out + 1] = c end
+    return unpack(out)
+end
 function Region:SetClampedToScreen() end
 function Region:SetMovable() end
 function Region:EnableMouse() end
@@ -359,7 +367,11 @@ function Mock.new(opts)
     env.IsShiftKeyDown = function() return self.shift end
     env.UISpecialFrames = {}
     env.SlashCmdList = {}
-    env.C_AddOns = { GetAddOnMetadata = function(_, field) if field == "Version" then return "4.0.0-test" end end }
+    self.addons = {}
+    env.C_AddOns = {
+        GetAddOnMetadata = function(_, field) if field == "Version" then return "4.0.0-test" end end,
+        IsAddOnLoaded = function(name) return self.addons[name] == true end,
+    }
 
     env.Enum = {
         TooltipDataLineType = TOOLTIP_LINE_TYPE,
@@ -388,7 +400,10 @@ function Mock.new(opts)
         end
         local f = (kind == "GameTooltip") and makeTooltip(env, name) or newRegion(kind, name, parent or env.UIParent)
         f.__template = template
-        if kind == "ItemButton" then makeItemButton(f) end
+        if kind == "ItemButton" then
+            makeItemButton(f)
+            for k, v in pairs(env.ItemButtonMixin) do f[k] = v end      -- the engine copies the mixin when the frame is created
+        end
         if template and template:find("ButtonFrameTemplate", 1, true) then
             f.Inset = newRegion("Frame", name and (name .. "Inset") or nil, f)
             f.TitleContainer = newRegion("Frame", nil, f)
@@ -629,8 +644,21 @@ function Mock.new(opts)
         end,
     }
     env.C_CurrencyInfo = { GetCoinTextureString = function(c) return c .. "c" end }
+    -- ItemButtonMixin: the methods of every ItemButton. The global functions hand over to the button's own method,
+    -- so a caller that uses the method never passes through the global (this is what bag addons do).
+    env.ItemButtonMixin = {}
+    function env.ItemButtonMixin:SetItemButtonQuality(quality, itemIDOrLink)
+        self.__quality, self.__qualityArg = quality, itemIDOrLink
+    end
+    function env.ItemButtonMixin:SetItemButtonTexture(texture)
+        if self.icon then self.icon:SetTexture(texture) self.icon:SetShown(texture ~= nil) end
+    end
     env.SetItemButtonTexture = function(button, texture)
-        if button.icon then button.icon:SetTexture(texture) button.icon:SetShown(texture ~= nil) end
+        if button.SetItemButtonTexture then
+            button:SetItemButtonTexture(texture)
+        elseif button.icon then
+            button.icon:SetTexture(texture) button.icon:SetShown(texture ~= nil)
+        end
     end
     env.ButtonFrameTemplate_HidePortrait = function() end
     env.StaticPopup_Show = function(which, a1, a2, data)
@@ -731,11 +759,23 @@ function Mock.new(opts)
     self.settingByVariable = byVariable
 
     ------------------------------------------------------------ Blizzard UI functions the addon hooks
-    env.SetItemButtonQuality = function(button, quality, itemIDOrLink)
-        button.__quality, button.__qualityArg = quality, itemIDOrLink
+    env.SetItemButtonQuality = function(button, quality, itemIDOrLink, ...)
+        if button.SetItemButtonQuality then
+            button:SetItemButtonQuality(quality, itemIDOrLink, ...)
+        else
+            button.__quality, button.__qualityArg = quality, itemIDOrLink
+        end
     end
     env.MerchantFrameItem_UpdateQuality = function(frame, link)
         frame.__merchantLink = link
+    end
+    -- ItemButtonTemplate.lua: the remaining stock of a vendor item; shows or hides the Stock text of the button
+    env.SetItemButtonStock = function(button, numInStock)
+        if not button then return end
+        button.numInStock = numInStock or ""
+        local stock = button.Stock
+        if not stock then return end
+        if (numInStock or 0) > 0 then stock:Show() else stock:Hide() end
     end
     env.GroupLootFrame_SetupItemDisplay = function(frame)
         if not frame.rollID then return false end
@@ -891,6 +931,153 @@ function Mock.new(opts)
         local b = button(nil, element)
         element.Item = b
         return b, element
+    end
+
+    ------------------------------------------------------------ other addons (models for the compatibility tests)
+    --[[ Baganator, reduced to what its public interface promises (API/Main.lua of release 834): corner widgets - the game
+         calls onInit once per button and onUpdate on every refresh, the first widget of a corner list that answers true
+         is shown, nil means "item information not available yet" -, an upgrade source and refresh requests. A button is
+         a container item button that carries its details (BGR), its widget container and its corner widgets, and it
+         sets the quality through the METHOD of the button, never through the global function.                     ]]
+    function H.installBaganator(options)
+        options = options or {}
+        local B = { API = {}, Constants = { RefreshReason = { ItemWidgets = "item_widgets", Searches = "searches" } } }
+        local model = { widgets = {}, plugins = {}, refreshes = {}, corners = {}, buttons = {}, B = B }
+
+        function B.API.RegisterCornerWidget(label, id, onUpdate, onInit, defaultPosition, isFast)
+            if options.broken then error("assertion failed!") end
+            assert(id and label and onUpdate and onInit and not model.widgets[id])
+            model.widgets[id] = { label = label, onUpdate = onUpdate, onInit = onInit, isFast = isFast or false }
+            if defaultPosition and type(defaultPosition.corner) == "string" and type(defaultPosition.priority) == "number" then
+                model.corners[id] = defaultPosition.corner          -- automatic insertion into the user's corner list
+            end
+        end
+        function B.API.IsCornerWidgetActive(id) return model.corners[id] ~= nil end
+        function B.API.GetCurrentCornerForWidget(id) return model.corners[id] end
+        function B.API.RegisterUpgradePlugin(label, id, callback)
+            assert(type(label) == "string" and type(id) == "string" and type(callback) == "function")
+            model.plugins[id] = { label = label, callback = callback }
+            if model.upgradePlugin == nil then model.upgradePlugin = id end      -- the first plugin selects itself
+        end
+        function B.API.IsUpgradePluginActive(id) return model.upgradePlugin == id end
+        function B.API.RequestItemButtonsRefresh(reasons) model.refreshes[#model.refreshes + 1] = reasons or "all" end
+
+        if options.noWidgetAPI then B.API.RegisterCornerWidget = nil end
+        env.Baganator = B
+        self.addons.Baganator = true
+        -- Baganator needs Syndicator: without it the game reports an error at start and applies nothing (Core/Initialize.lua)
+        if not options.noSyndicator then
+            env.Syndicator = { API = {} }
+            self.addons.Syndicator = true
+        end
+
+        function model.button(parent)
+            local b = env.CreateFrame("ItemButton", nil, parent or env.UIParent)
+            b.UpdateNewItem = function() end
+            b.widgetContainer = env.CreateFrame("Frame", nil, b)
+            b.cornerPlugins = {}
+            for id, w in pairs(model.widgets) do
+                local widget = w.onInit(b)
+                if widget then
+                    widget:SetParent(b.widgetContainer)
+                    widget:Hide()
+                    b.cornerPlugins[id] = widget
+                end
+            end
+            model.buttons[#model.buttons + 1] = b
+            return b
+        end
+        -- one refresh of a button. Returns the id of the widget that is shown (the first one of the corner list that says yes)
+        function model.update(b, link)
+            b.BGR = { itemLink = link }
+            b:SetItemButtonQuality(1, link, false, false)
+            for _, widget in pairs(b.cornerPlugins) do widget:Hide() end
+            local shownBy, pending = nil, false
+            for id in pairs(model.corners) do
+                local widget = b.cornerPlugins[id]
+                if widget then
+                    local show = model.widgets[id].onUpdate(widget, b.BGR)
+                    if show == nil then pending = true
+                    elseif show then widget:Show() shownBy = id break end
+                end
+            end
+            b.__pending = pending
+            return shownBy
+        end
+        -- what the active upgrade source says (Baganator wraps the call in pcall)
+        function model.isUpgrade(link)
+            local plugin = model.upgradePlugin and model.plugins[model.upgradePlugin]
+            if not plugin then return false end
+            local ok, result = pcall(plugin.callback, link)
+            return ok and result == true, ok and result
+        end
+        return model
+    end
+
+    --[[ EllesmereUI Bags as EllesmereUIBags_Grid.lua builds its slots: a plain frame whose ID is the bag, an ItemButton from the
+         container template inside it, a text overlay with the item level at the top left. A filled slot gets its icon and
+         SetItemButtonQuality AS A METHOD (the hooks on the global function never see it); an empty slot only loses its
+         texture. At the end of every paint - empty slots included - the module runs the painters that other addons
+         registered with EUI_Bags.RegisterItemOverlayIcon(name, fn(btn, data)), data = { bag, slot, info, itemLink }.
+         The window skin fades every direct texture region of a frame it has registered.                              ]]
+    function H.installEllesmere(options)
+        options = options or {}
+        env.EllesmereUI = { IS_FOREVER = true }
+        self.addons.EllesmereUI = true
+        self.addons.EllesmereUIBags = not options.noBags
+        local model = { overlayErrors = {} }
+        if not options.noBags then
+            local bags = { itemOverlayIcons = {} }
+            if not options.noOverlayAPI then
+                function bags.RegisterItemOverlayIcon(name, updateFn) bags.itemOverlayIcons[name] = updateFn end
+                function bags.UnregisterItemOverlayIcon(name) bags.itemOverlayIcons[name] = nil end
+            end
+            function bags.RunItemOverlays(btn, data)
+                for _, fn in pairs(bags.itemOverlayIcons) do
+                    local ok, err = pcall(fn, btn, data)          -- securecallfunction: a painter never stops the render
+                    if not ok then model.overlayErrors[#model.overlayErrors + 1] = tostring(err) end
+                end
+            end
+            env.EUI_Bags = bags
+            model.bags = bags
+        end
+        --[[ A grid slot (asRow = nil) has its text overlay over the whole slot and the item level on it; a row of the list view
+             (asRow = true, EllesmereUIBags_List.lua) has an overlay over the 20 pixel row icon, a row icon of its own and
+             no item level text.                                                                                         ]]
+        function model.slot(bag, slot, asRow)
+            local parent = env.CreateFrame("Frame", nil, env.UIParent)
+            parent:SetID(bag)
+            local b = env.CreateFrame("ItemButton", nil, parent)
+            b:SetID(slot)
+            b.UpdateNewItem = function() end
+            b.GetBagID = function(self) return self:GetParent():GetID() end
+            b._textOverlay = env.CreateFrame("Frame", nil, b)
+            b._textOverlay:SetFrameLevel(b:GetFrameLevel() + 3)
+            if asRow then
+                b._lvIcon = b:CreateTexture(nil, "ARTWORK")
+                b._textOverlay:SetSize(20, 20)
+            else
+                b.ItemLevelText = b._textOverlay:CreateFontString(nil, "OVERLAY")
+                b._textOverlay:SetSize(37, 37)
+            end
+            return b
+        end
+        function model.render(b, link)
+            local data = { bag = b:GetParent():GetID(), slot = b:GetID(), itemLink = link, info = link and {} or nil }
+            if link then
+                b:SetItemButtonTexture(134400)
+                b:SetItemButtonQuality(3, link, false, false)
+            else
+                b:SetItemButtonTexture(nil)
+            end
+            if model.bags then model.bags.RunItemOverlays(b, data) end
+        end
+        function model.fade(frame)
+            for _, region in ipairs({ frame:GetRegions() }) do
+                if region.__kind == "Texture" then region:SetAlpha(0) end
+            end
+        end
+        return model
     end
 
     return H
