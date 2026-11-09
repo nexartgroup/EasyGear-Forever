@@ -1004,6 +1004,7 @@ function Mock.new(opts)
         function G.setRaid(on) G.raid = on and true or false end
         function G.rosterChanged() H.fire("GROUP_ROSTER_UPDATE") end
         function G.gearChanged(unit) H.fire("UNIT_INVENTORY_CHANGED", unit) end
+        function G.levelChanged(unit) H.fire("UNIT_LEVEL", unit) end
         -- somebody inspects a member by hand (the player, or another addon): the client answers like it does for a request
         function G.inspectByHand(unit)
             local m = G.members[unit]
@@ -1088,8 +1089,13 @@ function Mock.new(opts)
                                             visible = m and m.visible, inspectable = m and m.inspectable }
             if not (m and m.connected and m.visible and m.distance <= 28 and G.answers) then return end
             env.C_Timer.After(G.latency, function()
-                G.inspectedGUID = m.guid
+                -- staleReply: the client still holds the data of somebody else (it drops requests when flooded)
+                G.inspectedGUID = G.staleReply and "Player-1-SOMEBODY-ELSE" or m.guid
                 H.fire("INSPECT_READY", m.guid)
+                -- echoEvent: reading the equipment of a unit makes the client announce a change of it (the item data arrive)
+                if G.echoEvent then
+                    env.C_Timer.After(0.5, function() H.fire("UNIT_INVENTORY_CHANGED", unit) end)
+                end
             end)
         end
 
@@ -1105,8 +1111,11 @@ function Mock.new(opts)
             local link = m and G.inspectedGUID == m.guid and m.gear[slot]
             return link and tonumber(tostring(link):match("item:(%d+)")) or nil
         end
+        -- specs: "same" = one number for all trees, "few" = only the first tree is known
         env.GetSpecializationInfoForClassID = function(classID, index)
             if not classID or index < 1 or index > 3 then return nil end
+            if G.specs == "same" then return 1000 * classID + 3, "Tree3" end         -- (the tests use members of tree 3)
+            if G.specs == "few" and index > 1 then return nil end
             return 1000 * classID + index, "Tree" .. index
         end
         env.C_SpecializationInfo.GetInspectSpecialization = function(unit)

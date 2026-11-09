@@ -183,9 +183,13 @@ function Marks.Update(button)
             local hint = data.hint and data.hint() or nil
             state = hint and "UPGRADE" or nil
         elseif data.link then
-            state = Score.UpgradeState(data.link)
-            -- Keine Verbesserung fuer dich: vielleicht fuer ein Gruppenmitglied (violetter Stern)
-            if state == nil and EG.Group then state = EG.Group.State(data.link, data.ctx, data.bag, data.slot) end
+            local loading
+            state, loading = Score.UpgradeState(data.link)
+            -- Keine Verbesserung fuer dich: vielleicht fuer ein Gruppenmitglied (violetter Stern) - aber erst, wenn deine
+            -- eigene Antwort feststeht; sonst stuende kurz ein Stern da, wo gleich der Pfeil erscheint
+            if state == nil and not loading and EG.Group then
+                state = EG.Group.State(data.link, data.ctx, data.bag, data.slot)
+            end
         end
         if data.best and Marks.Enabled(data.ctx) then show = true end
     end

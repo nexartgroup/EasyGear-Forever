@@ -189,9 +189,13 @@ If the item is an upgrade for you as well, you get the green arrow, and the tool
 * **What they wear:** the addon inspects members the way the inspect window does. At most one request every 2.5 seconds,
   only members in range, never in combat and never while you have an inspect window open. Every inspection that you or
   another addon starts is used as well. A member is read again after five minutes or when his equipment changes; out of
-  range or offline, the last reading stays. *Inspect group members* off: only inspections you start yourself count.
-* **Which profile:** the talents of the inspected member if the client hands them out; otherwise the class default - the
-  All-round profile, below the maximum level the Leveling profile of the class.
+  range or offline, the last reading stays. A member who wears little (a low level, a bare alt) is looked at a few times
+  only, an empty answer never wipes a good reading, and an equipment change is not re-read more often than every 30
+  seconds. The addon also waits a few seconds after an inspection that you or another addon started. *Inspect group
+  members* off: only inspections you start yourself count.
+* **Which profile:** the talents of the inspected member if the client hands them out (and names three different trees);
+  otherwise the class default - the All-round profile, below the maximum level the Leveling profile of the class.
+  Druids of the feral tree are rated as cats.
 * **How it is rated:** like your own items (member's profile, level and worn gear), with the thresholds of your settings
   and at least 3 %: the weights are estimates, and a star should mean something.
 * **Who can use it:** the class line of the item tooltip, armor type (a plate wearer is not offered cloth), weapon types
@@ -201,8 +205,8 @@ If the item is an upgrade for you as well, you get the green arrow, and the tool
   with two-hand, shield with shield, held item with held item. Whether somebody should change his style is not decided.
 * **An empty slot** counts only when the reading of the member is complete (eight or more worn pieces): an unfinished
   reading says nothing about a missing ring.
-* **Bound items** in your bags and bank get no star - you cannot hand them over - unless their trade time (looted
-  items, in the tooltip) is still running.
+* **Bound items** in your bags and bank get no star and their tooltip names nobody - you cannot hand them over - unless
+  their trade time (looted items, in the tooltip) is still running.
 * **Baganator and EllesmereUI** show the star in the same place as the arrow; Baganator only for items of this
   character's bags and bank.
 * `/eg group` lists the members, their profile (from talents or class default) and when they were read; `/eg group scan`
@@ -258,8 +262,8 @@ and the exact text of any Lua error (`/console scriptErrors 1` shows them). For 
 Run from the root of this repository:
 
 ```
-lua5.1 tests/run.lua                 # unit tests on a model of the client (Lua 5.1 only), ~340 checks
-python3 tests/mutate.py              # mutation check: breaks the addon in ~325 small ways, the tests must notice
+lua5.1 tests/run.lua                 # unit tests on a model of the client (Lua 5.1 only), ~350 checks
+python3 tests/mutate.py              # mutation check: breaks the addon in ~350 small ways, the tests must notice
 tools/check.sh <Interface/AddOns of the Forever UI source>
                                      # luacheck against a std built from the UI source + checks that every
                                      # method, event, template, font, atlas and global the addon names exists
@@ -316,6 +320,10 @@ This edition is a new codebase for the Forever client, not an update of that one
   combat), rated with their own profile, level and gear, and must be able to use the item or be at most one level short.
   Bound items without trade time get no star. Works in bags, bank, loot and rolls, and in Baganator and EllesmereUI.
 * New settings *Group hints*, *Inspect group members*, *Include raid members*; new command `/eg group`.
+* Findings of an independent review are in: incomplete readings and equipment events cannot start a loop of requests,
+  an empty answer keeps the old reading, a reading that brings nothing new does not recompute everything, the talent
+  tree is only taken from three different specialization numbers, members' levels follow `UNIT_LEVEL`, a late roster
+  entry is looked at again, and no violet star flashes while your own verdict is still loading.
 * Armor and weapon types of the nine classes (`Classes.lua`); the class line of item tooltips is read.
 
 ## Changes in 4.1.0
@@ -480,10 +488,14 @@ Ist das Item auch für dich besser, bekommst du den grünen Pfeil; der Tooltip n
 * **Was sie tragen:** das Addon untersucht Mitglieder wie das Untersuchen-Fenster. Höchstens eine Anfrage alle 2,5 Sekunden,
   nur Mitglieder in Reichweite, nie im Kampf und nie bei offenem Untersuchen-Fenster. Jede Untersuchung, die du oder ein
   anderes Addon startest, wird mitgenommen. Ein Mitglied wird nach fünf Minuten oder bei einem Wechsel seiner Ausrüstung
-  neu gelesen; außer Reichweite oder offline bleibt der letzte Stand. *Gruppenmitglieder untersuchen* aus: nur
+  neu gelesen; außer Reichweite oder offline bleibt der letzte Stand. Wer wenig trägt (niedrige Stufe, nackter
+  Zweitcharakter), wird nur ein paarmal angesehen, eine leere Antwort löscht nie einen guten Stand, und ein
+  Ausrüstungswechsel wird nicht öfter als alle 30 Sekunden neu gelesen. Nach einer Untersuchung, die du oder ein
+  anderes Addon gestartet hast, wartet das Addon ein paar Sekunden. *Gruppenmitglieder untersuchen* aus: nur
   Untersuchungen, die du selbst startest, zählen.
-* **Welches Profil:** die Talente des untersuchten Mitglieds, wenn der Client sie herausgibt; sonst der Klassenstandard -
-  das Allround-Profil, unter der Höchststufe das Leveln-Profil der Klasse.
+* **Welches Profil:** die Talente des untersuchten Mitglieds, wenn der Client sie herausgibt (und drei verschiedene
+  Bäume nennt); sonst der Klassenstandard - das Allround-Profil, unter der Höchststufe das Leveln-Profil der Klasse.
+  Druiden des Wildheitsbaums werden als Katze bewertet.
 * **Wie bewertet wird:** wie bei deinen eigenen Items (Profil, Stufe und getragene Ausrüstung des Mitglieds), mit den
   Schwellen deiner Einstellungen und mindestens 3 %: die Gewichte sind Schätzwerte, und ein Stern soll etwas heißen.
 * **Wer es nutzen kann:** die Klassenzeile des Tooltips, die Rüstungsart (ein Plattenträger bekommt keinen Stoff
@@ -493,8 +505,8 @@ Ist das Item auch für dich besser, bekommst du den grünen Pfeil; der Tooltip n
   Zweihand, Schild mit Schild, Halteitem mit Halteitem. Ob jemand seine Haltung wechseln sollte, entscheidet das Addon nicht.
 * **Ein leerer Platz** zählt nur, wenn der Stand des Mitglieds vollständig ist (acht oder mehr getragene Teile): ein
   unfertiger Stand sagt nichts über einen fehlenden Ring.
-* **Gebundene Items** in deinen Taschen und der Bank bekommen keinen Stern - du kannst sie nicht abgeben -, es sei denn,
-  ihre Tauschfrist (bei erbeuteten Items, steht im Tooltip) läuft noch.
+* **Gebundene Items** in deinen Taschen und der Bank bekommen keinen Stern und ihr Tooltip nennt niemanden - du kannst
+  sie nicht abgeben -, es sei denn, ihre Tauschfrist (bei erbeuteten Items, steht im Tooltip) läuft noch.
 * **Baganator und EllesmereUI** zeigen den Stern an derselben Stelle wie den Pfeil; Baganator nur bei Items in den
   Taschen und der Bank dieses Charakters.
 * `/eg group` listet die Mitglieder, ihr Profil (aus Talenten oder Klassenstandard) und wann sie gelesen wurden;

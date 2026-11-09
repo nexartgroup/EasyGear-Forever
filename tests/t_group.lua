@@ -1155,4 +1155,224 @@ return function(T)
         T.eq(G.notified[#G.notified].unit, "party2")
         T.eq(W.EG.lastError, nil)
     end)
+
+    ------------------------------------------------------------------ findings of the review: no loops, no lost data
+    T.test("group: members who wear little are asked again a few times, not for ever", function()
+        local W, G = world(function(w, g)
+            g.add("party1", { name = "Low", class = "MAGE", level = 8, gear = wornSet(w, 1, 5, CASTER, 3) })
+            g.add("party2", { name = "Naked", class = "ROGUE", level = 5, gear = {} })
+        end)
+        W.advance(700)
+        T.ok(G.requests("party1") >= 3 and G.requests("party1") <= 6, "few: " .. G.requests("party1"))
+        T.ok(G.requests("party2") >= 3 and G.requests("party2") <= 6, "few: " .. G.requests("party2"))
+        T.eq(W.EG.lastError, nil)
+    end)
+
+    T.test("group: a reading that brings nothing new does not make everything be computed again", function()
+        local changes = 0
+        local W, G = world(function(w, g)
+            g.add("party1", { name = "Bob", class = "PRIEST", tab = 3, gear = wornSet(w, 1, 30, CASTER) })
+        end)
+        W.EG:Listen("GROUP", function() changes = changes + 1 end)
+        W.advance(10)
+        local first = changes
+        W.advance(700)                                           -- two periodic readings of the same gear
+        T.eq(changes, first, "nothing changed: nothing announced")
+        T.ok(G.requests() >= 3, "the readings happened")
+        G.members.party1.gear[5] = F.gear(W, 41000, "Other Chest", "INVTYPE_CHEST", 31, { INT = 12 }, { subclassID = 1 })
+        G.gearChanged("party1") W.advance(60)
+        T.eq(changes, first + 1, "other gear: announced once")
+        G.members.party1.tab = 1 G.gearChanged("party1") W.advance(60)
+        T.eq(changes, first + 2, "another talent tree: announced")
+        G.members.party1.level = 61 G.gearChanged("party1") W.advance(60)
+        T.eq(changes, first + 3, "a new level: announced")
+    end)
+
+    T.test("group: an event that comes right after a reading (the inspection causes it) does not start a loop", function()
+        local W, G = world(function(w, g)
+            g.echoEvent = true
+            g.add("party1", { name = "Bob", class = "PRIEST", gear = wornSet(w, 1, 30, CASTER) })
+            g.add("party2", { name = "Eve", class = "MAGE", gear = wornSet(w, 1, 30, CASTER) })
+        end)
+        W.advance(700)
+        T.ok(G.requests("party1") <= 4, "periodic only: " .. G.requests("party1"))
+        T.ok(G.requests("party2") <= 4, "periodic only: " .. G.requests("party2"))
+    end)
+
+    T.test("group: a member who keeps changing his equipment is read at most every 30 seconds", function()
+        local W, G = world(function(w, g)
+            g.add("party1", { name = "Bob", class = "PRIEST", gear = wornSet(w, 1, 30, CASTER) })
+        end)
+        W.advance(10)
+        local before = G.requests()
+        for _ = 1, 100 do                                        -- every 3 seconds for five minutes
+            G.gearChanged("party1")
+            W.advance(3)
+        end
+        local n = G.requests() - before
+        T.ok(n >= 5 and n <= 11, "a request every 30 seconds or so: " .. n)
+    end)
+
+    T.test("group: /eg group scan reads at once, whatever the waiting times say", function()
+        local W, G = world(function(w, g)
+            g.add("party1", { name = "Bob", class = "PRIEST", gear = wornSet(w, 1, 30, CASTER) })
+        end)
+        W.advance(12)
+        local before = G.requests()
+        G.gearChanged("party1") W.advance(8)
+        T.eq(G.requests(), before, "a change soon after a reading waits for the cooldown")
+        W.slash("group scan") W.advance(6)
+        T.eq(G.requests(), before + 1, "but the player's command does not")
+    end)
+
+    T.test("group: an answer without any item - the client held somebody else's data - keeps the old reading", function()
+        local robe
+        local W, G = world(function(w, g)
+            local gear = wornSet(w, 1, 30, CASTER)
+            gear[5] = piece(w, "INVTYPE_CHEST", 30, { INT = 10, SP = 40 }, { subclassID = 1 })
+            g.add("party1", { name = "Bob", class = "PRIEST", gear = gear })
+            robe = piece(w, "INVTYPE_CHEST", 60, { INT = 30, SP = 80 }, { subclassID = 1 })
+            w.bag(0, 16, { [1] = robe })
+        end)
+        W.advance(30)
+        local b = W.bagButton(0, 1)
+        W.env.SetItemButtonQuality(b, 3, robe)
+        T.eq(star(b), true)
+        local bob = W.EG.Group.list[1]
+        local stamp = bob.stamp
+        G.staleReply = true
+        G.gearChanged("party1") W.advance(40)
+        T.ok(G.requests("party1") >= 2, "it was asked again")
+        T.eq(W.EG.Group.HasData(bob), true, "and the empty answer did not wipe him") T.eq(bob.count, 9)
+        T.eq(bob.stamp, stamp) T.eq(star(b), true, "the star stays")
+        T.ok(bob.nextTry ~= nil and bob.tries >= 1, "he is asked again after a pause")
+        G.staleReply = false
+        W.advance(200)
+        T.eq(bob.stamp > stamp, true, "and read properly later") T.eq(star(b), true)
+    end)
+
+    T.test("group: the talent tree is only taken from three different specialization numbers", function()
+        local function tabWith(mode)
+            local W = world(function(w, g)
+                g.specs = mode
+                g.add("party1", { name = "Bob", class = "PRIEST", tab = 3, gear = wornSet(w, 1, 30, CASTER) })
+            end)
+            W.advance(20)
+            return W.EG.Group.list[1].tab, W
+        end
+        T.eq((tabWith(nil)), 3)
+        local tab, W = tabWith("same")
+        T.eq(tab, nil, "one number for all trees: no way to tell the tree")
+        T.eq(W.EG.Group.ProfileOf(W.EG.Group.list[1]).source, "class", "so the class default rates him")
+        T.eq(W.EG.Group.list[1].specID ~= nil, true)
+        tab, W = tabWith("few")
+        T.eq(tab, nil, "only the first tree known") T.eq(W.EG.lastError, nil)
+    end)
+
+    T.test("group: the level of a member follows UNIT_LEVEL without a new reading", function()
+        local robe
+        local W, G = world(function(w, g)
+            g.add("party1", { name = "Bob", class = "PRIEST", level = 40, tab = 3, gear = wornSet(w, 1, 30, CASTER) })
+            robe = piece(w, "INVTYPE_CHEST", 60, { INT = 30, SP = 80 }, { subclassID = 1, minLevel = 42 })
+        end)
+        W.advance(30)
+        T.eq(#W.EG.Group.Beneficiaries(robe), 0, "two levels short")
+        local requests = G.requests()
+        G.members.party1.level = 41
+        G.levelChanged("party1") W.advance(5)
+        T.eq(W.EG.Group.list[1].level, 41)
+        local list = W.EG.Group.Beneficiaries(robe)
+        T.eq(#list, 1) T.eq(list[1].needLevel, 42, "one level short now")
+        T.eq(G.requests(), requests, "no new reading was needed")
+        G.levelChanged("target") G.levelChanged("party1") W.advance(5)
+        T.eq(W.EG.lastError, nil)
+    end)
+
+    T.test("group: a roster entry whose class or level comes late is picked up a few seconds later", function()
+        local W, G = world(function(w, g)
+            g.add("party1", { name = "Bob", class = "PRIEST", gear = wornSet(w, 1, 30, CASTER) })
+            g.add("party2", { name = "Late", class = "MAGE", level = 0 })
+        end)
+        T.eq(#W.EG.Group.list, 1, "the level is not known yet")
+        G.members.party2.level = 60
+        W.advance(4)
+        T.eq(#W.EG.Group.list, 2, "the next look finds him")
+        -- and the looking stops: a member that never delivers does not keep the timer busy for ever
+        G.add("party3", { name = "Never", class = "MAGE", level = 0 })
+        local calls = 0
+        local refresh = W.EG.Group.Refresh
+        W.EG.Group.Refresh = function(...) calls = calls + 1 return refresh(...) end
+        W.EG.Group.Refresh()
+        W.advance(120)
+        T.ok(calls >= 3 and calls <= 8, "a handful of looks: " .. calls)
+        T.eq(#W.EG.Group.list, 2, "he is not in the group")
+        W.EG.Group.Refresh = refresh
+    end)
+
+    T.test("group: while your own verdict is still loading there is no star that turns into an arrow", function()
+        local robe, plate
+        local W = world(function(w, g)
+            g.add("party1", { name = "Bob", class = "PRIEST", gear = wornSet(w, 1, 30, CASTER) })
+            robe = piece(w, "INVTYPE_CHEST", 60, { INT = 30, SP = 80 }, { subclassID = 1 })
+        end)
+        W.advance(30)
+        W.EG.Items.Wipe()
+        W.state.items[2001].uncached = true                     -- the chest you wear is not in the client's memory
+        W.EG:InvalidateAll()
+        local b = W.bagButton(0, 1)
+        W.env.SetItemButtonQuality(b, 3, robe)
+        T.eq(star(b), false, "your own answer is still missing")
+        W.state.items[2001].uncached = nil
+        W.fire("GET_ITEM_INFO_RECEIVED", 2001, true)
+        W.advance(5)
+        T.eq(star(b), true, "now it is clear that the robe is nothing for you")
+        T.ok(plate == nil)
+    end)
+
+    T.test("group: the trade time of a bound item is looked at again after a minute", function()
+        local W, _, robe = bobAndRobe()
+        W.bind(0, 1, true)                                        -- still tradable
+        T.eq(W.EG.Group.Untradable(0, 1, robe), false)
+        W.state.bags[0].trade[1] = nil                            -- the trade time has run out
+        W.advance(30)
+        T.eq(W.EG.Group.Untradable(0, 1, robe), false, "a cached answer is good for a while")
+        W.advance(40)
+        T.eq(W.EG.Group.Untradable(0, 1, robe), true, "and not for longer than a minute")
+    end)
+
+    T.test("group: the tooltip of a bound item in your bag names nobody - elsewhere it does", function()
+        local W, _, robe = bobAndRobe()
+        local b = W.bagButton(0, 1)
+        W.env.SetItemButtonQuality(b, 3, robe)
+        T.eq(W.tooltipFor(b, robe):HasLine("Bob"), true, "not bound")
+        W.bind(0, 1, false) W.EG:InvalidateAll() W.flush()
+        W.env.SetItemButtonQuality(b, 3, robe)
+        T.eq(W.tooltipFor(b, robe):HasLine("Bob"), false, "soulbound: it cannot be handed over")
+        T.eq(W.tooltipFor(W.env.UIParent, robe):HasLine("Bob"), true, "a link in the chat has no slot to check")
+        W.bind(0, 1, true) W.EG:InvalidateAll() W.flush()
+        W.env.SetItemButtonQuality(b, 3, robe)
+        T.eq(W.tooltipFor(b, robe):HasLine("Bob"), true, "bound but tradable")
+        local bank = W.bankButton(6, 4)
+        bank.itemInfo = { hyperlink = robe, itemID = 1 }
+        W.bag(6, 28, { [4] = robe })
+        W.bind(6, 4, false)
+        W.env.SetItemButtonQuality(bank, 3, 1)
+        T.eq(W.tooltipFor(bank, robe):HasLine("Bob"), false, "the bank, too")
+    end)
+
+    T.test("group: Group.Read tells whether anything changed", function()
+        local W, G = world(function(w, g)
+            w.env.EasyGearDB = { groupInspect = false }
+            g.add("party1", { name = "Bob", class = "PRIEST", gear = wornSet(w, 1, 30, CASTER) })
+        end)
+        local bob = W.EG.Group.list[1]
+        G.inspectedGUID = bob.guid
+        local ok, changed = W.EG.Group.Read(bob)
+        T.eq(ok, true) T.eq(changed, true, "the first reading is a change")
+        ok, changed = W.EG.Group.Read(bob)
+        T.eq(ok, true) T.eq(changed, false, "the same again is not")
+        G.members.party1.gear[1] = nil
+        ok, changed = W.EG.Group.Read(bob)
+        T.eq(changed, true, "a piece less")
+    end)
 end

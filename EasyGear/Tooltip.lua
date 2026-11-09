@@ -232,6 +232,18 @@ function Tooltip.ExtraFor(tooltip)
     return nil
 end
 
+--[[ Nennt der Tooltip Gruppenmitglieder?  Ein gebundener Gegenstand in deinen Taschen oder der Bank, den man nicht mehr
+     abgeben kann, bekommt keinen Stern und nennt auch niemanden. Ueberall sonst (Chat-Link, Haendler, Beute, Baganator-
+     Taschen) gibt es nichts zu pruefen.                                                                              ]]
+local function NamesGroup(tooltip, item)
+    local owner = tooltip.GetOwner and tooltip:GetOwner()
+    local data = type(owner) == "table" and EG.Marks and EG.Marks.registry[owner] or nil
+    if data and (data.ctx == "bag" or data.ctx == "bank") and EG.Group.Untradable(data.bag, data.slot, data.link or item.link) then
+        return false
+    end
+    return true
+end
+
 function Tooltip.OnItem(tooltip, data)
     if not EG:Get("showTooltip") then return end
     if not tooltip or not tooltip.AddLine then return end
@@ -269,7 +281,7 @@ function Tooltip.OnItem(tooltip, data)
 
     -- Fuer wen in der Gruppe waere der Gegenstand besser als das, was er traegt?  (nur im vollen Tooltip: nicht auf dem
     -- Charakterfenster und nicht in den Vergleichs-Tooltips)
-    if mode == "FULL" and item.isGear and EG.Group then
+    if mode == "FULL" and item.isGear and EG.Group and NamesGroup(tooltip, item) then
         local group = EG.Group.TooltipLines(item.link)
         if group then Emit(tooltip, group) end
     end

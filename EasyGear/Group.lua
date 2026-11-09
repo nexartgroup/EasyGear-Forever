@@ -47,7 +47,13 @@ local LOOP_INTERVAL = 1             -- Sekunden zwischen zwei Durchlaeufen des Z
 local INSPECT_INTERVAL = 2.5        -- Sekunden zwischen zwei Anfragen (der Server verwirft Anfragen, wenn man ihn flutet)
 local REPLY_TIMEOUT = 6             -- Sekunden, nach denen eine Anfrage als unbeantwortet gilt
 local REFRESH_AGE = 300             -- Sekunden, nach denen die Ausruestung eines Mitglieds neu gelesen wird
-local RETRY_AGE = 20                -- Sekunden bis zur Wiederholung, wenn der letzte Stand unvollstaendig war
+local RETRY_AGE = 20                -- Sekunden bis zur Wiederholung, wenn der letzte Stand unvollstaendig war ...
+local MAX_THIN_RETRIES = 2          -- ... aber nur so oft: wer wenig traegt (Stufe 5, nackter Zweitcharakter), traegt eben wenig
+local DIRTY_IGNORE = 5              -- Sekunden nach dem Lesen, in denen ein Ereignis der Ausruestung nichts zaehlt (die
+                                    -- Untersuchung loest es oft selbst aus)
+local DIRTY_COOLDOWN = 30           -- Mindestabstand zweier Lesungen wegen Ausruestungswechseln (Giftwechsel, Umruesten)
+local TRADE_RECHECK = 60            -- Sekunden, nach denen die Tauschfrist eines gebundenen Gegenstands neu geprueft wird
+local ROSTER_RETRIES = 5            -- so oft wird die Gruppe nachgelesen, wenn Klasse oder Stufe eines Mitglieds fehlten
 local BACKOFF = { 10, 30, 60, 120 } -- Wartezeit nach erfolglosen Anfragen
 local MIN_COMPLETE = 8              -- so viele belegte Plaetze, damit ein leerer Platz als wirklich leer gilt
 local FOREIGN_PAUSE = 6             -- Sekunden Ruhe nach einer Untersuchung, die nicht von uns stammt
@@ -130,8 +136,11 @@ end
 
 --[[ Die Mitglieder neu bestimmen. Wer schon bekannt ist (gleiche GUID), behaelt seinen Stand - die Einheitenkennung
      (party2, raid7) kann sich bei jeder Aenderung der Gruppe verschieben.                                        ]]
+local rosterRetries = 0
+
 function Group.Refresh()
     local list, seen = {}, {}
+    local incomplete = false
     if Group.Enabled() then
         for _, unit in ipairs(RosterUnits()) do
             local ok, exists = pcall(UnitExists, unit)
@@ -148,6 +157,8 @@ function Group.Refresh()
                     if m.class and m.level then
                         list[#list + 1] = m
                         seen[guid] = true
+                    else
+                        incomplete = true
                     end
                 end
             end
@@ -157,6 +168,19 @@ function Group.Refresh()
         if not seen[guid] then known[guid] = nil end
     end
     Group.list = list
+
+    -- Gleich nach dem Betreten oder Beitreten liefert der Client Klasse und Stufe eines Mitglieds mitunter noch nicht
+    -- (oder "geheim"): nach ein paar Sekunden noch einmal nachsehen, nicht erst beim naechsten Gruppenereignis
+    if incomplete and rosterRetries < ROSTER_RETRIES then
+        rosterRetries = rosterRetries + 1
+        EG:After(3, function()
+            Group.Refresh()
+            Group.Changed()
+            Group.Start()
+        end)
+    elseif not incomplete then
+        rosterRetries = 0
+    end
     return list
 end
 
@@ -174,6 +198,10 @@ local lastRequest = -1000
 local foreignAt = nil               -- Zeitpunkt der letzten Untersuchung, die der Spieler oder ein anderes Addon angestossen hat
 local ownRequest = false            -- gerade ruft das Addon NotifyInspect selbst auf
 
+local function Backoff(tries)
+    return BACKOFF[mmin(tries, #BACKOFF)]
+end
+
 -- Den Talentbaum (1..3) des untersuchten Spielers; nil, wenn die Oberflaeche ihn nicht herausgibt
 local function ReadSpec(unit, classID)
     local SI = C_SpecializationInfo
@@ -181,10 +209,21 @@ local function ReadSpec(unit, classID)
     local ok, specID = pcall(SI.GetInspectSpecialization, unit)
     specID = ok and Plain(specID) or nil
     if type(specID) ~= "number" or specID <= 0 then return nil end
+    -- Der Baum ist die Stelle, an der die Klasse diese Spezialisierung fuehrt. Das gilt nur, wenn der Client drei
+    -- verschiedene Nummern fuer die drei Baeume nennt (in Forever kann die Zahl der "Spezialisierungen" kleiner sein als
+    -- die der Baeume): sonst landete jedes Mitglied der Klasse im ersten Baum, ein sicher falsches Profil statt des
+    -- Klassenstandards.
     if type(GetSpecializationInfoForClassID) == "function" and classID then
+        local ids, seen = {}, {}
         for i = 1, 3 do
             local good, id = pcall(GetSpecializationInfoForClassID, classID, i)
-            if good and id == specID then return i, specID end
+            id = good and Plain(id) or nil
+            if type(id) ~= "number" or id <= 0 or seen[id] then return nil, specID end
+            seen[id] = true
+            ids[i] = id
+        end
+        for i = 1, 3 do
+            if ids[i] == specID then return i, specID end
         end
     end
     return nil, specID
@@ -192,6 +231,13 @@ end
 
 --[[ Die Ausruestung des gerade untersuchten Mitglieds lesen. Der Link kommt nicht immer sofort (der Client kennt den
      Gegenstand vielleicht noch nicht): dann steht die Gegenstandsnummer da, damit der Platz nicht leer aussieht.      ]]
+-- Der Stand eines Mitglieds als Text: ist er nach einer Lesung gleich geblieben, muss nichts neu berechnet werden
+local function Fingerprint(m)
+    local parts = { tostring(m.class), tostring(m.level), tostring(m.tab) }
+    for _, slot in ipairs(SCAN_SLOTS) do parts[#parts + 1] = tostring(m.gear[slot]) end
+    return tconcat(parts, "|")
+end
+
 function Group.Read(m)
     local unit = m.unit
     if not unit or Plain(UnitGUID(unit)) ~= m.guid then return false end
@@ -210,24 +256,31 @@ function Group.Read(m)
         end
     end
 
+    -- Eine Antwort ohne einen einzigen Gegenstand kam, als der Client die Daten eines anderen hielt (er verwirft
+    -- Anfragen, wenn man ihn flutet): der bisherige Stand bleibt, die naechste Anfrage kommt nach einer Pause
+    if count == 0 and Group.HasData(m) then
+        m.tries = (m.tries or 0) + 1
+        m.nextTry = Now() + Backoff(m.tries)
+        return false
+    end
+
+    local before = m.stamp and Fingerprint(m) or nil
     pcall(UpdateIdentity, m)
     m.gear, m.count = gear, count
     m.complete = count >= MIN_COMPLETE
+    m.thin = m.complete and 0 or ((m.thin or 0) + 1)
     m.stamp = Now()
-    m.dirty, m.tries, m.nextTry = false, 0, nil
+    m.dirty, m.force, m.tries, m.nextTry = false, false, 0, nil
     m.tab, m.specID = ReadSpec(unit, m.classID)
     m.profile = nil
-    return true
-end
-
-local function Backoff(tries)
-    return BACKOFF[mmin(tries, #BACKOFF)]
+    return true, before ~= Fingerprint(m)
 end
 
 local function NeedsScan(m, now)
     if m.nextTry and now < m.nextTry then return false end
-    if not m.stamp or m.dirty then return true end
-    if not m.complete and now - m.stamp > RETRY_AGE then return true end
+    if not m.stamp or m.force then return true end
+    if m.dirty and now - m.stamp >= DIRTY_COOLDOWN then return true end
+    if not m.complete and (m.thin or 0) <= MAX_THIN_RETRIES and now - m.stamp > RETRY_AGE then return true end
     return now - m.stamp > REFRESH_AGE
 end
 
@@ -300,7 +353,7 @@ end
 -- Alle Mitglieder beim naechsten Durchlauf neu lesen (/eg group scan)
 function Group.Rescan()
     for _, m in ipairs(Group.list) do
-        m.dirty, m.nextTry, m.tries = true, nil, 0
+        m.dirty, m.force, m.nextTry, m.tries = true, true, nil, 0         -- force: ohne Wartezeit lesen (der Spieler will es)
     end
     lastRequest = -1000
     Group.Start()
@@ -582,14 +635,16 @@ function Group.Untradable(bag, slot, link)
     end
     local key = bag .. ":" .. slot .. ":" .. tostring(link)
     local hit = tradeCache[key]
-    if hit ~= nil then return hit end
+    -- Die Tauschfrist laeuft ohne Ereignis ab: das Ergebnis fuer einen gebundenen Gegenstand haelt nur kurz
+    if hit ~= nil and (not hit.bound or Now() - hit.at < TRADE_RECHECK) then return hit.result end
 
-    local result = false
+    local result, bound = false, false
     local ok, info = pcall(C_Container.GetContainerItemInfo, bag, slot)
     if ok and type(info) == "table" and info.isBound then
+        bound = true
         result = not InTradeWindow(bag, slot)
     end
-    tradeCache[key] = result
+    tradeCache[key] = { result = result, bound = bound, at = Now() }
     return result
 end
 
@@ -715,13 +770,29 @@ EG:On("INSPECT_READY", function(_, guid)
     local m = type(guid) == "string" and known[guid] or nil
     if not m then return end
     if pending and pending.guid == guid then pending = nil end
-    if Group.Read(m) then EG:Debounce("groupChanged", 0.5, Group.Changed) end
+    local ok, changed = Group.Read(m)
+    if ok and changed then EG:Debounce("groupChanged", 0.5, Group.Changed) end
 end)
 
+-- Die Ausruestung eines Mitglieds hat sich geaendert (oder die Untersuchung hat das Ereignis selbst ausgeloest: dann
+-- kommt es gleich nach dem Lesen und zaehlt nicht)
 EG:On("UNIT_INVENTORY_CHANGED", function(_, unit)
     if type(unit) ~= "string" or unit == "player" then return end
+    local now = Now()
     for _, m in ipairs(Group.list) do
-        if m.unit == unit then m.dirty = true end
+        if m.unit == unit and not (m.stamp and now - m.stamp < DIRTY_IGNORE) then m.dirty = true end
+    end
+end)
+
+-- Eine neue Stufe aendert, was ein Mitglied tragen kann (und die Gewichtung der Stufe): nicht erst beim naechsten Lesen
+EG:On("UNIT_LEVEL", function(_, unit)
+    if type(unit) ~= "string" then return end
+    for _, m in ipairs(Group.list) do
+        if m.unit == unit then
+            local before = m.level
+            pcall(UpdateIdentity, m)
+            if m.level ~= before then EG:Debounce("groupChanged", 0.5, Group.Changed) end
+        end
     end
 end)
 
