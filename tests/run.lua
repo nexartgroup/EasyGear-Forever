@@ -1,4 +1,4 @@
--- Unit tests for EasyGear (WoW Forever edition). Run from the forever/ folder:
+-- Unit tests for EasyGear (WoW Forever edition). Run from the repository root:
 --
 --     lua5.1 tests/run.lua [pattern]
 --

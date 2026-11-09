@@ -8,7 +8,7 @@
 ## IconTexture: Interface\Icons\INV_Misc_Gear_01
 ## SavedVariables: EasyGearDB
 ## SavedVariablesPerCharacter: EasyGearCharDB
-## X-Website: https://github.com/nexartgroup/EasyGear
+## X-Website: https://github.com/nexartgroup/EasyGear-Forever
 ## AddonCompartmentFunc: EasyGear_OnAddonCompartmentClick
 ## AddonCompartmentFuncOnEnter: EasyGear_OnAddonCompartmentEnter
 ## AddonCompartmentFuncOnLeave: EasyGear_OnAddonCompartmentLeave

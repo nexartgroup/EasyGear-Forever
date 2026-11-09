@@ -48,6 +48,9 @@ Copy the folder `EasyGear` (the one that contains `EasyGear.toc`) into the `Inte
 your WoW Forever installation, so that you end up with `.../Interface/AddOns/EasyGear/EasyGear.toc`.
 Restart the game or `/reload`. Saved settings are `EasyGearDB` (account) and `EasyGearCharDB` (character).
 
+From GitHub: *Code > Download ZIP*, unpack it, and copy the inner folder `EasyGear` - not the folder of the
+ZIP itself (`EasyGear-Forever-main`), which also holds the tests and tools.
+
 At login the chat shows `EasyGear 4.0.0 loaded.`
 
 ## What you see
@@ -175,7 +178,7 @@ and the exact text of any Lua error (`/console scriptErrors 1` shows them).
 
 ## Verification
 
-Run from this folder (`forever/`):
+Run from the root of this repository:
 
 ```
 lua5.1 tests/run.lua                 # unit tests on a model of the client (Lua 5.1 only), ~240 checks
@@ -218,7 +221,7 @@ What this proves and what it does not:
 ## The 3.3.5a edition
 
 The addon for the old Wrath client (interface 30300, with ElvUI/Bagnon/Immersion support and the GM
-heirloom tools) is unchanged in the top-level folder of this repository.
+heirloom tools) lives in its own repository, [nexartgroup/EasyGear](https://github.com/nexartgroup/EasyGear).
 This edition is a new codebase for the Forever client, not an update of that one.
 
 ## Changes in 4.0.0
@@ -260,6 +263,9 @@ braucht kein weiteres Addon: es baut allein auf der Standard-Oberfläche von For
 Den Ordner `EasyGear` (der mit `EasyGear.toc`) in den Ordner `Interface/AddOns` deiner WoW-Forever-
 Installation kopieren, sodass `.../Interface/AddOns/EasyGear/EasyGear.toc` entsteht. Spiel neu starten
 oder `/reload`. Gespeichert wird in `EasyGearDB` (Konto) und `EasyGearCharDB` (Charakter).
+
+Von GitHub: *Code > Download ZIP*, entpacken und den inneren Ordner `EasyGear` kopieren - nicht den Ordner des ZIPs
+selbst (`EasyGear-Forever-main`), in dem auch Tests und Werkzeuge liegen.
 
 ## Was du siehst
 
@@ -357,7 +363,7 @@ Lua-Fehlers (`/console scriptErrors 1` zeigt sie an).
 
 ## Prüfung
 
-Im Ordner `forever/`: `lua5.1 tests/run.lua` (Modultests auf einem Modell des Clients), `python3 tests/mutate.py`
+Im Hauptordner dieses Repositories: `lua5.1 tests/run.lua` (Modultests auf einem Modell des Clients), `python3 tests/mutate.py`
 (Mutationsprüfung: die Tests müssen künstliche Fehler bemerken), `tools/check.sh <Interface/AddOns des Forever-
 Quelltexts>` (luacheck gegen eine aus dem Quelltext gebaute Standardbibliothek; jede Methode, jedes Ereignis, jede
 Vorlage, Schrift, jeder Atlas und jede Funktion, die das Addon nennt, muss dort vorkommen).
@@ -386,5 +392,5 @@ im Spiel**.
 ## Die 3.3.5a-Ausgabe
 
 Das Addon für den alten Wrath-Client (Interface 30300, mit ElvUI/Bagnon/Immersion und den GM-Heirloom-Werkzeugen)
-liegt unverändert im Hauptordner dieses Repositories. Diese Ausgabe ist ein neuer Code für den Forever-Client,
+liegt in einem eigenen Repository, [nexartgroup/EasyGear](https://github.com/nexartgroup/EasyGear). Diese Ausgabe ist ein neuer Code für den Forever-Client,
 keine Aktualisierung jener.

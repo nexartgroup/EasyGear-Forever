@@ -6,7 +6,7 @@
 Copies EasyGear/ to a temporary folder, applies one small change at a time (a flipped comparison, a dropped
 condition, a changed constant, ...) and runs the test suite on the copy. A mutation counts as killed when the
 suite fails. Survivors are changes the tests do not notice - each is either a test gap or an equivalent change.
-Run from the forever/ folder; needs Lua 5.1 (lua5.1).
+Run from the repository root; needs Lua 5.1 (lua5.1).
 """
 import os
 import shutil
