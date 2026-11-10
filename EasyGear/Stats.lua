@@ -228,27 +228,47 @@ local function AddStat(stats, key, value)
     end
 end
 
--- Liest jedes "+Zahl Attributname" einer Zeile (Edelsteine, Verzauberungen, Sockelbonus).
--- Rueckgabe: wurde etwas gefunden?
+--[[ Liest jedes Attribut mit Zahl aus einer Zeile (Edelsteine, Verzauberungen, Sockelbonus). Zwei Schreibweisen kommen vor:
+         "+10 Staerke"                          die Standardtexte der Edelsteine und Verzauberungen
+         "Ausdauer +1 und Ruestung +8"          Verzauberungen, die der Server selbst beschreibt (Name vor der Zahl)
+     Erst werden alle "+Zahl Name" gelesen und unkenntlich gemacht, dann die "Name +Zahl" im Rest: so gehoert in
+     "+10 Staerke +5 Ausdauer" die 5 zur Ausdauer und nicht zur Staerke davor.
+     Rueckgabe: wurde etwas gefunden?                                                                              ]]
 function Stats.ScanSegments(text, stats)
     BuildPatterns()
     local work, found = slower(text), false
+
+    local function Take(seg, s, e, num)
+        local v = tonumber((sgsub(num, ",", ".")))
+        if v and v > 0 then
+            AddStat(stats, seg.key, v)
+            found = true
+        end
+        -- Treffer unkenntlich machen, damit kuerzere Namen nicht noch einmal darauf anspringen
+        work = ssub(work, 1, s - 1) .. srep("\1", e - s + 1) .. ssub(work, e + 1)
+    end
+
     for _, seg in ipairs(segmentCache) do
         local init = 1
         while true do
             local s, e, num = sfind(work, "%+([%d%.,]+)%s*" .. seg.esc, init)
             if not s then break end
-            -- der Name muss hier enden: kein Buchstabe dahinter
+            -- der Name muss hier enden (kein Buchstabe dahinter), und die Zahl steht direkt davor: ein Komma oder Punkt
+            -- hinter der Zahl ist Satzzeichen ("Beweglichkeit +3, Ausdauer +4": die 3 gehoert nicht zur Ausdauer)
             local nextc = ssub(work, e + 1, e + 1)
-            if nextc == "" or not smatch(nextc, "%a") then
-                local v = tonumber((sgsub(num, ",", ".")))
-                if v and v > 0 then
-                    AddStat(stats, seg.key, v)
-                    found = true
-                end
-                -- Treffer unkenntlich machen, damit kuerzere Namen nicht noch einmal darauf anspringen
-                work = ssub(work, 1, s - 1) .. srep("\1", e - s + 1) .. ssub(work, e + 1)
-            end
+            if (nextc == "" or not smatch(nextc, "%a")) and not smatch(num, "[%.,]$") then Take(seg, s, e, num) end
+            init = e + 1
+        end
+    end
+
+    for _, seg in ipairs(segmentCache) do
+        local init = 1
+        while true do
+            local s, e, num = sfind(work, seg.esc .. "%s*%+([%d%.,]+)", init)
+            if not s then break end
+            -- der Name beginnt hier (kein Buchstabe davor), und es ist keine Prozentangabe ("Tempo +3%")
+            local prev, nextc = ssub(work, s - 1, s - 1), ssub(work, e + 1, e + 1)
+            if (s == 1 or not smatch(prev, "%a")) and nextc ~= "%" then Take(seg, s, e, num) end
             init = e + 1
         end
     end

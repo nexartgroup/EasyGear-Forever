@@ -79,8 +79,9 @@ local function IsOffhandWeapon(item, slot)
     return slot == 17 and item.handKind == "MELEE"
 end
 
-local function Row(key, label, value, weight, points)
-    return { key = key, label = label, value = value, weight = weight, points = points }
+-- extra (optional): der Teil des Werts, der aus Verzauberung und Steinen stammt (er steckt schon in value)
+local function Row(key, label, value, weight, points, extra)
+    return { key = key, label = label, value = value, weight = weight, points = points, extra = extra }
 end
 
 --[[ Wertung + vollstaendige Berechnungsgrundlage.
@@ -108,7 +109,8 @@ function Score.Breakdown(item, slot, weights, level)
         if w and w ~= 0 and value and value ~= 0 then
             local pts = value * w
             total = total + pts
-            rows[#rows + 1] = Row(key, Stats.Label(key), value, w, pts)
+            local extra = item.extraStats and item.extraStats[key]
+            rows[#rows + 1] = Row(key, Stats.Label(key), value, w, pts, (extra and extra > 0) and extra or nil)
         end
     end
     for _, key in ipairs(Stats.ORDER) do

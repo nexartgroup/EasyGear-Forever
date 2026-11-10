@@ -340,6 +340,7 @@ Mock.tocFiles = tocFiles
 --[[ opts:
        addonDir   path of the EasyGear folder (default "EasyGear")
        locale     client locale (default "enUS")
+       strings    { GLOBAL = "text" } replaces Blizzard global strings (the item stat names of another language)
        class      class token (default "WARRIOR"), level (default 60), maxLevel (default 60)
        talents    { points = {a,b,c}, mode = "specinfo"|"traits"|"selected"|"none", roles = {...} }
        noTooltipProcessor, noSettings ... switches that remove a part of the client          ]]
@@ -360,6 +361,7 @@ function Mock.new(opts)
 
     ------------------------------------------------------------ plain globals
     for k, v in pairs(GLOBAL_STRINGS) do env[k] = v end
+    for k, v in pairs(opts.strings or {}) do env[k] = v end      -- another client language's texts
     env.WOW_PROJECT_CAMELOT = 18
     env.WOW_PROJECT_ID = opts.notForever and 1 or 18
     env.LOCALIZED_CLASS_NAMES_MALE = {

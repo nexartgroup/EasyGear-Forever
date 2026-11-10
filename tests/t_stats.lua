@@ -149,4 +149,78 @@ return function(T)
         T.eq(S.Label("DPS"), "Weapon DPS")
         T.eq(S.Label("ITEM_MOD_UNKNOWN_SHORT"), "ITEM_MOD_UNKNOWN_SHORT")
     end)
+
+    ------------------------------------------------------------------ enchant texts that put the name first
+    -- The Forever server describes its own enchants as "Ausdauer +1 und Ruestung +8" (name, then number)
+    local GERMAN = {
+        ITEM_MOD_STRENGTH_SHORT = "Stärke", ITEM_MOD_AGILITY_SHORT = "Beweglichkeit", ITEM_MOD_STAMINA_SHORT = "Ausdauer",
+        ITEM_MOD_INTELLECT_SHORT = "Intelligenz", ITEM_MOD_SPIRIT_SHORT = "Willenskraft", RESISTANCE0_NAME = "Rüstung",
+        ITEM_MOD_ARMOR_PENETRATION_RATING_SHORT = "Rüstungsdurchschlagwertung", ITEM_MOD_HASTE_RATING_SHORT = "Tempowertung",
+        ITEM_MOD_HIT_RATING_SHORT = "Trefferwertung", ENCHANTED_TOOLTIP_LINE = "Verzaubert: %s", SPELL_STATALL = "Alle Werte",
+    }
+    local function german() return T.world({ strings = GERMAN }).EG.Stats end
+    local function enchant(text) return { type = LINE.ItemEnchantmentPermanent, leftText = text, leftColor = C.green } end
+
+    T.test("stats: an enchant that names the stat first (Ausdauer +1 und Rüstung +8) is read and added to the base values", function()
+        local S = german()
+        local r = S.ScanLines({
+            { type = 0, leftText = "55 Rüstung", leftColor = C.white },
+            { type = 0, leftText = "+1 Ausdauer", leftColor = C.white },
+            enchant("Verzaubert: Ausdauer +1 und Rüstung +8"),
+        })
+        T.eq(r.base.ARMOR, 55) T.eq(r.base.STA, 1)
+        T.eq(r.extra.STA, 1) T.eq(r.extra.ARMOR, 8) T.eq(r.hasStats, true)
+        local stats, extra = S.Merge({}, r, true)
+        T.eq(stats.STA, 2) T.eq(stats.ARMOR, 63) T.eq(extra.STA, 1) T.eq(extra.ARMOR, 8)
+        stats, extra = S.Merge({}, r, false)
+        T.eq(stats.STA, 1, "with enchants switched off only the base counts") T.eq(stats.ARMOR, 55) T.eq(next(extra), nil)
+    end)
+
+    T.test("stats: the enchant line is recognised by its text alone, without the line type", function()
+        local S = german()
+        local r = S.ScanLines({ { type = 0, leftText = "Verzaubert: Ausdauer +1 und Rüstung +8", leftColor = C.green } })
+        T.eq(r.extra.STA, 1) T.eq(r.extra.ARMOR, 8) T.eq(next(r.base), nil)
+        local e = T.world().EG.Stats.ScanLines({ enchant("Enchanted: Stamina +1 and Armor +8") })
+        T.eq(e.extra.STA, 1) T.eq(e.extra.ARMOR, 8, "the same in English")
+    end)
+
+    T.test("stats: both spellings in one line - a number belongs to the name next to it", function()
+        local S = german()
+        local r = S.ScanLines({ enchant("Verzaubert: +10 Stärke +5 Ausdauer") })
+        T.eq(r.extra.STR, 10) T.eq(r.extra.STA, 5, "the 5 is the stamina's, not the strength's")
+        r = S.ScanLines({ enchant("Verzaubert: Stärke +10 und +15 Ausdauer") })
+        T.eq(r.extra.STR, 10) T.eq(r.extra.STA, 15)
+        r = S.ScanLines({ enchant("Verzaubert: Beweglichkeit +3, Ausdauer +4, Intelligenz +5 und Willenskraft +6") })
+        T.eq(r.extra.AGI, 3) T.eq(r.extra.STA, 4) T.eq(r.extra.INT, 5) T.eq(r.extra.SPI, 6)
+        r = S.ScanLines({ enchant("Verzaubert: Alle Werte +4") })
+        for _, k in ipairs({ "STR", "AGI", "STA", "INT", "SPI" }) do T.eq(r.extra[k], 4, k) end
+    end)
+
+    T.test("stats: the longest name wins (Rüstungsdurchschlagwertung is not armor), a name inside a word is no name", function()
+        local S = german()
+        local r = S.ScanLines({ enchant("Verzaubert: Rüstungsdurchschlagwertung +5 und Rüstung +8") })
+        T.eq(r.extra.ARP, 5) T.eq(r.extra.ARMOR, 8)
+        r = S.ScanLines({ enchant("Verzaubert: Superausdauer +5") })
+        T.eq(r.extra.STA, nil, "a letter before the name: another word")
+        r = S.ScanLines({ enchant("Verzaubert: Ausdauerschub +5") })
+        T.eq(r.extra.STA, nil, "a name that is the start of a longer word")
+        r = S.ScanLines({ enchant("Verzaubert: +5 Ausdauerschub") })
+        T.eq(r.extra.STA, nil, "the same with the number first")
+        r = S.ScanLines({ enchant("Verzaubert: Ausdauer +0 und +0 Stärke") })
+        T.eq(next(r.extra), nil, "a value of zero is no value") T.eq(r.hasStats, false)
+    end)
+
+    T.test("stats: percentages and values without a plus sign are no stats", function()
+        local S = german()
+        local r = S.ScanLines({ enchant("Verzaubert: Tempowertung +3% und Ausdauer 4") })
+        T.eq(next(r.extra), nil, "a percentage is no rating, and a number without a plus is not an enchant value")
+        r = S.ScanLines({ enchant("Verzaubert: Tempowertung +30 und Ausdauer +2%") })
+        T.eq(r.extra.HASTE, 30) T.eq(r.extra.STA, nil)
+    end)
+
+    T.test("stats: the number-first spelling keeps working as before", function()
+        local S = german()
+        local r = S.ScanLines({ enchant("Verzaubert: +15 Ausdauer"), { type = LINE.GemSocketEnchantment, leftText = "+10 Stärke", leftColor = C.white } })
+        T.eq(r.extra.STA, 15) T.eq(r.extra.STR, 10)
+    end)
 end

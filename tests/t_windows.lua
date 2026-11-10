@@ -449,4 +449,108 @@ return function(T)
         PW.SaveOver()
         T.eq(P.Get(id).weights.STR, 1.25)
     end)
+
+    ------------------------------------------------------------------ enchants and long labels (feedback from the game)
+    local LINE, COLOR = T.Mock.LINE, T.Mock.COLOR
+    local function boneArmor(w, id)
+        return F.gear(w, id or 8010, "Bone Armor", "INVTYPE_CHEST", 10, { STA = 1 }, { armor = 55,
+            lines = { { type = LINE.ItemEnchantmentPermanent, leftText = "Enchanted: Stamina +1 and Armor +8", leftColor = COLOR.green } } })
+    end
+    local function rowOf(col, label)
+        for _, row in ipairs(col.rows) do if row.label:GetText() == label then return row end end
+    end
+
+    T.test("window: the enchant of the worn item counts and its part shows in green next to the base value", function()
+        local W = world(function(w) w.equip(5, boneArmor(w)) end)
+        W.EG.Window.SetItem(W.I.better)
+        local f = W.env.EasyGearWindow
+        local sta, armor = rowOf(f.eq, "Stamina"), rowOf(f.eq, "Armor")
+        T.ok(sta and armor, "both stats of the enchant are rows")
+        T.eq(sta.value:GetText(), "1|cff00ff00+1|r", "base 1 + enchant 1")
+        T.eq(armor.value:GetText(), "55|cff00ff00+8|r", "base 55 + enchant 8")
+        T.eq(rowOf(f.cand, "Armor").value:GetText(), "500", "an item without an enchant shows the plain value")
+        -- 10 x 0.5 ilvl + 2 x 0.1 stamina + 63 x 0.025 armor
+        T.has(f.eq.score:GetText(), "6.8")
+        local on = W.EG.Score.Of(W.EG.Items.Get(W.EG.Items.EquippedLink(5)))
+        W.EG:Set("includeEnchants", false) W.flush()
+        T.eq(rowOf(f.eq, "Stamina").value:GetText(), "1", "without enchants the plain value")
+        T.ok(W.EG.Score.Of(W.EG.Items.Get(W.EG.Items.EquippedLink(5))) < on, "and the score is lower")
+        T.eq(W.EG.lastError, nil)
+    end)
+
+    T.test("window: a stat that only the enchant carries shows as +N", function()
+        local W = world(function(w)
+            w.equip(5, F.gear(w, 8011, "Plain Vest", "INVTYPE_CHEST", 10, {}, { armor = 55,
+                lines = { { type = LINE.ItemEnchantmentPermanent, leftText = "Enchanted: +15 Stamina", leftColor = COLOR.green } } }))
+        end)
+        W.EG.Window.SetItem(W.I.better)
+        T.eq(rowOf(W.env.EasyGearWindow.eq, "Stamina").value:GetText(), "|cff00ff00+15|r")
+    end)
+
+    T.test("window: the damage per second of a ranged weapon shows with one decimal, like that of a melee weapon", function()
+        local W = world(function(w) w.I.bow = F.gear(w, 8012, "Short Bow", "INVTYPE_RANGED", 20, {}, { dps = 20 }) end)
+        W.EG.Window.SetItem(W.I.bow)
+        local row = rowOf(W.env.EasyGearWindow.cand, W.EG.L.RANGED_DPS)
+        T.ok(row, "a row for the ranged damage") T.eq(row.value:GetText(), "20.0", "a whole number still shows its decimal")
+        W.EG.Window.SetItem(W.I.better)
+        W.EG.Window.SetItem(F.gear(W, 8013, "Axe", "INVTYPE_2HWEAPON", 20, {}, { dps = 20 }))
+        T.eq(rowOf(W.env.EasyGearWindow.cand, W.EG.L.WEAPON_DPS).value:GetText(), "20.0")
+    end)
+
+    T.test("window: every row is one line, and the four columns of a row do not overlap", function()
+        local W = world()
+        W.EG.Window.Open()
+        local f = W.env.EasyGearWindow
+        for _, col in ipairs({ f.cand, f.eq }) do
+            local x0 = select(4, col.rows[1].label:GetPoint(1))
+            for i, row in ipairs(col.rows) do
+                T.eq(row.label.__wordWrap, false, "row " .. i .. ": a long label is cut, it does not wrap onto the next row")
+                local lx, vx, wx, px = select(4, row.label:GetPoint(1)), select(4, row.value:GetPoint(1)),
+                                       select(4, row.weight:GetPoint(1)), select(4, row.points:GetPoint(1))
+                T.ok(lx + row.label:GetWidth() <= vx, "value column starts after the label column")
+                T.ok(vx + row.value:GetWidth() <= wx, "weight column starts after the value column")
+                T.ok(wx + row.weight:GetWidth() <= px, "points column starts after the weight column")
+                T.ok(px + row.points:GetWidth() <= x0 + 256, "the row stays within its half of the window")
+            end
+        end
+    end)
+
+    T.test("window: the worn item's line does not repeat the slot name that the line starts with", function()
+        local W = world()
+        W.EG.Window.SetItem(W.I.better)
+        local f = W.env.EasyGearWindow
+        T.eq(f.eq.info:GetText(), "Chest - Item level 30 - Plate", "the slot text of the item is the slot name: said once")
+        T.eq(f.cand.info:GetText(), "Item level 40 - Chest - Plate", "the candidate's line has no slot name in front")
+        W.EG.Window.SetItem(W.I.ring)
+        T.has(f.eq.info:GetText(), "Finger 1 - Item level", "a ring keeps its slot name: it tells the two ring slots apart")
+    end)
+
+    T.test("window: the item level row is named like the item level (short enough for the column) in every language", function()
+        local W = world()
+        W.EG.Window.SetItem(W.I.better)
+        local f = W.env.EasyGearWindow
+        T.eq(f.cand.rows[1].label:GetText(), W.EG.L.BASE_ILVL)
+        local env = { EasyGearLocales = {} }
+        for _, code in ipairs({ "enUS", "deDE", "frFR", "esES", "ruRU", "koKR", "zhCN", "zhTW" }) do
+            local chunk = assert(loadfile(T.dir .. "/Locales/" .. code .. ".lua"))
+            setfenv(chunk, env) chunk()
+        end
+        -- about 7 pixels per Latin letter, twice that for Chinese and Korean characters: the column is 124 pixels wide
+        local function width(text)
+            local w = 0
+            for i = 1, #text do
+                local b = text:byte(i)
+                if b < 0x80 then w = w + 1 elseif b >= 0xE0 then w = w + 2 elseif b >= 0xC0 then w = w + 1 end
+            end
+            return w
+        end
+        local seen = 0
+        for code, tbl in pairs(env.EasyGearLocales) do
+            local text = tbl.BASE_ILVL or env.EasyGearLocales.enUS.BASE_ILVL
+            T.ok(width(text) <= 18, code .. ": '" .. text .. "' fits the label column (" .. width(text) .. " units)")
+            T.eq(text, tbl.ILVL or env.EasyGearLocales.enUS.ILVL, code .. ": the row is named like the item level")
+            seen = seen + 1
+        end
+        T.eq(seen, 8)
+    end)
 end

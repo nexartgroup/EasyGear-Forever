@@ -364,4 +364,17 @@ return function(T)
         refused("marker group moon star", "Unknown shape or color: star")
         T.eq(W.EG.lastError, nil)
     end)
+
+    ------------------------------------------------------------------ enchant parts in the report
+    T.test("slash: the report names the part of a value that comes from enchants and gems", function()
+        local W = world(function(w)
+            w.I.bone = F.gear(w, 9110, "Bone Armor", "INVTYPE_CHEST", 10, { STA = 1 }, { armor = 55,
+                lines = { { type = T.Mock.LINE.ItemEnchantmentPermanent, leftText = "Enchanted: Stamina +1 and Armor +8", leftColor = T.Mock.COLOR.green } } })
+        end)
+        local text = say(W, W.I.bone)
+        T.has(text, "(of which 1 from enchants and gems)") T.has(text, "(of which 8 from enchants and gems)")
+        T.has(text, "Includes the values of enchants and gems.")
+        local plain = say(W, W.I.better)
+        T.hasnt(plain, "of which", "an item without enchants has no such note")
+    end)
 end

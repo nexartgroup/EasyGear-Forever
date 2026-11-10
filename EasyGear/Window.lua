@@ -23,6 +23,8 @@ local sformat = string.format
 local WIDTH, HEIGHT = 570, 520
 local ROWS = 15
 local ROW_H = 16
+-- Breite der vier Spalten einer Rechenzeile (zusammen eine Spalte des Fensters: 256 Pixel)
+local LABEL_W, VALUE_W, WEIGHT_W, POINTS_W = 124, 46, 40, 42
 
 local frame
 local state = { link = nil, pick = 1 }
@@ -69,17 +71,30 @@ local function BuildColumn(parent, x)
     for i = 1, ROWS do
         local row = {}
         row.label = Text(parent, "GameFontHighlightSmall", "TOPLEFT", x, y)
-        row.label:SetWidth(112) row.label:SetJustifyH("LEFT")
-        row.value = Text(parent, "GameFontHighlightSmall", "TOPLEFT", x + 112, y)
-        row.value:SetWidth(40) row.value:SetJustifyH("RIGHT")
-        row.weight = Text(parent, "GameFontDisableSmall", "TOPLEFT", x + 156, y)
-        row.weight:SetWidth(44) row.weight:SetJustifyH("RIGHT")
-        row.points = Text(parent, "GameFontNormalSmall", "TOPLEFT", x + 204, y)
-        row.points:SetWidth(52) row.points:SetJustifyH("RIGHT")
+        row.label:SetWidth(LABEL_W) row.label:SetJustifyH("LEFT")
+        row.label:SetWordWrap(false)    -- eine Zeile: ein langer Name wird gekuerzt und ueberdeckt nicht die naechste Zeile
+        row.value = Text(parent, "GameFontHighlightSmall", "TOPLEFT", x + LABEL_W, y)
+        row.value:SetWidth(VALUE_W) row.value:SetJustifyH("RIGHT")
+        row.weight = Text(parent, "GameFontDisableSmall", "TOPLEFT", x + LABEL_W + VALUE_W + 2, y)
+        row.weight:SetWidth(WEIGHT_W) row.weight:SetJustifyH("RIGHT")
+        row.points = Text(parent, "GameFontNormalSmall", "TOPLEFT", x + LABEL_W + VALUE_W + WEIGHT_W + 4, y)
+        row.points:SetWidth(POINTS_W) row.points:SetJustifyH("RIGHT")
         col.rows[i] = row
         y = y - ROW_H
     end
     return col
+end
+
+-- Der Wert einer Zeile. Was Verzauberung und Steine dazu beitragen, steht in Gruen dahinter: "1+1" (Basis + Verzauberung)
+local function ValueText(data)
+    local v = data.value or 0
+    if data.key == "DPS" or data.key == "RDPS" then return sformat("%.1f", v) end
+    local extra = data.extra
+    if extra and extra > 0 and extra <= v then
+        local own = v - extra
+        return (own > 0 and EG.FmtScore(own) or "") .. EG.COLOR.good .. "+" .. EG.FmtScore(extra) .. EG.COLOR.reset
+    end
+    return EG.FmtScore(v)
 end
 
 local function FillRows(col, breakdown)
@@ -88,8 +103,7 @@ local function FillRows(col, breakdown)
         local row, data = col.rows[i], breakdown and breakdown[i]
         if data and i <= ROWS then
             row.label:SetText(data.label or "?")
-            local v = data.value or 0
-            row.value:SetText((data.key == "DPS" or data.key == "RDPS") and sformat("%.1f", v) or EG.FmtScore(v))
+            row.value:SetText(ValueText(data))
             row.weight:SetText("x" .. EG.FmtWeight(data.weight))
             row.points:SetText(EG.FmtScore(data.points or 0))
         else
@@ -133,9 +147,11 @@ end
 -- 02  Inhalt
 ------------------------------------------------------------------------------
 
-local function ItemInfo(item)
+-- Stufe, Platz und Art eines Gegenstands als eine Zeile; skip = ein Name, der schon davor steht und nicht noch einmal
+-- erscheinen soll ("Brust - Gegenstandsstufe 10 - Brust - Leder")
+local function ItemInfo(item, skip)
     local parts = { L.ILVL .. " " .. tostring(item.ilvl or 0) }
-    if item.slotText and item.slotText ~= "" then parts[#parts + 1] = item.slotText end
+    if item.slotText and item.slotText ~= "" and item.slotText ~= skip then parts[#parts + 1] = item.slotText end
     if item.typeText and item.typeText ~= "" then parts[#parts + 1] = item.typeText end
     return table.concat(parts, " - ")
 end
@@ -189,7 +205,8 @@ function Window.Refresh()
     local entry = entries[state.pick]
 
     if entry and entry.item then
-        ShowItem(frame.eq, entry.item, Score.SlotName(entry.slotID) .. " - " .. ItemInfo(entry.item))
+        local slotName = Score.SlotName(entry.slotID)
+        ShowItem(frame.eq, entry.item, slotName .. " - " .. ItemInfo(entry.item, slotName))
         frame.eq.score:SetText(L.SCORE .. ": " .. EG.FmtScore(result.combined and result.targetScore or entry.score or 0))
         FillRows(frame.eq, entry.breakdown)
     elseif entry then

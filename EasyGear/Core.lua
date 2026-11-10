@@ -1,5 +1,5 @@
 --[[---------------------------------------------------------------------------
-    EasyGear 4.3.0 - Forever
+    EasyGear 4.3.1 - Forever
     Ausruestungsbewertung, Upgrade-Erkennung und Vergleich fuer WoW Forever
 
     Dieses Addon vergleicht und empfiehlt, mehr nicht: es verschickt keine
@@ -48,7 +48,7 @@ do
     if C_AddOns and C_AddOns.GetAddOnMetadata then
         meta = C_AddOns.GetAddOnMetadata(EG.name, "Version")
     end
-    EG.version = meta or "4.3.0"
+    EG.version = meta or "4.3.1"
 end
 
 -- WoW Forever meldet sich ueber WOW_PROJECT_ID == WOW_PROJECT_CAMELOT (Blizzard_ProjectConstants).

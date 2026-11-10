@@ -41,6 +41,7 @@ need any other addon: it is built on the default Forever interface and nothing e
 - [Verification](#verification)
 - [Known limits](#known-limits)
 - [The 3.3.5a edition](#the-335a-edition)
+- [Changes in 4.3.1](#changes-in-431)
 - [Changes in 4.3.0](#changes-in-430)
 - [Changes in 4.2.0](#changes-in-420)
 - [Changes in 4.1.0](#changes-in-410)
@@ -57,7 +58,7 @@ Restart the game or `/reload`. Saved settings are `EasyGearDB` (account) and `Ea
 From GitHub: *Code > Download ZIP*, unpack it, and copy the inner folder `EasyGear` - not the folder of the
 ZIP itself (`EasyGear-Forever-main`), which also holds the tests and tools.
 
-At login the chat shows `EasyGear 4.3.0 loaded.`
+At login the chat shows `EasyGear 4.3.1 loaded.`
 
 ## What you see
 
@@ -128,7 +129,12 @@ score =  item level x item level weight x (character level / maximum level)
 * **Weights** come from the profile, normalised so that the main attribute of the profile is 1.00.
 * **Values** come from `C_Item.GetItemStats` (language independent) and the tooltip lines (enchants,
   gems, socket bonus, ratings the API does not list). Lines are read with patterns built at run time
-  from the client's own strings, so no text of one language is hard-coded.
+  from the client's own strings, so no text of one language is hard-coded. Enchant and gem texts are read
+  in both spellings, `+8 Armor` and `Armor +8` (the Forever server describes its own enchants as
+  `Stamina +1 and Armor +8`). The comparison window shows what an enchant or gem adds in green behind the
+  base value (`55+8`), the chat report says `(of which 8 from enchants and gems)`. An item that is worn
+  usually carries an enchant that a new item lacks, so the enchant counts for the worn one (switch it off
+  with `/eg enchants off`).
 * **Empty sockets** are worth a typical gem of your level for the main attribute of the profile, minus 10 %.
 * **Upgrade** means: the gain is positive *and* at least `max(minimum, percent of the worn item's score)` -
   defaults 0 points and 1 %. Small differences are noise, not upgrades.
@@ -297,8 +303,8 @@ and the exact text of any Lua error (`/console scriptErrors 1` shows them). For 
 Run from the root of this repository:
 
 ```
-lua5.1 tests/run.lua                 # unit tests on a model of the client (Lua 5.1 only), ~380 checks
-python3 tests/mutate.py              # mutation check: breaks the addon in ~420 small ways, the tests must notice
+lua5.1 tests/run.lua                 # unit tests on a model of the client (Lua 5.1 only), ~390 checks
+python3 tests/mutate.py              # mutation check: breaks the addon in ~450 small ways, the tests must notice
 tools/check.sh <Interface/AddOns of the Forever UI source>
                                      # luacheck against a std built from the UI source + checks that every
                                      # method, event, template, font, atlas and global the addon names exists
@@ -351,6 +357,20 @@ What this proves and what it does not:
 The addon for the old Wrath client (interface 30300, with ElvUI/Bagnon/Immersion support and the GM
 heirloom tools) lives in its own repository, [nexartgroup/EasyGear](https://github.com/nexartgroup/EasyGear).
 This edition is a new codebase for the Forever client, not an update of that one.
+
+## Changes in 4.3.1
+
+* **Enchants that name the stat first are counted.** The text `Enchanted: Stamina +1 and Armor +8` (name before the
+  number, as the Forever server writes its own enchants) was not read at all, so a worn item lost the value of its
+  enchant: the comparison window showed only the base stamina and the verdict ignored the enchant. Both spellings
+  are read now (`+8 Armor`, `Armor +8`), also in lists (`Agility +3, Stamina +4`), never as a percentage.
+  A new item that is no better than the worn one *with* its enchant is no upgrade, as it should be.
+* The comparison window shows the part that comes from an enchant or gem in green behind the base value (`1+1`,
+  `55+8`); the chat report names it too.
+* **Comparison window layout:** the label of a row is one line (a long name is cut, it no longer wraps onto the next
+  row and hides it), the label column is wider, the item level row is named like the item level (`Gegenstandsstufe`
+  instead of `Basis Gegenstandsstufe`), and the line under the worn item no longer repeats its slot name
+  (`Chest - Item level 10 - Chest - Leather`).
 
 ## Changes in 4.3.0
 
@@ -483,6 +503,11 @@ Wertung =  Gegenstandsstufe x Stufengewicht x (Charakterstufe / Höchststufe)
 * **Gewichte** stammen aus dem Profil, normiert auf das Hauptattribut des Profils (1,00).
 * **Werte** kommen aus `C_Item.GetItemStats` (sprachunabhängig) und den Tooltipzeilen (Verzauberungen, Edelsteine,
   Sockelbonus). Die Zeilen werden mit Mustern gelesen, die zur Laufzeit aus den Texten des Clients gebaut werden.
+  Verzauberungs- und Edelsteintexte werden in beiden Schreibweisen gelesen, `+8 Rüstung` und `Rüstung +8` (der
+  Forever-Server beschreibt seine eigenen Verzauberungen als `Ausdauer +1 und Rüstung +8`). Das Vergleichsfenster
+  zeigt, was eine Verzauberung oder ein Stein beiträgt, in Grün hinter dem Basiswert (`55+8`), der Chatbericht
+  schreibt `(davon 8 aus Verzauberung und Steinen)`. Ein getragenes Item trägt meist eine Verzauberung, die ein neues
+  nicht hat; sie zählt deshalb für das getragene (`/eg enchants off` schaltet das ab).
 * **Leere Sockel** zählen wie ein typischer Stein deiner Stufe für das Hauptattribut, minus 10 %.
 * **Verbesserung** heißt: der Zugewinn ist positiv *und* mindestens `max(Minimum, Prozent der Wertung des Getragenen)`
   - Standard 0 Punkte und 1 %.

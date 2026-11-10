@@ -82,8 +82,12 @@ end
 local function FmtRow(row)
     local v = tonumber(row.value) or 0
     local num = (v % 1 ~= 0) and sformat("%.1f", v) or sformat("%d", v)
-    return sformat("  %-24s %8s  x %-6s = %s%s%s",
+    local text = sformat("  %-24s %8s  x %-6s = %s%s%s",
         tostring(row.label), num, EG.FmtWeight(row.weight), C.value, EG.FmtScore(row.points), C.reset)
+    if row.extra and row.extra > 0 then
+        text = text .. "  " .. C.good .. sformat(L.ROW_EXTRA, EG.FmtScore(row.extra)) .. C.reset
+    end
+    return text
 end
 
 function Slash.PrintBreakdown(rows, total)

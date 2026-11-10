@@ -344,7 +344,7 @@ EasyGearLocales["enUS"] = {
     WEIGHT = "Weight",
     POINTS = "Points",
     TOTAL = "Total",
-    BASE_ILVL = "Item level base",
+    BASE_ILVL = "Item level",
     WEAPON_DPS = "Weapon DPS",
     RANGED_DPS = "Ranged DPS",
     SOCKETS = "Empty sockets",
@@ -368,4 +368,5 @@ EasyGearLocales["enUS"] = {
     COMPAT_ELLESMERE_BAGS = "Bags module: arrow through its overlay interface (top right of each item).",
     COMPAT_ELLESMERE_NOAPI = "Bags module: loaded, but without its overlay interface - no arrow there.",
     COMPAT_ELLESMERE_NOBAGS = "Bags module: not loaded.",
+    ROW_EXTRA = "(of which %s from enchants and gems)",
 }

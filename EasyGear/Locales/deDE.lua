@@ -334,7 +334,7 @@ EasyGearLocales["deDE"] = {
     WEIGHT = "Gewicht",
     POINTS = "Punkte",
     TOTAL = "Gesamt",
-    BASE_ILVL = "Basis Gegenstandsstufe",
+    BASE_ILVL = "Gegenstandsstufe",
     WEAPON_DPS = "Waffen-DPS",
     RANGED_DPS = "Fernkampf-DPS",
     SOCKETS = "Freie Sockel",
@@ -358,4 +358,5 @@ EasyGearLocales["deDE"] = {
     COMPAT_ELLESMERE_BAGS = "Taschenmodul: Pfeil über seine Overlay-Schnittstelle (oben rechts am Gegenstand).",
     COMPAT_ELLESMERE_NOAPI = "Taschenmodul: geladen, aber ohne seine Overlay-Schnittstelle - dort kein Pfeil.",
     COMPAT_ELLESMERE_NOBAGS = "Taschenmodul: nicht geladen.",
+    ROW_EXTRA = "(davon %s aus Verzauberung und Steinen)",
 }
