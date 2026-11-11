@@ -108,6 +108,62 @@ return function(T)
         T.eq(W.EG.lastError, nil)
     end)
 
+    T.test("dui: the queue of Dialogue UI stays sound - no rebuild from inside its loop, every later tooltip works", function()
+        local W, D = world({})
+        local b = D.showQuest({ choices = { W.I.better, W.I.weak }, rewards = { W.I.good } })
+        D.tick(0.3)
+        local P = D.processor
+        T.eq(P.anyDelayedTrigger, nil) T.eq(P.triggerQueue, nil, "nothing pending, nothing half-done")
+        D.hover(b[1])                                       -- the first tooltip: the hook is attached, the tooltip built anew
+        T.eq(P.anyDelayedTrigger, nil) T.eq(P.triggerQueue, nil, "the flag and the queue agree again")
+        T.eq(count(D.lines(), "EasyGear |"), 1)
+        D.leave(b[1])
+        for _, button in ipairs({ b[2], b[3], b[1], b[3] }) do        -- with the flag stuck, each of these raises inside Dialogue UI
+            D.hover(button)
+            T.eq(D.tooltip:IsShown(), true)
+            T.eq(P.anyDelayedTrigger, nil) T.eq(P.triggerQueue, nil)
+            D.leave(button)
+        end
+        T.eq(W.EG.lastError, nil)
+    end)
+
+    T.test("dui: gear that Dialogue UI compares, but EasyGear does not count as gear (bag, tabard), gets its pick line once", function()
+        local W, D = world({}, function(w)
+            w.I.bag = F.gear(w, 7060, "Big Bag", "INVTYPE_BAG", 10, {}, { sellPrice = 900, typeText = "Bag" })
+            w.I.tabard = F.gear(w, 7061, "Fine Tabard", "INVTYPE_TABARD", 1, {}, { sellPrice = 100, typeText = "Tabard" })
+        end)
+        local b = D.showQuest({ choices = { W.I.bag, W.I.tabard } })
+        D.tick(0.3)
+        T.eq(checked(b[1]), true, "the bag sells best")
+        for round = 1, 2 do                                  -- the first display builds anew; the second is the plain case
+            local lines = hoverText(W, D, b[1])
+            T.eq(count(lines, "EasyGear: best choice (highest vendor price)"), 1, "round " .. round .. ": " .. D.text())
+            D.leave(b[1])
+        end
+        T.eq(count(hoverText(W, D, b[2]), "EasyGear"), 0, "and nothing on the other one")
+        T.eq(W.EG.lastError, nil)
+    end)
+
+    T.test("dui: a function that is replaced again and again is not chained again and again - a few times, then the processor writes", function()
+        local W, D = world({})
+        local b = D.showQuest({ choices = { W.I.better, W.I.weak } })
+        D.tick(0.3)
+        local show = D.tooltip.ShowItemComparison
+        function D.tooltip:ShowItemComparison()               -- an addon that sets its function anew with every build
+            self.ProcessItemExternal = function() end
+            return show(self)
+        end
+        D.hover(b[1])
+        W.flush()
+        local builds = D.builds
+        W.flush()
+        T.eq(D.builds, builds, "it comes to rest: no tooltip is built again and again")
+        T.ok(builds <= 8, "after a few attempts: " .. builds)
+        T.eq(count(D.lines(), "EasyGear |"), 1, "and the block is there: the processor writes it at the end")
+        T.eq(D.lines()[#D.lines()], "UPGRADE | +37  (+83.1%)", D.text())
+        T.eq(W.EG.lastError, nil)
+    end)
+
     T.test("dui: the first tooltip is built twice (the block needs its place before the hint), every later one once", function()
         local W, D = world({})
         local b = D.showQuest({ choices = { W.I.better, W.I.weak } })
@@ -401,16 +457,33 @@ return function(T)
         W.EG:Set("markPickShape", "star") W.EG:Set("markPickColor", "ff3366ff")
         local b = D.showQuest({ choices = { W.I.weak, W.I.better }, choosing = true })
         T.eq(checked(b[2]), false, "nothing before the first pass of the driver")
-        D.tick(0.1)
-        T.eq(checked(b[2]), false, "the pass comes every quarter second")
-        D.tick(0.2)
-        T.eq(checked(b[2]), true) T.eq(checked(b[1]), false)
+        D.tick(0.01)
+        T.eq(checked(b[2]), true, "the release of the old quest asked for a pass at once: no pause, no blinking")
+        T.eq(checked(b[1]), false)
         local tex = checkOf(b[2])
         local point, rel = tex:GetPoint(1)
         T.eq(point, "TOPRIGHT") T.eq(rel, b[2].Icon, "at the icon, where Dialogue UI keeps its own marks off")
         T.eq(tex:GetAtlas(), "tradeskills-star") T.near(tex.__vertex[1], 0x33 / 255, 1e-9)
         T.eq(tex:GetWidth(), 20)
         T.eq(b[2].EasyGearArrow, nil, "no arrow of EasyGear's own: Dialogue UI has its arrow")
+        T.eq(W.EG.lastError, nil)
+    end)
+
+    T.test("dui: a pass follows the release of the old quest at once, all later ones every quarter second", function()
+        local W, D = world({}, function(w) w.I.cheap = F.gear(w, 7030, "Cheap Chestplate", "INVTYPE_CHEST", 10, { STR = 1 }, { sellPrice = 50 }) end)
+        local spec = { choices = { { link = W.I.better }, { link = W.I.cheap } } }
+        local b = D.showQuest(spec)
+        D.tick(0.01)
+        T.eq(checked(b[1]), true, "the first pass came at once")
+        spec.choices[1].usable = false                      -- something changes ...
+        D.tick(0.1)
+        T.eq(checked(b[1]), true, "... but the next pass is not due yet")
+        D.tick(0.2)
+        T.eq(checked(b[1]), false, "now it is") T.eq(checked(b[2]), true)
+        -- the quest is built anew (Dialogue UI does it a moment after opening): the mark is back within one frame
+        D.showQuest({ choices = { { link = W.I.better }, { link = W.I.cheap } } })
+        D.tick(0.01)
+        T.eq(checked(b[1]), true)
         T.eq(W.EG.lastError, nil)
     end)
 
@@ -606,6 +679,73 @@ return function(T)
         T.eq(W.EG.lastError, nil, "what is no tooltip is not an error either")
     end)
 
+    T.test("dui: /eg status tells what is really on - switched off, tooltip lines off, reward marks off", function()
+        local W = world({})
+        local function status()
+            W.clearChat() W.slash("status")
+            return W.chatText()
+        end
+        T.has(status(), "Dialogue UI: found - score and verdict in its tooltips, the best reward marked on its reward buttons")
+        T.hasnt(status(), "Dialogue UI: found - score and verdict in its tooltips, the best reward marked on its reward buttons (")
+        W.slash("tooltip off")
+        local text = status()
+        T.has(text, "Dialogue UI: found - score and verdict") T.has(text, "reward buttons (Extra lines in item tooltips: disabled)")
+        W.slash("quest off")
+        T.has(status(), "reward buttons (Extra lines in item tooltips: disabled; Mark the best quest reward: disabled)")
+        W.slash("tooltip on") W.slash("quest on")
+        W.slash("dui off")
+        text = status()
+        T.has(text, "Dialogue UI: found, but switched off here (/eg dui on)") T.hasnt(text, "score and verdict")
+        W.slash("dui on")
+        T.hasnt(status(), "switched off")
+
+        local V = world({ noQuestFrame = true })
+        V.slash("dui off")
+        V.clearChat() V.slash("status")
+        T.has(V.chatText(), "found, but part of its interface is missing", "a missing part is named before the switch")
+    end)
+
+    T.test("dui: an open tooltip is rebuilt only when there is something to add or to take back", function()
+        local W, D = world({})
+        local b = D.showQuest({ choices = { W.I.better, W.I.weak } })
+        D.tick(0.3)
+        D.hover(b[1])
+        W.flush()
+        T.eq(count(D.lines(), "EasyGear |"), 1)
+        local builds = D.builds
+        W.EG:InvalidateAll() W.flush()
+        T.eq(D.builds, builds + 1, "enabled: the data may have changed, so the block is worked out again")
+
+        W.slash("dui off") W.flush()
+        T.eq(count(D.lines(), "EasyGear"), 0, "switched off: the block is taken back")
+        builds = D.builds
+        W.EG:InvalidateAll() W.flush()
+        T.eq(D.builds, builds, "switched off and nothing of ours in it: the tooltip is left alone (a rebuild fades it in again)")
+        W.EG:Set("showQuestIcons", false) W.flush()
+        T.eq(D.builds, builds)
+        T.eq(W.EG.lastError, nil)
+    end)
+
+    T.test("dui: the pick line of an open tooltip follows the recommendation, also when it comes late", function()
+        local W, D = world({}, function(w)
+            w.I.super = F.gear(w, 7031, "Super Chestplate", "INVTYPE_CHEST", 90, { STR = 200, STA = 100 }, { armor = 900 })
+            w.I.cheap = F.gear(w, 7030, "Cheap Chestplate", "INVTYPE_CHEST", 10, { STR = 1 }, { sellPrice = 50 })
+        end)
+        local b = D.showQuest({ choices = { W.I.better, W.I.cheap } })
+        b[1].__scripts.OnEnter(b[1])                          -- hovered within the first moments: the driver has not run yet
+        W.advance(0)
+        T.eq(count(D.lines(), "best choice"), 0, "no recommendation yet")
+        D.tick(0.01)                                          -- the first pass: the mark comes - and the open tooltip follows
+        W.advance(0)
+        T.eq(count(D.lines(), "EasyGear: best choice (largest upgrade)"), 1, D.text())
+
+        W.equip(5, W.I.super) W.fire("PLAYER_EQUIPMENT_CHANGED", 5) W.flush()   -- now the first is no upgrade any more
+        D.tick(0.3) W.advance(0)
+        T.eq(checked(b[1]), false) T.eq(checked(b[2]), true)
+        T.eq(count(D.lines(), "best choice"), 0, "the open tooltip of the first one dropped the line with the check mark: " .. D.text())
+        T.eq(W.EG.lastError, nil)
+    end)
+
     T.test("dui: a tooltip without one of the methods EasyGear writes with is named in the status, and left alone", function()
         for _, name in ipairs({ "AddLeftLine", "AddRightLine", "AddBlankLine" }) do
             local W, D = world({ missingMethods = { [name] = true } })
@@ -680,6 +820,8 @@ return function(T)
                 W.flush()
             end
             D.tick(0.3)
+            local P = D.processor
+            T.eq(P.anyDelayedTrigger == true, P.triggerQueue ~= nil, "the queue of Dialogue UI is whole, step " .. step)
             local shown, shownIndex = 0, nil
             for _, bt in ipairs(buttons) do if checked(bt) then shown = shown + 1 shownIndex = bt.index end end
             T.ok(shown <= 1, "at most one best choice on screen, step " .. step)

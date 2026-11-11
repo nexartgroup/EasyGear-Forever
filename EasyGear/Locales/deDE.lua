@@ -364,4 +364,5 @@ EasyGearLocales["deDE"] = {
     ROW_EXTRA = "(davon %s aus Verzauberung und Steinen)",
     DUI_OK = "gefunden - Wertung und Urteil in seinen Tooltips, die beste Belohnung an seinen Belohnungsknöpfen markiert",
     DUI_PROBLEM = "gefunden, aber ein Teil seiner Schnittstelle fehlt",
+    DUI_OFF = "gefunden, aber hier abgeschaltet (/eg dui on)",
 }

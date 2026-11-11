@@ -38,6 +38,7 @@ local tconcat = table.concat
 
 local ADDON = "DialogueUI"
 local TICK = 0.25                        -- Sekunden zwischen zwei Durchlaeufen ueber die Belohnungsknoepfe
+local MAX_WRAPS = 5                      -- so oft haengt sich EasyGear an die Funktion fuer Pawn, wenn sie immer wieder ersetzt wird
 
 ------------------------------------------------------------------------------
 -- 01  Aussehen: die Farben und Masse von Dialogue UI (Code/Tooltip/Tooltip_Private.lua, Tooltip_Base.lua)
@@ -75,7 +76,15 @@ end
 -- 02  Tooltip
 ------------------------------------------------------------------------------
 
-local state = { found = false, problems = {}, tooltip = nil, wrapper = nil, checked = false, broken = false }
+local state = {
+    found = false, problems = {},
+    tooltip = nil,          -- der Tooltip von Dialogue UI (er wird erst beim ersten Gegenstand bekannt)
+    wrapper = nil,          -- unsere Funktion an tooltip.ProcessItemExternal
+    wraps = 0,              -- wie oft wir uns angehaengt haben
+    handled = nil,          -- Link, fuer den der Haken im laufenden Aufbau den Block schon gesetzt hat
+    wrote = false,          -- steht im offenen Tooltip ein Block von uns?
+    checked = false, broken = false,
+}
 
 -- Die Anbindung als Ganzes laesst sich in den Optionen abschalten; der Tooltip folgt ausserdem dem Schalter der Tooltips
 local function Active()
@@ -117,10 +126,16 @@ local function PickOf(owner)
     return nil
 end
 
+local function PickKind(owner)
+    local pick = PickOf(owner)
+    return pick and pick.pick or false
+end
+
 --[[ Den Block von EasyGear an das Ende des Tooltips setzen. Rueckgabe: wurde etwas gesetzt?
      Knapp (Vergleich aus): Wertung, Urteil und die Empfehlung. Mit Vergleich: dazu Platz, Attribute, Hinweise und die
      Gruppenhinweise.                                                                                               ]]
 local function AddBlock(tooltip, link, owner)
+    state.wrote = false
     if not Enabled() or not link then return false end
     local expanded = Expanded()
     local content = Tooltip.Compose(Items.Get(link), "FULL", PickOf(owner), expanded)
@@ -141,7 +156,18 @@ local function AddBlock(tooltip, link, owner)
         any = true
         for _, ln in ipairs(content.group) do AddLine(tooltip, ln) end
     end
+    state.wrote = any
     return any
+end
+
+-- Daten, die erst spaeter ankommen (ein Gegenstand wird geladen, eine Einstellung aendert sich, die Empfehlung wechselt):
+-- der offene Tooltip baut sich neu, damit der Block erscheint, sich aendert oder verschwindet. Nichts tun, wo es nichts zu
+-- setzen und nichts zurueckzunehmen gibt: jedes Neubauen laesst den Tooltip von Dialogue UI neu einblenden.
+local function RefreshTooltip()
+    local tooltip = state.tooltip
+    if not (tooltip and tooltip.IsShown and tooltip:IsShown() and type(tooltip.ReprocessInfo) == "function") then return end
+    if not (Enabled() or state.wrote) then return end
+    tooltip:ReprocessInfo()
 end
 
 -- EasyGear haengt sich hinter das, was schon an tooltip.ProcessItemExternal haengt (Pawn setzt dort seine Zeilen). Ersetzt
@@ -151,10 +177,12 @@ local function Wrap(tooltip)
     local original = tooltip.ProcessItemExternal
     local function wrapper(self, itemLink)
         if type(original) == "function" then original(self, itemLink) end
+        state.handled = itemLink                    -- der Verarbeiter dieses Aufbaus muss den Block nicht noch einmal setzen
         EG:Try("dialogueui", AddBlock, self, itemLink, self.owner)
     end
     tooltip.ProcessItemExternal = wrapper
     state.wrapper, state.tooltip = wrapper, tooltip
+    state.wraps = state.wraps + 1
 end
 
 local function IsWrapped(tooltip)
@@ -164,35 +192,32 @@ end
 --[[ Dialogue UI ruft jeden Verarbeiter, wenn sein Tooltip einen Gegenstand zeigt (DialogueUIAPI.AddItemTooltipProcessorExternal),
      aber erst im naechsten Bild - nach dem Umschalt-Hinweis, der die letzte Zeile sein soll. Beim ersten Mal haengt sich
      EasyGear deshalb an tooltip.ProcessItemExternal (das ruft Dialogue UI mitten im Aufbau, vor dem Hinweis) und laesst den
-     Tooltip einmal neu bauen. Ausruestung setzt von da an der Haken, alles andere (ein Verbrauchsgegenstand, der die beste
-     Wahl ist) setzt dieser Verarbeiter selbst ans Ende.                                                              ]]
+     Tooltip neu bauen. Von da an setzt der Haken den Block bei allem, was Dialogue UI vergleichen kann (jeder anlegbare
+     Gegenstand); alles andere (ein Verbrauchsgegenstand, der die beste Wahl ist) setzt dieser Verarbeiter selbst ans Ende.
+
+     Das Neubauen darf NICHT hier geschehen: Dialogue UI geht in diesem Augenblick seine Warteschlange durch (CallbackRegistry,
+     Processor_OnUpdate: Merker weg, Schleife, Warteschlange weg). Ein Aufbau legt dort einen neuen Eintrag an; das Ende der
+     Schleife wirft ihn weg und laesst den Merker gesetzt - von da an wirft jeder Tooltip einen Lua-Fehler. Darum eine
+     Verzoegerung um ein Bild.                                                                                       ]]
 local function OnSetItem(tooltip, _, itemLink)
     if type(tooltip) ~= "table" then return false end
     if not state.checked and not CheckTooltip(tooltip) then return false end
     if state.broken then return false end
-    if not IsWrapped(tooltip)
+    if not IsWrapped(tooltip) and state.wraps < MAX_WRAPS
        and type(tooltip.ProcessItemExternal) == "function" and type(tooltip.ReprocessInfo) == "function" then
         Wrap(tooltip)
-        if Enabled() and tooltip.IsShown and tooltip:IsShown() then tooltip:ReprocessInfo() end
+        EG:After(0, RefreshTooltip)
         return false
     end
-    local item = Enabled() and itemLink and Items.Get(itemLink) or nil
-    if item and item.isGear and IsWrapped(tooltip) then return false end      -- der Haken hat den Block gesetzt
+    local handled = state.handled
+    state.handled = nil
+    if handled ~= nil and handled == itemLink then return false end      -- der Haken hat den Block in diesem Aufbau gesetzt
     return AddBlock(tooltip, itemLink, tooltip.owner)
 end
 
 local function Processor(tooltip, itemID, itemLink)
     local ok, changed = EG:Try("dialogueui", OnSetItem, tooltip, itemID, itemLink)
     return ok and changed == true
-end
-
--- Daten, die erst spaeter ankommen (ein Gegenstand wird geladen, eine Einstellung aendert sich): der offene Tooltip
--- baut sich neu, damit der Block erscheint oder verschwindet
-local function RefreshTooltip()
-    local tooltip = state.tooltip
-    if tooltip and tooltip.IsShown and tooltip:IsShown() and type(tooltip.ReprocessInfo) == "function" then
-        tooltip:ReprocessInfo()
-    end
 end
 
 ------------------------------------------------------------------------------
@@ -274,10 +299,13 @@ local function Update(dialog)
     end
 
     if dirty then
-        -- die beste Wahl (nur bei mehreren Belohnungen zur Auswahl)
+        -- die beste Wahl (nur bei mehreren Belohnungen zur Auswahl); die Zeile "beste Wahl" im offenen Tooltip folgt ihr
+        local owner = state.tooltip and state.tooltip.owner
+        local before = PickKind(owner)
         local best, kind
         if #entries >= 2 then best, kind = Recommend.BestReward(entries) end
         for idx, button in pairs(choiceButtons) do Marks.SetBest(button, best ~= nil and idx == best, kind) end
+        if PickKind(owner) ~= before then RefreshTooltip() end
 
         -- der Aufwertungspfeil von Dialogue UI fuer jede Verbesserung, die EasyGear erkennt; fehlen noch Gegenstandsdaten,
         -- gilt der Durchlauf als nicht abgeschlossen
@@ -311,7 +339,10 @@ local function StartDriver(dialog)
     driver:SetScript("OnHide", function() ClearAll() end)
     -- Dialogue UI raeumt bei jedem Wechsel der Quest alle Knoepfe weg und belegt sie neu: nichts soll stehen bleiben
     if type(dialog.ReleaseAllObjects) == "function" and hooksecurefunc then
-        pcall(hooksecurefunc, dialog, "ReleaseAllObjects", function() EG:Try("dialogueui", ClearAll) end)
+        pcall(hooksecurefunc, dialog, "ReleaseAllObjects", function()
+            elapsed = TICK                      -- Dialogue UI baut gleich neu: der naechste Durchlauf setzt alles ohne Pause wieder
+            EG:Try("dialogueui", ClearAll)
+        end)
     end
     DUI.driver = driver
 end
@@ -368,7 +399,13 @@ end
 function DUI.StatusLine()
     if not state.found then return "Dialogue UI: " .. L.COMPAT_NOT_FOUND end
     if #state.problems > 0 then return "Dialogue UI: " .. L.DUI_PROBLEM .. " (" .. tconcat(state.problems, ", ") .. ")" end
-    return "Dialogue UI: " .. L.DUI_OK
+    if not Active() then return "Dialogue UI: " .. L.DUI_OFF end
+    local text = L.DUI_OK
+    local off = {}
+    if EG:Get("showTooltip") == false then off[#off + 1] = L.OPT_TOOLTIP .. ": " .. L.SET_OFF end
+    if not Marks.Enabled("quest") then off[#off + 1] = L.OPT_QUESTREWARD .. ": " .. L.SET_OFF end
+    if #off > 0 then text = text .. " (" .. tconcat(off, "; ") .. ")" end
+    return "Dialogue UI: " .. text
 end
 
 EG:OnLogin("dialogueui", function() DUI.Register() end)

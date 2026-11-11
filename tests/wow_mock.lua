@@ -1310,22 +1310,38 @@ function Mock.new(opts)
         env.DialogueUI_DB = { TooltipShowItemComparison = options.expanded and true or false }
         env.DialogueUIAPI = {}
 
-        local pending
+        -- CallbackRegistry:TriggerOnNextUpdate and its Processor frame, as in the source (Code/CallbackRegistry.lua): one
+        -- queue, one call per event; the flag is cleared before the loop, the queue after it - so a trigger from INSIDE a
+        -- callback builds a queue that the end of the loop throws away and leaves the flag set; from then on every trigger
+        -- indexes a nil queue and raises. (A model that "re-queues" instead hid exactly this once.)
+        local Processor = { triggerQueue = nil, anyDelayedTrigger = nil, scheduled = false }
+        D.processor = Processor
+        local function onSetItem(tooltip, itemID, link)                     -- Tooltip_Public.lua: Tooltip_OnSetItem
+            local any
+            for processor in pairs(D.processors) do
+                D.calls[#D.calls + 1] = link
+                if processor(tooltip, itemID, link) then any = true end
+            end
+            if any then D.relayouts = D.relayouts + 1 tooltip:Show() end
+        end
+        local function processorOnUpdate()
+            Processor.scheduled = false                                      -- SetScript("OnUpdate", nil)
+            if Processor.triggerQueue and Processor.anyDelayedTrigger then
+                Processor.anyDelayedTrigger = nil
+                for _, args in pairs(Processor.triggerQueue) do onSetItem(args[1], args[2], args[3]) end
+                Processor.triggerQueue = nil
+            end
+        end
         local function triggerOnNextUpdate(tooltip, itemID, link)
-            if not D.callbackAdded then return end
-            local first = pending == nil
-            pending = { tooltip, itemID, link }
-            if first then
-                env.C_Timer.After(0, function()
-                    local args = pending
-                    pending = nil
-                    local any
-                    for processor in pairs(D.processors) do
-                        D.calls[#D.calls + 1] = args[3]
-                        if processor(args[1], args[2], args[3]) then any = true end
-                    end
-                    if any then D.relayouts = D.relayouts + 1 args[1]:Show() end
-                end)
+            if not D.callbackAdded then return end                           -- self.events[event]
+            if not Processor.anyDelayedTrigger then
+                Processor.triggerQueue = {}
+                Processor.anyDelayedTrigger = true
+            end
+            Processor.triggerQueue["SharedTooltip.SetItem"] = { tooltip, itemID, link }
+            if not Processor.scheduled then
+                Processor.scheduled = true
+                env.C_Timer.After(0, processorOnUpdate)                      -- SetScript("OnUpdate", Processor_OnUpdate)
             end
         end
         if not options.noProcessorAPI then
@@ -1366,6 +1382,7 @@ function Mock.new(opts)
         if options.missingMethods then
             for name in pairs(options.missingMethods) do tip[name] = nil end
         end
+        tip:SetScript("OnHide", function(self) self.tooltipData, self.tooltipInfo = nil, nil end)
         function tip:SetOwner(owner) self.owner = owner end
         function tip:GetHyperlink() return self.hyperlink end
         function tip:GetItemID() return self.hyperlink and tonumber(self.hyperlink:match("item:(%d+)")) end
@@ -1467,7 +1484,7 @@ function Mock.new(opts)
             local function pool(create, remove)
                 local p = { active = {}, free = {} }
                 function p:Acquire()
-                    local o = table.remove(self.free) or create()
+                    local o = table.remove(self.free, 1) or create()
                     self.active[#self.active + 1] = o
                     o:Show()
                     return o

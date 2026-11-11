@@ -328,9 +328,13 @@ block also follows *Extra lines in item tooltips* (`/eg tooltip`), the check mar
 reward* (`/eg quest`).
 
 **If something does not show:** `/eg status` has a line `Dialogue UI: ...` - *not installed*, *found* (with what it
-does) or *found, but part of its interface is missing* followed by the names that were not found (a different version
-of Dialogue UI); what exists keeps working. `tools/check.sh` can compare every name EasyGear uses with a copy of
-Dialogue UI.
+does, and which parts are switched off: item tooltips, quest rewards), *found, but switched off here* or *found, but part
+of its interface is missing* followed by the names that were not found (a different version of Dialogue UI); what
+exists keeps working. The methods of its tooltip are checked when the first item tooltip appears. `tools/check.sh` can
+compare every name EasyGear uses with a copy of Dialogue UI.
+
+If *Use Blizzard Tooltip* is switched on in Dialogue UI, its reward buttons show the game's own tooltip instead; then
+the ordinary item tooltip lines of EasyGear appear there (the check mark and the arrows work as described).
 
 Written against Dialogue UI 1.0.7 b (read from its source) and **tested here on a model of it, not in the game with the
 real addon** (see [Known limits](#known-limits)).
@@ -412,7 +416,10 @@ What this proves and what it does not:
   price coin of Dialogue UI and the check mark of EasyGear can sit on the same icon when both pick the same reward;
   Dialogue UI marks the highest sell price on its own, EasyGear the best choice by your weights. The first item
   tooltip after the login is built twice (once to attach, once with the block), so it may jump for a single frame - once
-  per session.
+  per session. A tooltip that EasyGear has Dialogue UI build anew (data that arrives late, a changed recommendation) loses
+  what Dialogue UI adds after building it - the same thing happens when you toggle its comparison with Shift. An arrow that
+  Dialogue UI was asked to show stays until the next quest, even if you switch EasyGear off meanwhile (Dialogue UI has no
+  way to take it back).
 
 ## The 3.3.5a edition
 
@@ -426,8 +433,8 @@ This edition is a new codebase for the Forever client, not an update of that one
   comparison shown - the slot, the attribute differences, the notes and the group hint appear **in its own item tooltips**,
   in its colours, fonts and indentation, placed below its comparison and Pawn's lines and above its Shift hint; the **best
   quest reward** gets the check mark in the look you chose; an upgrade that Dialogue UI did not mark gets **its own arrow**.
-* New setting *Dialogue UI* (Options, `/eg dui [on|off]`); `/eg status` has a line for it, and names what is missing when a
-  different version of Dialogue UI lacks a part of the interface EasyGear uses.
+* New setting *Dialogue UI* (Options, `/eg dui [on|off]`); `/eg status` has a line for it that says what is switched off,
+  and names what is missing when a different version of Dialogue UI lacks a part of the interface EasyGear uses.
 * The lines of an item tooltip are built once for every window now (`Tooltip.Compose`) and say what their colours mean
   (verdict good / bad / warning, detail line, indentation), so a window with another palette paints the same statements
   in its own colours. The game's own tooltips look exactly as before.
@@ -767,10 +774,14 @@ Tooltip von Dialogue UI knapp: Wertung, Urteil und - wo es zutrifft - die Empfeh
 **Schalter:** *Optionen > AddOns > EasyGear > Dialogue UI* (`/eg dui [on|off]`) schaltet die ganze Anbindung. Der Tooltip-Block
 folgt außerdem *Zusatzzeilen in Item-Tooltips* (`/eg tooltip`), Haken und Pfeile folgen *Beste Questbelohnung markieren* (`/eg quest`).
 
-**Zeigt sich etwas nicht:** `/eg status` hat eine Zeile `Dialogue UI: ...` - *nicht installiert*, *gefunden* (mit dem, was sie tut)
-oder *gefunden, aber ein Teil der Schnittstelle fehlt* mit den Namen, die nicht gefunden wurden (eine andere Fassung von
-Dialogue UI); was da ist, arbeitet weiter. `tools/check.sh` kann jeden Namen, den EasyGear von Dialogue UI benutzt, mit einer Kopie
-von Dialogue UI vergleichen.
+**Zeigt sich etwas nicht:** `/eg status` hat eine Zeile `Dialogue UI: ...` - *nicht installiert*, *gefunden* (mit dem, was sie tut,
+und welche Teile abgeschaltet sind: Item-Tooltips, Questbelohnungen), *gefunden, aber hier abgeschaltet* oder *gefunden, aber ein
+Teil der Schnittstelle fehlt* mit den Namen, die nicht gefunden wurden (eine andere Fassung von Dialogue UI); was da ist, arbeitet
+weiter. Die Methoden seines Tooltips werden geprüft, wenn der erste Item-Tooltip erscheint. `tools/check.sh` kann jeden Namen, den
+EasyGear von Dialogue UI benutzt, mit einer Kopie von Dialogue UI vergleichen.
+
+Ist in Dialogue UI *Blizzard-Tooltips verwenden* eingeschaltet, zeigen seine Belohnungsknöpfe den Tooltip des Spiels; dann
+erscheinen dort die gewöhnlichen Tooltip-Zeilen von EasyGear (Haken und Pfeile arbeiten wie beschrieben).
 
 Gebaut gegen Dialogue UI 1.0.7 b (aus dem Quelltext gelesen) und **hier an einem Modell davon getestet, nicht im Spiel mit dem
 echten Addon** (siehe [Bekannte Grenzen](#bekannte-grenzen)).
@@ -832,7 +843,10 @@ im Spiel**.
   Verkaufspreis-Münze von Dialogue UI und der Haken von EasyGear können auf demselben Symbol sitzen, wenn beide dieselbe
   Belohnung wählen; Dialogue UI markiert den höchsten Verkaufspreis von sich aus, EasyGear die beste Wahl nach deinen Gewichten.
   Der erste Item-Tooltip nach der Anmeldung wird zweimal gebaut (einmal zum Anhängen, einmal mit dem Block), springt also
-  einen Augenblick lang - einmal je Sitzung.
+  einen Augenblick lang - einmal je Sitzung. Ein Tooltip, den Dialogue UI auf Wunsch von EasyGear neu baut (spät eintreffende
+  Daten, geänderte Empfehlung), verliert, was Dialogue UI erst nach dem Bauen anhängt - dasselbe passiert beim Umschalten seines
+  Vergleichs mit der Umschalttaste. Ein Pfeil, den Dialogue UI auf Bitten von EasyGear gezeigt hat, bleibt bis zur nächsten Quest,
+  auch wenn du EasyGear zwischendurch abschaltest (Dialogue UI kann ihn nicht zurücknehmen).
 
 ## Die 3.3.5a-Ausgabe
 

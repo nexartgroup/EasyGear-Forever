@@ -374,4 +374,5 @@ EasyGearLocales["enUS"] = {
     ROW_EXTRA = "(of which %s from enchants and gems)",
     DUI_OK = "found - score and verdict in its tooltips, the best reward marked on its reward buttons",
     DUI_PROBLEM = "found, but part of its interface is missing",
+    DUI_OFF = "found, but switched off here (/eg dui on)",
 }
