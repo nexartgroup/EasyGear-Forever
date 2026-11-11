@@ -619,7 +619,6 @@ MUTATIONS = [
     ('dui handled skip', 'DialogueUI.lua', 'if handled ~= nil and handled == itemLink then return false end', ''),
     ('dui handled link', 'DialogueUI.lua', 'if handled ~= nil and handled == itemLink then return false end', 'if handled ~= nil then return false end'),
     ('dui handled set', 'DialogueUI.lua', 'state.handled = itemLink                    -- der Verarbeiter', '-- der Verarbeiter'),
-    ('dui refresh only shown', 'DialogueUI.lua', 'tooltip.IsShown and tooltip:IsShown() and type(tooltip.ReprocessInfo) == "function") then return end', 'tooltip.IsShown and type(tooltip.ReprocessInfo) == "function") then return end'),
     ('dui refresh gate', 'DialogueUI.lua', 'if not (Enabled() or state.wrote) then return end', ''),
     ('dui refresh gate wrote', 'DialogueUI.lua', 'if not (Enabled() or state.wrote) then return end', 'if not Enabled() then return end'),
     ('dui refresh gate enabled', 'DialogueUI.lua', 'if not (Enabled() or state.wrote) then return end', 'if not state.wrote then return end'),

@@ -144,6 +144,23 @@ return function(T)
         T.eq(W.EG.lastError, nil)
     end)
 
+    T.test("dui: two displays within one frame - the processor serves the later one and does not take it for the earlier", function()
+        local W, D = world({}, function(w)
+            w.I.bag = F.gear(w, 7060, "Big Bag", "INVTYPE_BAG", 10, {}, { sellPrice = 500, typeText = "Bag" })
+        end)
+        local b = D.showQuest({ choices = { W.I.gem, W.I.bag } })        -- the gem sells best: 900 against 500
+        D.tick(0.3)
+        D.hover(b[2]) D.leave(b[2])                                       -- once for real: the hook is attached, the tooltip built anew
+        b[2].__scripts.OnEnter(b[2])                                      -- the bag: the hook writes for it ...
+        b[1].__scripts.OnEnter(b[1])                                      -- ... and the gem at once, before the frame ends: no hook for it
+        W.advance(0)                                                      -- the processor comes once, for the gem
+        local lines = D.lines()
+        T.eq(lines[1], "Shiny Gem")
+        T.eq(lines[#lines], "EasyGear: best choice (highest vendor price)", D.text())
+        T.eq(count(lines, "EasyGear"), 1)
+        T.eq(W.EG.lastError, nil)
+    end)
+
     T.test("dui: a function that is replaced again and again is not chained again and again - a few times, then the processor writes", function()
         local W, D = world({})
         local b = D.showQuest({ choices = { W.I.better, W.I.weak } })
