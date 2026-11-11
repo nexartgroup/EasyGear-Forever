@@ -170,6 +170,111 @@ return function(T)
         T.eq(#B(potion, nil, "FULL", { pick = "UPGRADE" }), 1)
     end)
 
+    T.test("tooltip: every line says what its color means (role) and whether a short tooltip may drop it (detail)", function()
+        local W = world()
+        local B = W.EG.Tooltip.BuildLines
+        local ROLES = { title = true, good = true, bad = true, warn = true, muted = true, text = true }
+        local function lines(link, extra)
+            local item = W.EG.Items.Get(link)
+            local out = B(item, W.EG.Score.Compare(item), "FULL", extra)
+            for i, l in ipairs(out) do
+                T.ok(ROLES[l.role], "role of line " .. i .. " (" .. tostring(l.left) .. "): " .. tostring(l.role))
+                if l.right then T.ok(ROLES[l.rightRole], "right role of line " .. i .. ": " .. tostring(l.rightRole)) end
+            end
+            return out
+        end
+        local function find(list, text)
+            for _, l in ipairs(list) do if l.left:find(text, 1, true) then return l end end
+        end
+
+        local up = lines(W.I.better)
+        T.eq(up[1].role, "title") T.eq(up[1].rightRole, "text") T.eq(up[1].detail, nil) T.eq(up[1].indent, nil)
+        local slot = find(up, "Chest")
+        T.eq(slot.role, "muted") T.eq(slot.rightRole, "muted") T.eq(slot.detail, true, "the slot line is for the long tooltip")
+        local verdict = find(up, "UPGRADE")
+        T.eq(verdict.role, "good") T.eq(verdict.rightRole, "good") T.eq(verdict.detail, nil, "the verdict is for every tooltip")
+        local gain = find(up, "+20 Critical Strike")
+        T.eq(gain.role, "good") T.eq(gain.indent, true) T.eq(gain.detail, true)
+
+        local weak = F.gear(W, 6020, "Weak", "INVTYPE_CHEST", 10, { STR = 1 })
+        local down = lines(weak)
+        verdict = find(down, "NO UPGRADE")
+        T.eq(verdict.role, "bad") T.eq(verdict.rightRole, "bad")
+        local loss = find(down, "-19 Strength")
+        T.eq(loss.role, "bad") T.eq(loss.indent, true) T.eq(loss.detail, true)
+
+        local twin = F.gear(W, 6021, "Twin", "INVTYPE_CHEST", 30, { STR = 20, STA = 20 }, { armor = 300 })
+        T.eq(find(lines(twin), "NO UPGRADE").rightRole, "muted", "no change")
+
+        local robe = F.gear(W, 6022, "Robe", "INVTYPE_CHEST", 90, { INT = 100 }, { badType = true, typeText = "Cloth" })
+        local no = lines(robe)
+        T.eq(find(no, "NOT USABLE").role, "bad") T.eq(find(no, "NOT USABLE").right, nil)
+        local reason = find(no, "Not usable by your class")
+        T.eq(reason.role, "muted") T.eq(reason.wrap, true) T.eq(reason.detail, nil, "the reason is for every tooltip")
+
+        local late = F.gear(W, 6023, "Late", "INVTYPE_CHEST", 90, { STR = 100 }, { minLevel = 65 })
+        T.eq(find(lines(late), "UPGRADE from level 65").role, "warn")
+
+        local two = F.gear(W, 6024, "Greatsword", "INVTYPE_2HWEAPON", 40, {}, { dps = 60 })
+        local note = find(lines(two), "two-handed weapon replaces")
+        T.eq(note.role, "muted") T.eq(note.wrap, true) T.eq(note.detail, true, "notes are for the long tooltip")
+
+        W.equip(12, nil) W.fire("PLAYER_EQUIPMENT_CHANGED", 12) W.flush()
+        local ring = F.gear(W, 6025, "Ring", "INVTYPE_FINGER", 40, { STR = 20 }, { typeText = "" })
+        local empty = lines(ring)
+        T.eq(find(empty, "UPGRADE (slot empty)").role, "good")
+        gain = find(empty, "+20 Strength")
+        T.eq(gain.role, "good") T.eq(gain.indent, true) T.eq(gain.detail, true, "an empty slot lists the attributes it gains")
+
+        local extra = lines(W.I.better, { pick = "UPGRADE", hint = { delta = 5, link = "[Bag Item]" } })
+        T.eq(find(extra, "best choice").role, "good") T.eq(find(extra, "best choice").detail, nil)
+        local hint = find(extra, "Better in your bags")
+        T.eq(hint.role, "warn") T.eq(hint.rightRole, "text")
+        T.eq(find(lines(W.I.better, { pick = "VENDOR" }), "highest vendor price").role, "good")
+    end)
+
+    T.test("tooltip: Compose gives everything one window needs - lines, and group lines only on request", function()
+        local W = world(function(w)
+            local G = w.installGroup()
+            local gear = {}
+            for slot, loc in pairs({ [1] = "INVTYPE_HEAD", [3] = "INVTYPE_SHOULDER", [5] = "INVTYPE_CHEST", [6] = "INVTYPE_WAIST",
+                                     [7] = "INVTYPE_LEGS", [8] = "INVTYPE_FEET", [9] = "INVTYPE_WRIST", [10] = "INVTYPE_HAND" }) do
+                gear[slot] = F.gear(w, 6100 + slot, "Cloth" .. slot, loc, 30, { INT = 10, SP = 10 }, { subclassID = 1 })
+            end
+            G.add("party1", { name = "Bob", class = "PRIEST", gear = gear })
+            w.I.robe = F.gear(w, 6120, "Robe", "INVTYPE_CHEST", 60, { INT = 30, SP = 80 }, { subclassID = 1 })
+        end)
+        W.advance(30)
+        local C = W.EG.Tooltip.Compose
+        local item = W.EG.Items.Get(W.I.better)
+        local full = C(item, "FULL")
+        T.ok(full and #full.lines >= 4, "title, slot, verdict, differences") T.eq(full.group, nil, "no group lines unless asked")
+        T.eq(full.lines[1].left, "EasyGear")
+        local score = C(item, "SCORE")
+        T.eq(#score.lines, 1, "the score alone") T.eq(score.group, nil)
+        T.eq(C(item, "SCORE", nil, true).group, nil, "the group lines belong to the full comparison")
+
+        local robe = W.EG.Items.Get(W.I.robe)
+        local withGroup = C(robe, "FULL", nil, true)
+        T.ok(withGroup.group and #withGroup.group >= 2, "heading and a line for Bob")
+        T.eq(withGroup.group[1].role, "title") T.eq(withGroup.group[2].indent, true)
+        T.eq(C(robe, "FULL", nil, false).group, nil)
+
+        local potion = W.EG.Items.Get(F.gear(W, 6121, "Potion", "", 1, {}))
+        T.eq(C(potion, "FULL"), nil, "nothing to say about what is no gear")
+        local pick = C(potion, "FULL", { pick = "VENDOR" })
+        T.eq(#pick.lines, 1) T.has(pick.lines[1].left, "highest vendor price")
+        T.eq(C(nil, "FULL"), nil)
+
+        -- the worn chest is not loaded (yet): no comparison is possible, and a half answer - score without verdict - is worse than none
+        W.state.items[2001].uncached = true
+        W.EG.Items.Wipe() W.EG:InvalidateAll()
+        local better = W.EG.Items.Get(W.I.better)
+        T.eq(C(better, "FULL"), nil, "nothing to say yet")
+        T.eq(#C(better, "SCORE").lines, 1, "the score alone does not need the worn item")
+        T.eq(W.tooltipFor(W.bagButton(0, 1), W.I.better):HasLine("EasyGear"), false, "and the game's tooltip shows nothing, too")
+    end)
+
     T.test("tooltip: an error inside the handler never reaches the tooltip", function()
         local W = world()
         W.EG.Score.Compare = function() error("boom") end

@@ -36,6 +36,7 @@ Options.CHECKS = {
     { key = "showItemIcons",    name = "OPT_ITEMS",        tip = "OPT_ITEMS_TIP" },
     { key = "showQuestIcons",   name = "OPT_QUESTREWARD",  tip = "OPT_QUESTREWARD_TIP" },
     { key = "showCharIcons",    name = "OPT_CHARHINT",     tip = "OPT_CHARHINT_TIP" },
+    { key = "showDialogueUI",   name = "OPT_DUI",          tip = "OPT_DUI_TIP" },
     { section = "OPT_SEC_GROUP" },
     { key = "showGroupHints",   name = "OPT_GROUP",         tip = "OPT_GROUP_TIP" },
     { key = "groupInspect",     name = "OPT_GROUP_INSPECT", tip = "OPT_GROUP_INSPECT_TIP" },

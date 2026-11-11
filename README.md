@@ -37,10 +37,12 @@ need any other addon: it is built on the default Forever interface and nothing e
 - [Group hints](#group-hints)
 - [Marker look](#marker-look)
 - [Baganator and EllesmereUI](#baganator-and-ellesmereui)
+- [Dialogue UI](#dialogue-ui)
 - [Troubleshooting](#troubleshooting)
 - [Verification](#verification)
 - [Known limits](#known-limits)
 - [The 3.3.5a edition](#the-335a-edition)
+- [Changes in 4.4.0](#changes-in-440)
 - [Changes in 4.3.1](#changes-in-431)
 - [Changes in 4.3.0](#changes-in-430)
 - [Changes in 4.2.0](#changes-in-420)
@@ -58,7 +60,7 @@ Restart the game or `/reload`. Saved settings are `EasyGearDB` (account) and `Ea
 From GitHub: *Code > Download ZIP*, unpack it, and copy the inner folder `EasyGear` - not the folder of the
 ZIP itself (`EasyGear-Forever-main`), which also holds the tests and tools.
 
-At login the chat shows `EasyGear 4.3.1 loaded.`
+At login the chat shows `EasyGear 4.4.0 loaded.`
 
 ## What you see
 
@@ -70,6 +72,7 @@ At login the chat shows `EasyGear 4.3.1 loaded.`
 | Character window | an arrow on an equipment slot when something better for that slot is in your bags |
 | Item tooltips | `EasyGear  Score: 81` - the slot and score of the item you would replace, the verdict (`UPGRADE +37 (+83.1%)`, `NO UPGRADE`, `NOT USABLE`, `UPGRADE from level 45`) and the attribute differences |
 | Worn items, compare tooltips | only the score (comparing an item with itself is pointless) |
+| [Dialogue UI](#dialogue-ui) (if installed) | the same verdict in its own item tooltips, a check mark on the best quest reward, its own upgrade arrow on what EasyGear finds better |
 
 A **yellow** arrow means: it would be an upgrade, but your level is too low for it yet.
 Items the client marks as unusable for you (wrong armor type, class) never get an arrow.
@@ -107,6 +110,7 @@ on the right, both applied to the gear you are wearing. See [Profiles](#profiles
 | `/eg ilvl <0-2>` / `/eg ilvlscale [on\|off]` | item level weight / scale it with your level |
 | `/eg mindelta <0-1000>` / `/eg mindeltapct <0-10>` | minimum gain for "upgrade" (absolute points / percent) |
 | `/eg icons \| items \| quest \| char \| tooltip \| stats \| diff` | switch marker groups and tooltip parts on or off |
+| `/eg dui [on\|off]` | the connection to [Dialogue UI](#dialogue-ui) (its tooltips and quest reward buttons) |
 | `/eg options` | open the settings page |
 | `/eg scale <0.5-2>` | window scale |
 | `/eg status` | profile, detected talent points, settings, state of every interface hook |
@@ -177,8 +181,8 @@ Stats the addon does not know can be weighted in a custom profile by their raw n
 ## Settings
 
 *Options > AddOns > EasyGear*: marker groups (bags/bank, vendors/loot/rolls/trade/mail, quest rewards,
-character window), group hints (the star, inspecting members, raid members), the look of the markers (shape and colour),
-tooltip parts, enchants, Leveling profile, item level weight and scaling, minimum
+character window, Dialogue UI), group hints (the star, inspecting members, raid members), the look of the markers
+(shape and colour), tooltip parts, enchants, Leveling profile, item level weight and scaling, minimum
 gain, the profile choice and a reset button. Everything takes effect immediately - also when you change
 a value by chat command while the page is open.
 The addon-compartment entry on the minimap: left click opens the comparison window, right click the settings.
@@ -282,10 +286,59 @@ EasyGear found.
   interfaces; **they were tested here with models of those interfaces, not in the game with the real addons**
   (see [Known limits](#known-limits)).
 
+## Dialogue UI
+
+[Dialogue UI](https://www.curseforge.com/wow/addons/dialogueui) replaces the quest and gossip windows and draws
+everything itself: its own reward buttons, and its own item tooltip (not the game's tooltip) with a comparison that
+the Shift key shows and hides. The hooks EasyGear puts on the default interface do not reach those, so EasyGear joins
+Dialogue UI through the interfaces Dialogue UI offers to other addons and paints with its fonts, colours and
+spacing. Nothing of Dialogue UI is replaced or changed; without it, nothing of this exists.
+
+**In its item tooltips** (quest rewards and every other item tooltip Dialogue UI builds) one block sits below the
+comparison of Dialogue UI - and below what Pawn adds there - and above its hint line (the Shift key with *Show Comparison* /
+*Hide Comparison*), which stays the last line:
+
+```
+EasyGear                                Score: 81.5          gold, like "Replaces: ..."
+UPGRADE                                 +37  (+83.1%)        green; red when worse; gold when your level is too low
+EasyGear: best choice (largest upgrade)                      only on the best of several quest rewards
+```
+
+While Dialogue UI shows its comparison (toggled with Shift, as Dialogue UI remembers it), the block grows: the slot and
+score of what you would replace (grey), the attribute differences below the verdict - indented the way Dialogue UI
+indents its own item level difference, green for a gain, red for a loss - the notes (two-hander, unique, enchants of
+the worn item) and the group hint (*Better for the group:*, see [Group hints](#group-hints)). With the comparison
+hidden, Dialogue UI's tooltip stays short: score, verdict and, where it applies, the recommendation.
+The settings *Extra lines in item tooltips*, *Slot and comparison line* and *Stat differences in the tooltip* hold here as well.
+
+**On the reward buttons:**
+
+* The **best of several rewards** gets the check mark of EasyGear, in the shape and colour you chose under
+  [Marker look](#marker-look) (the two *Best quest reward* kinds), at the **top right** of the icon. Dialogue UI keeps that
+  corner free: it puts its sell price coin at the top left and its arrow at the bottom left.
+* Dialogue UI marks upgrades by item level with an arrow of its own. Where EasyGear finds an item better **by your
+  weights** and Dialogue UI showed no arrow, EasyGear asks Dialogue UI to show *its* arrow - same picture, same place,
+  same movement while you are choosing. A button that already has an arrow is left alone, and no arrow of Dialogue UI is
+  ever removed. Items that are worse, unusable for you, or a level away get none; currency, experience and similar
+  rewards are not touched.
+* Closing the window or opening the next quest clears the marks at once.
+
+**Switches:** *Options > AddOns > EasyGear > Dialogue UI* (`/eg dui [on|off]`) switches the whole connection. The tooltip
+block also follows *Extra lines in item tooltips* (`/eg tooltip`), the check mark and the arrows follow *Mark the best quest
+reward* (`/eg quest`).
+
+**If something does not show:** `/eg status` has a line `Dialogue UI: ...` - *not installed*, *found* (with what it
+does) or *found, but part of its interface is missing* followed by the names that were not found (a different version
+of Dialogue UI); what exists keeps working. `tools/check.sh` can compare every name EasyGear uses with a copy of
+Dialogue UI.
+
+Written against Dialogue UI 1.0.7 b (read from its source) and **tested here on a model of it, not in the game with the
+real addon** (see [Known limits](#known-limits)).
+
 ## Troubleshooting
 
 `/eg status` shows the interface hooks the addon installed (`itembuttons`, `merchant`, `merchantstock`, `rolls`,
-`tooltip`, `settings`, `shiftclick`, plus `baganator` and `ellesmere` when those addons are installed): a red name
+`tooltip`, `settings`, `shiftclick`, plus `baganator`, `ellesmere` and `dialogueui` when those addons are installed): a red name
 with a reason means that part of the client interface was not found and that feature is off. It lists the other
 addons it found. It also prints the detected talent points and the last internal error.
 Internal errors are printed once in the chat as `EasyGear[label]: message`.
@@ -303,11 +356,13 @@ and the exact text of any Lua error (`/console scriptErrors 1` shows them). For 
 Run from the root of this repository:
 
 ```
-lua5.1 tests/run.lua                 # unit tests on a model of the client (Lua 5.1 only), ~390 checks
-python3 tests/mutate.py              # mutation check: breaks the addon in ~450 small ways, the tests must notice
-tools/check.sh <Interface/AddOns of the Forever UI source>
+lua5.1 tests/run.lua                 # unit tests on a model of the client (Lua 5.1 only), ~430 checks
+python3 tests/mutate.py              # mutation check: breaks the addon in ~570 small ways, the tests must notice
+                                     # (MUT_SHARD=0/3 ... 2/3 splits it over several processes)
+tools/check.sh <Interface/AddOns of the Forever UI source> [<folder of the Dialogue UI addon>]
                                      # luacheck against a std built from the UI source + checks that every
-                                     # method, event, template, font, atlas and global the addon names exists
+                                     # method, event, template, font, atlas and global the addon names exists;
+                                     # with the second argument also every name it uses of Dialogue UI
 ```
 
 What this proves and what it does not:
@@ -351,12 +406,33 @@ What this proves and what it does not:
   overlay interface of the Bags module), tested against models of them. If an arrow does not show there, `/eg status`
   tells which part was found. EllesmereUI's offline views of other characters' bags are not painted. Other bag addons
   (Bagnon, ElvUI bags, ...) are not supported specifically.
+* Dialogue UI is connected through the interface it offers to other addons (a processor for its item tooltip, the hook
+  point it keeps for Pawn, its reward buttons) and tested against a model of it. Tooltips that Dialogue UI opens for
+  links inside quest text are no item tooltips for that interface (no comparison, no Pawn, no EasyGear). The sell
+  price coin of Dialogue UI and the check mark of EasyGear can sit on the same icon when both pick the same reward;
+  Dialogue UI marks the highest sell price on its own, EasyGear the best choice by your weights. The first item
+  tooltip after the login is built twice (once to attach, once with the block), so it may jump for a single frame - once
+  per session.
 
 ## The 3.3.5a edition
 
 The addon for the old Wrath client (interface 30300, with ElvUI/Bagnon/Immersion support and the GM
 heirloom tools) lives in its own repository, [nexartgroup/EasyGear](https://github.com/nexartgroup/EasyGear).
 This edition is a new codebase for the Forever client, not an update of that one.
+
+## Changes in 4.4.0
+
+* **Dialogue UI** is connected (see [Dialogue UI](#dialogue-ui)): the score, the verdict and - with Dialogue UI's
+  comparison shown - the slot, the attribute differences, the notes and the group hint appear **in its own item tooltips**,
+  in its colours, fonts and indentation, placed below its comparison and Pawn's lines and above its Shift hint; the **best
+  quest reward** gets the check mark in the look you chose; an upgrade that Dialogue UI did not mark gets **its own arrow**.
+* New setting *Dialogue UI* (Options, `/eg dui [on|off]`); `/eg status` has a line for it, and names what is missing when a
+  different version of Dialogue UI lacks a part of the interface EasyGear uses.
+* The lines of an item tooltip are built once for every window now (`Tooltip.Compose`) and say what their colours mean
+  (verdict good / bad / warning, detail line, indentation), so a window with another palette paints the same statements
+  in its own colours. The game's own tooltips look exactly as before.
+* Tests and tools: a model of Dialogue UI built after its source (`tests/wow_mock.lua`), `tools/check_dui.py` (every name
+  EasyGear uses of Dialogue UI exists in its source), and the tests and mutations for all of it.
 
 ## Changes in 4.3.1
 
@@ -462,6 +538,7 @@ selbst (`EasyGear-Forever-main`), in dem auch Tests und Werkzeuge liegen.
 | Charakterfenster | ein Pfeil am Ausrüstungsplatz, für den in den Taschen etwas Besseres liegt |
 | Item-Tooltips | `EasyGear  Wertung: 81` - Platz und Wertung des ersetzten Items, das Urteil (`VERBESSERUNG +37 (+83.1%)`, `KEINE VERBESSERUNG`, `NICHT VERWENDBAR`, `VERBESSERUNG ab Stufe 45`) und die Attribut-Unterschiede |
 | Getragene Items, Vergleichs-Tooltips | nur die Wertung |
+| [Dialogue UI](#dialogue-ui-1) (falls installiert) | dasselbe Urteil in dessen eigenen Item-Tooltips, ein Haken an der besten Questbelohnung, sein eigener Aufwertungspfeil an dem, was EasyGear besser findet |
 
 Ein **gelber** Pfeil heißt: wäre eine Verbesserung, aber deine Stufe reicht noch nicht. Items, die der Client
 als unbrauchbar für dich kennzeichnet (falsche Rüstungsart, Klasse), bekommen nie einen Pfeil.
@@ -485,7 +562,7 @@ Ausrüstung angewandt, die du gerade trägst.
 `/eg` oder `/easygear`; `/eggui` öffnet das Fenster, `/egprofile` das Profilfenster. Die Befehle sind oben in
 der englischen Tabelle aufgeführt und in jeder Sprache gleich; `/eg help` erklärt sie in deiner Sprache.
 Wichtig sind `/eg upgrades` (alle Verbesserungen in den Taschen), `/eg group` (die Gruppe: wer gelesen ist, was für wen besser wäre), `/eg profile ...` (Profil wählen),
-`/eg marker` (Form und Farbe der Markierungen), `/eg weight <Wert> <Gewicht>` (Gewicht im eigenen Profil), `/eg status` (Profil, erkannte Talentpunkte,
+`/eg marker` (Form und Farbe der Markierungen), `/eg dui [on|off]` (die Anbindung an Dialogue UI), `/eg weight <Wert> <Gewicht>` (Gewicht im eigenen Profil), `/eg status` (Profil, erkannte Talentpunkte,
 Zustand jeder Oberflächen-Anbindung), `/eg parse <Itemlink>` (was aus einem Item gelesen wurde) und
 `/eg unknown` (Werte, die das Addon nicht kennt).
 
@@ -542,7 +619,7 @@ Einzigartige Items: das zweite Exemplar ersetzt das erste. Hemd und Wappenrock w
 
 ## Einstellungen
 
-*Optionen > AddOns > EasyGear*: Markierungsgruppen, Gruppenhinweise (Stern, Mitglieder untersuchen, Schlachtzug), Aussehen der Markierungen (Form und Farbe), Tooltip-Teile, Verzauberungen, Leveln-Profil, Stufengewicht
+*Optionen > AddOns > EasyGear*: Markierungsgruppen, Dialogue UI, Gruppenhinweise (Stern, Mitglieder untersuchen, Schlachtzug), Aussehen der Markierungen (Form und Farbe), Tooltip-Teile, Verzauberungen, Leveln-Profil, Stufengewicht
 und -skalierung, Mindestzugewinn, Profilwahl und ein Zurücksetzen-Knopf. Alles wirkt sofort - auch wenn du einen
 Wert per Chatbefehl änderst, während die Seite offen ist.
 Der Eintrag im Addon-Fach der Minimap: Linksklick Vergleichsfenster, Rechtsklick Einstellungen.
@@ -649,10 +726,59 @@ EasyGear gefunden hat.
   Schnittstellen gebaut; **getestet wurde hier mit Modellen dieser Schnittstellen, nicht im Spiel mit den echten Addons**
   (siehe [Bekannte Grenzen](#bekannte-grenzen)).
 
+## Dialogue UI
+
+[Dialogue UI](https://www.curseforge.com/wow/addons/dialogueui) ersetzt die Quest- und Gesprächsfenster und zeichnet alles
+selbst: eigene Belohnungsknöpfe und einen eigenen Item-Tooltip (nicht den des Spiels) mit einem Vergleich, den die
+Umschalttaste ein- und ausblendet. Die Haken, die EasyGear auf die Standard-Oberfläche setzt, erreichen das nicht; darum
+schließt sich EasyGear an Dialogue UI über die Schnittstellen an, die Dialogue UI anderen Addons anbietet, und malt mit
+dessen Schriften, Farben und Abständen. Nichts an Dialogue UI wird ersetzt oder geändert; ohne Dialogue UI gibt es
+nichts davon.
+
+**In dessen Item-Tooltips** (Questbelohnungen und jeder andere Item-Tooltip, den Dialogue UI baut) steht ein Block unter dem
+Vergleich von Dialogue UI - und unter dem, was Pawn dort einträgt - und über dessen Hinweiszeile (Umschalttaste mit
+*Vergleich anzeigen* / *Vergleich ausblenden*), die die letzte Zeile bleibt:
+
+```
+EasyGear                                Wertung: 81.5        Gold, wie "Ersetze ..."
+VERBESSERUNG                            +37  (+83.1%)        grün; rot bei schlechter; gold, wenn die Stufe noch nicht reicht
+EasyGear: beste Wahl (größte Verbesserung)                   nur an der besten von mehreren Questbelohnungen
+```
+
+Zeigt Dialogue UI seinen Vergleich (mit der Umschalttaste, Dialogue UI merkt sich das), wächst der Block: Platz und Wertung
+des Ersetzten (grau), die Attribut-Unterschiede unter dem Urteil - eingerückt wie die Stufendifferenz von Dialogue UI,
+grün bei Gewinn, rot bei Verlust -, die Hinweise (Zweihänder, einzigartig, Verzauberungen des Getragenen) und der
+Gruppenhinweis (*Besser für die Gruppe:*, siehe [Gruppenhinweise](#gruppenhinweise)). Bei ausgeblendetem Vergleich bleibt der
+Tooltip von Dialogue UI knapp: Wertung, Urteil und - wo es zutrifft - die Empfehlung. Die Einstellungen *Zusatzzeilen in Item-Tooltips*,
+*Platz- und Vergleichszeile* und *Wertunterschiede im Tooltip* gelten auch hier.
+
+**An den Belohnungsknöpfen:**
+
+* Die **beste von mehreren Belohnungen** bekommt den Haken von EasyGear, in Form und Farbe, die du unter
+  [Aussehen der Markierungen](#aussehen-der-markierungen) gewählt hast (die beiden Arten *Beste Questbelohnung*), **oben rechts** am Symbol.
+  Diese Ecke lässt Dialogue UI frei: oben links sitzt dessen Verkaufspreis-Münze, unten links sein Pfeil.
+* Dialogue UI markiert Verbesserungen nach Gegenstandsstufe mit einem eigenen Pfeil. Findet EasyGear ein Item **nach deinen
+  Gewichten** besser und Dialogue UI zeigte keinen Pfeil, bittet EasyGear Dialogue UI, *seinen* Pfeil zu zeigen - dasselbe
+  Bild, derselbe Platz, dieselbe Bewegung, solange du wählst. Ein Knopf, der schon einen Pfeil hat, bleibt unberührt, und ein
+  Pfeil von Dialogue UI wird nie entfernt. Schlechtere, für dich unbrauchbare oder erst mit höherer Stufe nutzbare Items bekommen
+  keinen; Währung, Erfahrung und Ähnliches bleibt unberührt.
+* Beim Schließen des Fensters und beim Wechsel zur nächsten Quest verschwinden die Markierungen sofort.
+
+**Schalter:** *Optionen > AddOns > EasyGear > Dialogue UI* (`/eg dui [on|off]`) schaltet die ganze Anbindung. Der Tooltip-Block
+folgt außerdem *Zusatzzeilen in Item-Tooltips* (`/eg tooltip`), Haken und Pfeile folgen *Beste Questbelohnung markieren* (`/eg quest`).
+
+**Zeigt sich etwas nicht:** `/eg status` hat eine Zeile `Dialogue UI: ...` - *nicht installiert*, *gefunden* (mit dem, was sie tut)
+oder *gefunden, aber ein Teil der Schnittstelle fehlt* mit den Namen, die nicht gefunden wurden (eine andere Fassung von
+Dialogue UI); was da ist, arbeitet weiter. `tools/check.sh` kann jeden Namen, den EasyGear von Dialogue UI benutzt, mit einer Kopie
+von Dialogue UI vergleichen.
+
+Gebaut gegen Dialogue UI 1.0.7 b (aus dem Quelltext gelesen) und **hier an einem Modell davon getestet, nicht im Spiel mit dem
+echten Addon** (siehe [Bekannte Grenzen](#bekannte-grenzen)).
+
 ## Fehlersuche
 
 `/eg status` zeigt die Oberflächen-Anbindungen (`itembuttons`, `merchant`, `merchantstock`, `rolls`, `tooltip`, `settings`, `shiftclick`,
-bei installiertem Baganator bzw. EllesmereUI auch `baganator` und `ellesmere`): ein roter Name mit Grund heißt, dass dieser Teil der Client-Oberfläche nicht gefunden wurde und die
+bei installiertem Baganator, EllesmereUI bzw. Dialogue UI auch `baganator`, `ellesmere` und `dialogueui`): ein roter Name mit Grund heißt, dass dieser Teil der Client-Oberfläche nicht gefunden wurde und die
 Funktion aus ist. Dazu die erkannten Talentpunkte und der letzte interne Fehler. Interne Fehler erscheinen einmalig im Chat als `EasyGear[Name]: Meldung`.
 
 **Fehler melden:** bitte die Ausgabe von `/eg status` mitschicken (Clientversion, erkannte Talentpunkte, welche
@@ -663,9 +789,10 @@ Lua-Fehlers (`/console scriptErrors 1` zeigt sie an). Bei den Gruppenhinweisen z
 ## Prüfung
 
 Im Hauptordner dieses Repositories: `lua5.1 tests/run.lua` (Modultests auf einem Modell des Clients), `python3 tests/mutate.py`
-(Mutationsprüfung: die Tests müssen künstliche Fehler bemerken), `tools/check.sh <Interface/AddOns des Forever-
-Quelltexts>` (luacheck gegen eine aus dem Quelltext gebaute Standardbibliothek; jede Methode, jedes Ereignis, jede
-Vorlage, Schrift, jeder Atlas und jede Funktion, die das Addon nennt, muss dort vorkommen).
+(Mutationsprüfung: die Tests müssen künstliche Fehler bemerken; `MUT_SHARD=0/3` bis `2/3` teilt sie auf mehrere Prozesse auf), `tools/check.sh <Interface/AddOns des Forever-
+Quelltexts> [<Ordner von Dialogue UI>]` (luacheck gegen eine aus dem Quelltext gebaute Standardbibliothek; jede Methode, jedes
+Ereignis, jede Vorlage, Schrift, jeder Atlas und jede Funktion, die das Addon nennt, muss dort vorkommen; mit dem zweiten
+Argument auch jeder Name, den es von Dialogue UI benutzt).
 
 Das belegt die Form der Aufrufe gegen den echten Quelltext und die Logik auf einem Modell - **es ersetzt keinen Lauf
 im Spiel**.
@@ -699,6 +826,13 @@ im Spiel**.
   Overlay-Schnittstelle des Taschenmoduls) und gegen Modelle von ihnen getestet. Zeigt sich dort kein Pfeil, sagt
   `/eg status`, welcher Teil gefunden wurde. Die Offline-Ansichten fremder Charaktere von EllesmereUI werden nicht bemalt.
   Andere Taschen-Addons (Bagnon, ElvUI-Taschen, ...) werden nicht gezielt unterstützt.
+* Dialogue UI ist über die Schnittstelle angebunden, die es anderen Addons anbietet (ein Verarbeiter für seinen Item-Tooltip, die
+  Stelle, die es für Pawn vorhält, seine Belohnungsknöpfe), und gegen ein Modell davon getestet. Tooltips, die Dialogue UI für
+  Links im Questtext öffnet, sind für diese Schnittstelle keine Item-Tooltips (kein Vergleich, kein Pawn, kein EasyGear). Die
+  Verkaufspreis-Münze von Dialogue UI und der Haken von EasyGear können auf demselben Symbol sitzen, wenn beide dieselbe
+  Belohnung wählen; Dialogue UI markiert den höchsten Verkaufspreis von sich aus, EasyGear die beste Wahl nach deinen Gewichten.
+  Der erste Item-Tooltip nach der Anmeldung wird zweimal gebaut (einmal zum Anhängen, einmal mit dem Block), springt also
+  einen Augenblick lang - einmal je Sitzung.
 
 ## Die 3.3.5a-Ausgabe
 

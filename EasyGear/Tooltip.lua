@@ -51,10 +51,13 @@ local function FmtDelta(v, decimals)
 end
 
 local function PickLine(kind)
-    return { left = (kind == "VENDOR") and L.QUEST_PICK_VENDOR or L.QUEST_PICK, color = GREEN }
+    return { left = (kind == "VENDOR") and L.QUEST_PICK_VENDOR or L.QUEST_PICK, color = GREEN, role = "good" }
 end
 
---[[ Liste von Zeilen { left, right, color, rightColor, wrap }.
+--[[ Liste von Zeilen { left, right, color, rightColor, wrap, role, rightRole, indent, detail }.
+     role / rightRole sagen, was die Farbe bedeutet ("title" | "good" | "bad" | "warn" | "muted" | "text"): ein anderes
+     Fenster (Dialogue UI) malt dieselbe Aussage in seinen eigenen Farben. indent = Wert unter einer Ueberschrift,
+     detail = Zeile, die ein knapper Tooltip weglassen darf (Platz, Attribute, Hinweise).
      mode "FULL" = mit Vergleich, "SCORE" = nur die Wertung.
      extra (optional): { pick = "UPGRADE"|"VENDOR"  - beste Questbelohnung,
                          hint = Eintrag             - in den Taschen liegt etwas Besseres,
@@ -71,14 +74,15 @@ function Tooltip.BuildLines(item, result, mode, extra)
     -- extra.slot: der Platz, in dem der Gegenstand liegt (Charakterfenster, Vergleichs-Tooltip) - in der Nebenhand
     -- zaehlt die Waffe nur halb, wie im Vergleich
     local score = result and result.score or Score.Of(item, extra and extra.slot)
-    lines[#lines + 1] = { left = "EasyGear", right = L.SCORE .. ": " .. EG.FmtScore(score), color = TITLE, rightColor = WHITE }
+    lines[#lines + 1] = { left = "EasyGear", right = L.SCORE .. ": " .. EG.FmtScore(score), color = TITLE, rightColor = WHITE,
+                          role = "title", rightRole = "text" }
 
     if extra and extra.pick then lines[#lines + 1] = PickLine(extra.pick) end
     if extra and extra.hint then
         local h = extra.hint
         lines[#lines + 1] = {
             left = L.BAG_HINT .. " " .. EG.FmtSigned(h.delta or 0), right = h.link,
-            color = YELLOW, rightColor = WHITE,
+            color = YELLOW, rightColor = WHITE, role = "warn", rightRole = "text",
         }
     end
 
@@ -88,38 +92,43 @@ function Tooltip.BuildLines(item, result, mode, extra)
         -- Platz und Wertung dessen, was ersetzt wird
         local tgt = result.target
         local slotText = result.slotName
+        local function SlotLine(right)
+            lines[#lines + 1] = { left = slotText, right = right, color = GREY, rightColor = GREY, role = "muted", rightRole = "muted",
+                                  detail = true }
+        end
         if result.combined then
-            lines[#lines + 1] = { left = slotText, right = EG.FmtScore(result.targetScore), color = GREY, rightColor = GREY }
+            SlotLine(EG.FmtScore(result.targetScore))
         elseif tgt and tgt.empty then
-            lines[#lines + 1] = { left = slotText, right = L.NOTHING_EQUIPPED, color = GREY, rightColor = GREY }
+            SlotLine(L.NOTHING_EQUIPPED)
         elseif tgt then
-            lines[#lines + 1] = { left = slotText, right = EG.FmtScore(tgt.score), color = GREY, rightColor = GREY }
+            SlotLine(EG.FmtScore(tgt.score))
         end
     end
 
     -- Urteil
     local verdict
     if not result.usable then
-        verdict = { left = L.NOT_USABLE, color = RED }
+        verdict = { left = L.NOT_USABLE, color = RED, role = "bad" }
     elseif result.levelTooLow and result.wouldUpgrade then
-        verdict = { left = sformat(L.UPGRADE_AT_LEVEL, item.reqLevel or 0), color = YELLOW }
+        verdict = { left = sformat(L.UPGRADE_AT_LEVEL, item.reqLevel or 0), color = YELLOW, role = "warn" }
     elseif result.isUpgrade then
         local t = L.UPGRADE
         if result.target and result.target.empty then t = t .. " (" .. L.R_EMPTY_SHORT .. ")" end
-        verdict = { left = t, color = GREEN }
+        verdict = { left = t, color = GREEN, role = "good" }
     else
-        verdict = { left = L.NO_UPGRADE, color = RED }
+        verdict = { left = L.NO_UPGRADE, color = RED, role = "bad" }
     end
     if result.usable and result.delta then
         local d = EG.FmtSigned(result.delta)
         if result.percent then d = d .. "  (" .. EG.FmtPct(result.percent) .. ")" end
         verdict.right = d
         verdict.rightColor = (result.delta > 0) and GREEN or ((result.delta < 0) and RED or GREY)
+        verdict.rightRole = (result.delta > 0) and "good" or ((result.delta < 0) and "bad" or "muted")
     end
     lines[#lines + 1] = verdict
 
     if not result.usable and result.reason then
-        lines[#lines + 1] = { left = result.reason, color = GREY, wrap = true }
+        lines[#lines + 1] = { left = result.reason, color = GREY, wrap = true, role = "muted" }
     end
 
     -- Attribut-Unterschiede
@@ -129,21 +138,43 @@ function Tooltip.BuildLines(item, result, mode, extra)
             local d = diffs[i]
             lines[#lines + 1] = {
                 left = FmtDelta(d.delta, d.decimals) .. " " .. d.label,
-                color = (d.delta > 0) and GREEN or RED,
+                color = (d.delta > 0) and GREEN or RED, role = (d.delta > 0) and "good" or "bad", indent = true, detail = true,
             }
         end
     elseif EG:Get("tooltipDiff") and result.usable and result.target and result.target.empty then
         local diffs = Score.StatDiff(item, {}, result.candSlot)
         for i = 1, mmin(#diffs, MAX_DIFF_LINES) do
             local d = diffs[i]
-            lines[#lines + 1] = { left = FmtDelta(d.delta, d.decimals) .. " " .. d.label, color = GREEN }
+            lines[#lines + 1] = { left = FmtDelta(d.delta, d.decimals) .. " " .. d.label, color = GREEN, role = "good",
+                                  indent = true, detail = true }
         end
     end
 
     if result.note then
-        lines[#lines + 1] = { left = result.note, color = GREY, wrap = true }
+        lines[#lines + 1] = { left = result.note, color = GREY, wrap = true, role = "muted", detail = true }
     end
     return lines
+end
+
+--[[ Alles, was EasyGear zu einem Gegenstand sagt, ohne Tooltip: { lines = Zeilen, group = Zeilen | nil } oder nil, wenn
+     es nichts zu sagen gibt. mode und extra wie bei BuildLines. withGroup haengt die Gruppenhinweise an (nur im vollen
+     Tooltip und nur fuer Ausruestung): true, oder eine Funktion, die erst gefragt wird, wenn sie angehaengt werden
+     koennten. Der Blizzard-Tooltip (OnItem) und Dialogue UI schreiben denselben Inhalt.                               ]]
+function Tooltip.Compose(item, mode, extra, withGroup)
+    if not item then return nil end
+    if not item.isGear and not (extra and extra.pick) then return nil end
+    local result
+    if mode == "FULL" and item.isGear then
+        result = Score.Compare(item)
+        if not result then return nil end
+    end
+    local content = { lines = Tooltip.BuildLines(item, result, mode, extra) }
+    if withGroup and mode == "FULL" and item.isGear and EG.Group then
+        if type(withGroup) ~= "function" or withGroup() then
+            content.group = EG.Group.TooltipLines(item.link)
+        end
+    end
+    return content
 end
 
 ------------------------------------------------------------------------------
@@ -257,7 +288,6 @@ function Tooltip.OnItem(tooltip, data)
     local item = Items.Get(link)
     if not item then return end
     local extra = Tooltip.ExtraFor(tooltip)
-    if not item.isGear and not (extra and extra.pick) then return end
 
     -- Auf dem Charakterfenster und in den Vergleichs-Tooltips steht nur die Wertung (mit dem Platz des Gegenstands)
     local mode, slot = "FULL", nil
@@ -272,19 +302,12 @@ function Tooltip.OnItem(tooltip, data)
         extra.slot = slot
     end
 
-    local result
-    if mode == "FULL" and item.isGear then
-        result = Score.Compare(item)
-        if not result then return end
-    end
-    Emit(tooltip, Tooltip.BuildLines(item, result, mode, extra))
-
     -- Fuer wen in der Gruppe waere der Gegenstand besser als das, was er traegt?  (nur im vollen Tooltip: nicht auf dem
     -- Charakterfenster und nicht in den Vergleichs-Tooltips)
-    if mode == "FULL" and item.isGear and EG.Group and NamesGroup(tooltip, item) then
-        local group = EG.Group.TooltipLines(item.link)
-        if group then Emit(tooltip, group) end
-    end
+    local content = Tooltip.Compose(item, mode, extra, function() return NamesGroup(tooltip, item) end)
+    if not content then return end
+    Emit(tooltip, content.lines)
+    if content.group then Emit(tooltip, content.group) end
 end
 
 ------------------------------------------------------------------------------

@@ -1287,6 +1287,306 @@ function Mock.new(opts)
         return model
     end
 
+    --[[ Dialogue UI (Raenore, Peterodox), reduced to what EasyGear touches, after its source (Code/Tooltip/Tooltip_Base.lua,
+         Tooltip_Private.lua, Tooltip_Public.lua, Code/Dialogue/DialogueUI.lua, UITemplates.lua, API.lua):
+           * DialogueUIAPI.AddItemTooltipProcessorExternal(processor): processor(tooltip, itemID, itemLink) -> changed?; the
+             call comes one frame after the shared tooltip has shown an item (CallbackRegistry:TriggerOnNextUpdate keeps only
+             the last call per event), after the comparison and the Shift hint were built
+           * the shared tooltip (not a GameTooltip): AddLeftLine / AddRightLine (pairs with the last left line) / AddBlankLine /
+             AddLine / AddDoubleLine, ProcessTooltipData -> ShowItemComparison (block "Replaces: ..." only while
+             DialogueUI_DB.TooltipShowItemComparison, then tooltip:ProcessItemExternal(link) - where Dialogue UI puts Pawn's
+             lines -, then the Shift hint as the last lines), ReprocessInfo; items from SetQuestItem are items, a hyperlink
+             (getter "GetHyperlink") is not
+           * DUIQuestFrame with an object pool of item buttons: Icon, type "choice" | "reward", index, objectType, isEquippable,
+             ShowUpgradeIcon (once per button: the marker "upgrade") ; ReleaseAllObjects hands every button back before the
+             rewards of the next quest are built
+         options: expanded (comparison shown), pawn (a Pawn-like ProcessItemExternal), noProcessorAPI, noQuestFrame, noReprocess,
+                  noProcessItemExternal, noReleaseAllObjects, noItemButtonPool, missingMethods = { AddBlankLine = true } (taken away from the tooltip),
+                  nativeArrow = { [link] = true } (Dialogue UI's own item level arrow)                                  ]]
+    function H.installDialogueUI(options)
+        options = options or {}
+        self.addons.DialogueUI = true
+        local D = { processors = {}, upgrades = {}, buttons = {}, hints = 0, builds = 0, calls = {}, relayouts = 0 }
+        env.DialogueUI_DB = { TooltipShowItemComparison = options.expanded and true or false }
+        env.DialogueUIAPI = {}
+
+        local pending
+        local function triggerOnNextUpdate(tooltip, itemID, link)
+            if not D.callbackAdded then return end
+            local first = pending == nil
+            pending = { tooltip, itemID, link }
+            if first then
+                env.C_Timer.After(0, function()
+                    local args = pending
+                    pending = nil
+                    local any
+                    for processor in pairs(D.processors) do
+                        D.calls[#D.calls + 1] = args[3]
+                        if processor(args[1], args[2], args[3]) then any = true end
+                    end
+                    if any then D.relayouts = D.relayouts + 1 args[1]:Show() end
+                end)
+            end
+        end
+        if not options.noProcessorAPI then
+            function env.DialogueUIAPI.AddItemTooltipProcessorExternal(processor)
+                D.callbackAdded = true
+                D.processors[processor] = true
+            end
+        end
+
+        -------------------------------------------------------------------- the shared tooltip
+        local tip = env.CreateFrame("Frame", nil, env.UIParent)
+        tip:Hide()
+        tip.rows = {}
+        D.tooltip = tip
+        function tip:ClearLines() self.rows = {} self.hasHotkey = false end
+        function tip:NumLines() return #self.rows end
+        -- the tooltip builds itself with these; options.missingMethods takes one of them away from the object afterwards
+        local function addLeft(self, text, r, g, b, wrap, offsetY, sizeIndex, horizontalOffset)
+            if not text or text == "" then return nil end
+            local fs = { text = text, r = r, g = g, b = b, wrap = wrap, size = sizeIndex or 2, indent = horizontalOffset or 0 }
+            self.rows[#self.rows + 1] = { left = fs }
+            return fs
+        end
+        local function addRight(self, text, r, g, b, wrap, offsetY, sizeIndex)
+            if not text or text == "" then return nil end
+            local current = self.rows[#self.rows]
+            assert(current and current.left, "a right line comes in pairs with a left line")
+            current.right = { text = text, r = r, g = g, b = b, size = sizeIndex or 2 }
+            return current.right
+        end
+        local function addBlank(self) self.rows[#self.rows + 1] = { blank = true } end
+        tip.AddLeftLine, tip.AddRightLine, tip.AddBlankLine = addLeft, addRight, addBlank
+        function tip:AddLine(text, r, g, b, wrap) return addLeft(self, text, r, g, b, wrap, nil, 2) end
+        function tip:AddDoubleLine(left, right, lr, lg, lb, rr, rg, rb)
+            addLeft(self, left, lr, lg, lb)
+            addRight(self, right, rr, rg, rb)
+        end
+        if options.missingMethods then
+            for name in pairs(options.missingMethods) do tip[name] = nil end
+        end
+        function tip:SetOwner(owner) self.owner = owner end
+        function tip:GetHyperlink() return self.hyperlink end
+        function tip:GetItemID() return self.hyperlink and tonumber(self.hyperlink:match("item:(%d+)")) end
+        function tip:ShowHotkey(key, description)
+            addBlank(self)
+            addLeft(self, description, 0.5, 0.5, 0.5, true, nil, 2, 20)
+            self.hasHotkey = true
+            D.hints = D.hints + 1
+        end
+        if not options.noProcessItemExternal then
+            if options.pawn then
+                function tip:ProcessItemExternal(link)                      -- what Pawn's integration does (SupportedAddOns/Pawn.lua)
+                    addBlank(self)
+                    addLeft(self, "Pawn: 12% upgrade", 1, 1, 1, false, nil, 2)
+                end
+            else
+                function tip:ProcessItemExternal() end
+            end
+        end
+        function tip:ShowItemComparison()
+            local it = self.hyperlink and self.itemFromAny(self.hyperlink)
+            if not (it and it.equipLoc and it.equipLoc ~= "" and not it.cosmetic) then return end
+            local expanded = env.DialogueUI_DB.TooltipShowItemComparison == true
+            local canCompare = options.canCompare ~= false
+            if canCompare and expanded then
+                addBlank(self)
+                addLeft(self, "Replaces: [worn item]", 1, 0.82, 0, true)
+                addLeft(self, "Item Level +3", 1, 1, 1, false, nil, 2, 12)
+            end
+            if self.ProcessItemExternal then self:ProcessItemExternal(self.hyperlink) end
+            if canCompare then self:ShowHotkey("Shift", expanded and "Hide Comparison" or "Show Comparison") end
+        end
+        tip.itemFromAny = self.itemFromAny
+        function tip:ProcessTooltipData(data)
+            if not (data and data.lines) then self.tooltipData = nil return false end
+            D.builds = D.builds + 1
+            self.tooltipData, self.hyperlink = data, data.hyperlink
+            for i, l in ipairs(data.lines) do
+                local c = l.leftColor or { r = 1, g = 0.82, b = 0 }
+                addLeft(self, l.leftText, c.r, c.g, c.b, l.wrapText or false, nil, (i == 1) and 1 or 2)
+                if l.rightText then
+                    local rc = l.rightColor or c
+                    addRight(self, l.rightText, rc.r, rc.g, rc.b, false, nil, 2)
+                end
+            end
+            if data.isItem then
+                self:ShowItemComparison()
+                triggerOnNextUpdate(self, self:GetItemID(), self.hyperlink)
+            end
+            return true
+        end
+        function tip:ProcessInfo(info)
+            self.tooltipInfo = info
+            local data = info.fetch()
+            self:ClearLines()
+            if data then data.isItem = info.isItem end
+            if self:ProcessTooltipData(data) then self:Show() else self:Hide() end
+        end
+        if not options.noReprocess then
+            function tip:ReprocessInfo()
+                if self.tooltipData then
+                    self:ClearLines()
+                    self:ProcessTooltipData(self.tooltipData)
+                    self:Show()
+                end
+            end
+        end
+        function tip:SetQuestItem(kind, index)
+            return self:ProcessInfo({ isItem = true, fetch = function()
+                local link = env.GetQuestItemLink(kind, index)
+                return link and env.C_TooltipInfo.GetHyperlink(link)
+            end })
+        end
+        function tip:SetHyperlink(link)
+            return self:ProcessInfo({ isItem = nil, fetch = function() return env.C_TooltipInfo.GetHyperlink(link) end })
+        end
+        function D.lines()
+            local out = {}
+            for _, r in ipairs(tip.rows) do
+                if r.blank then out[#out + 1] = ""
+                else out[#out + 1] = r.left.text .. (r.right and (" | " .. r.right.text) or "") end
+            end
+            return out
+        end
+        function D.text() return table.concat(D.lines(), "\n") end
+        -- the row that starts with this text (or nil), and its index
+        function D.row(prefix)
+            for i, r in ipairs(tip.rows) do
+                if r.left and r.left.text:sub(1, #prefix) == prefix then return r, i end
+            end
+        end
+
+        -------------------------------------------------------------------- the quest frame and its reward buttons
+        if not options.noQuestFrame then
+            local frame = env.CreateFrame("Frame", "DUIQuestFrame", env.UIParent)
+            frame:Hide()
+            frame.chooseItems = false
+            D.frame = frame
+            local function pool(create, remove)
+                local p = { active = {}, free = {} }
+                function p:Acquire()
+                    local o = table.remove(self.free) or create()
+                    self.active[#self.active + 1] = o
+                    o:Show()
+                    return o
+                end
+                function p:Release()
+                    for _, o in ipairs(self.active) do remove(o) self.free[#self.free + 1] = o end
+                    self.active = {}
+                end
+                function p:ProcessActiveObjects(fn) for _, o in ipairs(self.active) do fn(o) end end
+                return p
+            end
+            local function createButton()
+                local b = env.CreateFrame("Button", nil, frame)
+                b.Icon = b:CreateTexture(nil, "ARTWORK")
+                function b:SetItem(kind, index)
+                    self.objectType, self.type, self.index = "item", kind, index
+                    local link = env.GetQuestItemLink(kind, index)
+                    local it = link and self.itemFromAny(link)
+                    self.itemID = it and it.id
+                    self.rewardAmount = 1
+                    self.isEquippable = (it and it.equipLoc and it.equipLoc ~= "") or nil
+                    if self.isEquippable and options.nativeArrow and options.nativeArrow[link] then self:ShowUpgradeIcon() end
+                end
+                b.itemFromAny = self.itemFromAny
+                function b:DoesButtonHaveMarker(name) return self.markers ~= nil and self.markers[name] == true end
+                function b:ShowUpgradeIcon(playAnimation)
+                    if self:DoesButtonHaveMarker("upgrade") then return end
+                    self.markers = self.markers or {}
+                    self.markers.upgrade = true
+                    D.upgrades[#D.upgrades + 1] = { button = self, animation = playAnimation }
+                end
+                function b:OnRelease() self:ClearAllPoints() self:Hide() self.markers = nil end
+                b:SetScript("OnEnter", function(self)
+                    tip:Hide()
+                    tip:SetOwner(self, "ANCHOR_NONE")
+                    tip:SetQuestItem(self.type, self.index, true)
+                end)
+                b:SetScript("OnLeave", function() tip:Hide() end)
+                return b
+            end
+            if not options.noItemButtonPool then
+                frame.itemButtonPool = pool(createButton, function(b) b:OnRelease() end)
+            end
+            frame.iconFramePool = pool(function() return env.CreateFrame("Frame", nil, frame) end, function() end)
+            function frame:IsChoosingReward() return self.chooseItems == true end
+            local function releaseAll()
+                if frame.itemButtonPool then frame.itemButtonPool:Release() end
+                frame.iconFramePool:Release()
+                D.upgrades = {}
+                D.buttons = {}
+            end
+            if not options.noReleaseAllObjects then
+                function frame:ReleaseAllObjects() releaseAll() end
+            end
+
+            -- what HandleQuestComplete / HandleQuestDetail do: release everything, build the buttons, show the frame
+            -- spec = { choices = { link | { link =, count =, usable = } }, rewards = { ... }, currencies = n, choosing = bool }
+            -- (a currency reward is a button of type "reward" and objectType "currency": same type name, other kind of index)
+            function D.showQuest(spec)
+                spec = spec or {}
+                local choices, rewards = spec.choices or {}, spec.rewards or {}
+                local function entry(kind, i)
+                    local list = (kind == "choice") and choices or ((kind == "reward") and rewards or {})
+                    local c = list[i]
+                    if type(c) == "table" then return c end
+                    return c and { link = c } or nil
+                end
+                env.GetQuestItemLink = function(kind, i) local c = entry(kind, i) return c and c.link or nil end
+                env.GetQuestItemInfo = function(kind, i)
+                    local c = entry(kind, i)
+                    return "name", 1, c and c.count or 1, 1, not c or c.usable ~= false
+                end
+                env.GetNumQuestChoices = function() return #choices end
+                frame.chooseItems = (spec.choosing ~= false) and #choices > 1
+                if frame.ReleaseAllObjects then frame:ReleaseAllObjects() else releaseAll() end
+                for i = 1, #choices do
+                    local b = frame.itemButtonPool:Acquire()
+                    b:SetItem("choice", i)
+                    D.buttons[#D.buttons + 1] = b
+                end
+                for i = 1, #rewards do
+                    local b = frame.itemButtonPool:Acquire()
+                    b:SetItem("reward", i)
+                    D.buttons[#D.buttons + 1] = b
+                end
+                for i = 1, spec.currencies or 0 do
+                    local b = frame.itemButtonPool:Acquire()
+                    b.objectType, b.type, b.index = "currency", "reward", i
+                    D.buttons[#D.buttons + 1] = b
+                end
+                frame:Show()
+                return D.buttons
+            end
+            -- the client tells the shown children of a frame when it is hidden or shown
+            function D.hide()
+                frame:Hide()
+                for _, f in ipairs(self.frames) do
+                    if f.__parent == frame and f.__scripts.OnHide then f.__scripts.OnHide(f) end
+                end
+            end
+            function D.show()
+                frame:Show()
+                for _, f in ipairs(self.frames) do
+                    if f.__parent == frame and f.__shown and f.__scripts.OnShow then f.__scripts.OnShow(f) end
+                end
+            end
+            -- a frame that is shown runs the OnUpdate of its children, then the timers of the client advance
+            function D.tick(dt)
+                for _, f in ipairs(self.frames) do
+                    if f.__parent == frame and f.__scripts.OnUpdate and f:IsVisible() then f.__scripts.OnUpdate(f, dt) end
+                end
+                H.advance(dt)
+            end
+            function D.hover(button) button.__scripts.OnEnter(button) H.advance(0) end
+            function D.leave(button) button.__scripts.OnLeave(button) end
+        end
+        return D
+    end
+
     return H
 end
 

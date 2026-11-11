@@ -127,6 +127,8 @@ EasyGearLocales["enUS"] = {
     OPT_MARK_COLOR = "%s: color",
     OPT_MARK_RESET = "Reset marker look",
     OPT_MARK_RESET_TIP = "Sets shape and color of all markers back to the original look: green arrow, yellow arrow, purple star, green check mark.",
+    OPT_DUI = "Dialogue UI: EasyGear in its tooltips and reward buttons",
+    OPT_DUI_TIP = "If the addon Dialogue UI is installed: shows EasyGear's score and verdict in its item tooltips and marks the best of several quest rewards on its reward buttons, in Dialogue UI's own style. Has no effect without Dialogue UI.",
 
     ---------- chat output
     SET_PROFILE = "Active profile: %s",
@@ -181,6 +183,7 @@ EasyGearLocales["enUS"] = {
     NUM_RANGE = "Please enter a number from %s to %s.",
     H_GROUP = "group members: what is read and who would gain; on/off, scan = read again, raid / inspect = switches",
     H_MARKER = "shape and color of the markers (kinds: upgrade, level, group, pick, sell); without arguments it lists them",
+    H_DUI = "EasyGear in Dialogue UI (its tooltips and reward buttons) on or off",
 
     ---------- group hints
     GROUP_BETTER = "Better for the group:",
@@ -369,4 +372,6 @@ EasyGearLocales["enUS"] = {
     COMPAT_ELLESMERE_NOAPI = "Bags module: loaded, but without its overlay interface - no arrow there.",
     COMPAT_ELLESMERE_NOBAGS = "Bags module: not loaded.",
     ROW_EXTRA = "(of which %s from enchants and gems)",
+    DUI_OK = "found - score and verdict in its tooltips, the best reward marked on its reward buttons",
+    DUI_PROBLEM = "found, but part of its interface is missing",
 }

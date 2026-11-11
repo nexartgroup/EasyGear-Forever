@@ -35,7 +35,11 @@ CLIENT_STRINGS = {
 OWN_GLOBALS = {"EasyGear", "EasyGearDB", "EasyGearCharDB", "EasyGearLocales"}
 OWN_PREFIXES = ("SLASH_EASYGEAR", "EasyGear_")
 # globals of optional third-party addons that Compat.lua reaches through _G (never required)
-THIRD_PARTY = {"Baganator", "Syndicator", "EllesmereUI", "EUI_Bags"}
+THIRD_PARTY = {"Baganator", "Syndicator", "EllesmereUI", "EUI_Bags", "DialogueUI_DB", "DialogueUIAPI", "DUIQuestFrame"}
+# methods of Dialogue UI's own objects (tooltip, quest frame, reward buttons, object pools) that DialogueUI.lua calls; they
+# are not in the Forever UI source - tools/check_dui.py checks them against the source of Dialogue UI itself
+THIRD_PARTY_METHODS = {"AddLeftLine", "AddRightLine", "AddBlankLine", "ReprocessInfo", "ProcessActiveObjects",
+                       "DoesButtonHaveMarker", "ShowUpgradeIcon", "IsChoosingReward"}
 
 STRING_METHODS = {"find", "format", "gmatch", "gsub", "len", "lower", "match", "rep", "reverse", "sub", "upper", "byte"}
 # Methods of Lua tables from the standard library or of objects that are not UI objects
@@ -82,7 +86,7 @@ for p in sorted(lua_files):
                 bad.append("%s:%d: atlas %s is not in the UI source" % (rel, lineno, m.group(1)))
         for m in re.finditer(r":([A-Za-z_]\w*)\s*[({\"']", line):
             name = m.group(1)
-            if name in STRING_METHODS or name in own or name in methods or name in OTHER:
+            if name in STRING_METHODS or name in own or name in methods or name in OTHER or name in THIRD_PARTY_METHODS:
                 continue
             bad.append("%s:%d: unknown method :%s" % (rel, lineno, name))
 

@@ -17,7 +17,7 @@ return function(T)
         T.ok(cat, "category registered") T.eq(cat.name, "EasyGear") T.eq(cat.registered, true)
         local kinds = {}
         for _, c in ipairs(cat.controls) do kinds[c.kind] = (kinds[c.kind] or 0) + 1 end
-        T.eq(kinds.checkbox, 13) T.eq(kinds.slider, 2) T.eq(kinds.dropdown, 6, "the profile and a shape list for each of the 5 kinds")
+        T.eq(kinds.checkbox, 14, "with the one for Dialogue UI") T.eq(kinds.slider, 2) T.eq(kinds.dropdown, 6, "the profile and a shape list for each of the 5 kinds")
         T.eq(kinds.swatch, 5, "a color field for each kind")
         local headers, buttons = 0, 0
         for _, init in ipairs(cat.initializers) do

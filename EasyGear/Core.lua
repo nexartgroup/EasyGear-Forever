@@ -1,5 +1,5 @@
 --[[---------------------------------------------------------------------------
-    EasyGear 4.3.1 - Forever
+    EasyGear 4.4.0 - Forever
     Ausruestungsbewertung, Upgrade-Erkennung und Vergleich fuer WoW Forever
 
     Dieses Addon vergleicht und empfiehlt, mehr nicht: es verschickt keine
@@ -21,6 +21,7 @@
       Marks.lua          Markierungen auf Gegenstandssymbolen
       Contexts.lua       Anbindung: Taschen, Bank, Haendler, Beute, Wuerfeln, Quests, ...
       Compat.lua         Anbindung an Baganator und EllesmereUI (optional)
+      DialogueUI.lua     Anbindung an Dialogue UI (optional): Tooltip-Block und Markierungen an den Belohnungen
       Window.lua         Vergleichsfenster
       ProfileWindow.lua  Profilfenster
       Options.lua        Einstellungsseite (Optionen > AddOns) und Addon-Fach
@@ -48,7 +49,7 @@ do
     if C_AddOns and C_AddOns.GetAddOnMetadata then
         meta = C_AddOns.GetAddOnMetadata(EG.name, "Version")
     end
-    EG.version = meta or "4.3.1"
+    EG.version = meta or "4.4.0"
 end
 
 -- WoW Forever meldet sich ueber WOW_PROJECT_ID == WOW_PROJECT_CAMELOT (Blizzard_ProjectConstants).
@@ -207,6 +208,7 @@ local DEFAULTS = {
     showItemIcons     = true,   -- Haendler, Beute, Wuerfeln, Handel, Post
     showQuestIcons    = true,   -- beste Questbelohnung
     showCharIcons     = true,   -- Hinweis am Charakterfenster: in den Taschen liegt etwas Besseres
+    showDialogueUI    = true,   -- Dialogue UI (falls installiert): Zeilen im Tooltip, Haken und Pfeil an den Belohnungen
     showGroupHints    = true,   -- violetter Stern und Tooltip-Zeilen: besser fuer ein Gruppenmitglied
     groupInspect      = true,   -- Gruppenmitglieder dafuer selbst untersuchen (sonst nur mitnehmen, was ohnehin gelesen wird)
     groupRaid         = false,  -- auch die Mitglieder eines Schlachtzugs (sonst nur die Gruppe)

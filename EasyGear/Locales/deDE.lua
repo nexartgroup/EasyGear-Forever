@@ -117,6 +117,8 @@ EasyGearLocales["deDE"] = {
     OPT_MARK_COLOR = "%s: Farbe",
     OPT_MARK_RESET = "Aussehen zurücksetzen",
     OPT_MARK_RESET_TIP = "Setzt Form und Farbe aller Markierungen auf das ursprüngliche Aussehen zurück: grüner Pfeil, gelber Pfeil, violetter Stern, grüner Haken.",
+    OPT_DUI = "Dialogue UI: EasyGear in Tooltips und Belohnungsknöpfen",
+    OPT_DUI_TIP = "Wenn das Addon Dialogue UI installiert ist: zeigt Wertung und Urteil von EasyGear in dessen Item-Tooltips und markiert die beste von mehreren Questbelohnungen auf dessen Belohnungsknöpfen, im Stil von Dialogue UI. Ohne Dialogue UI ohne Wirkung.",
 
     ---------- chat output
     SET_PROFILE = "Aktives Profil: %s",
@@ -171,6 +173,7 @@ EasyGearLocales["deDE"] = {
     NUM_RANGE = "Bitte eine Zahl von %s bis %s eingeben.",
     H_GROUP = "Gruppenmitglieder: was gelesen ist und wer gewinnen würde; on/off, scan = neu lesen, raid / inspect = Schalter",
     H_MARKER = "Form und Farbe der Markierungen (Arten: upgrade, level, group, pick, sell); ohne Angabe eine Übersicht",
+    H_DUI = "EasyGear in Dialogue UI (dessen Tooltips und Belohnungsknöpfe) ein- oder ausschalten",
 
     ---------- group hints
     GROUP_BETTER = "Besser für die Gruppe:",
@@ -359,4 +362,6 @@ EasyGearLocales["deDE"] = {
     COMPAT_ELLESMERE_NOAPI = "Taschenmodul: geladen, aber ohne seine Overlay-Schnittstelle - dort kein Pfeil.",
     COMPAT_ELLESMERE_NOBAGS = "Taschenmodul: nicht geladen.",
     ROW_EXTRA = "(davon %s aus Verzauberung und Steinen)",
+    DUI_OK = "gefunden - Wertung und Urteil in seinen Tooltips, die beste Belohnung an seinen Belohnungsknöpfen markiert",
+    DUI_PROBLEM = "gefunden, aber ein Teil seiner Schnittstelle fehlt",
 }

@@ -306,6 +306,7 @@ function Slash.PrintStatus()
     if EG.Compat then
         for _, line in ipairs(EG.Compat.StatusLines()) do EG:Raw(line) end
     end
+    if EG.DialogueUI then EG:Raw(EG.DialogueUI.StatusLine()) end
     if EG.lastError then
         EG:Raw(C.bad .. L.ST_LASTERROR .. ": [" .. tostring(EG.lastError.label) .. "] " .. tostring(EG.lastError.err) .. C.reset)
     end
@@ -425,6 +426,7 @@ local HELP = {
     { "/eg mindelta <" .. Range("minDelta") .. ">",         "H_MINDELTA" },
     { "/eg mindeltapct <" .. Range("minDeltaPercent") .. ">", "H_MINDELTAPCT" },
     { "/eg icons | items | quest | char | tooltip | diff", "H_TOGGLES" },
+    { "/eg dui [on|off]",                     "H_DUI" },
     { "/eg options",                          "H_OPTIONS" },
     { "/eg scale <" .. Range("scale") .. ">",               "H_SCALE" },
     { "/eg status",                           "H_STATUS" },
@@ -451,6 +453,7 @@ local TOGGLES = {
     items   = { "showItemIcons",    "OPT_ITEMS" },
     quest   = { "showQuestIcons",   "OPT_QUESTREWARD" },
     char    = { "showCharIcons",    "OPT_CHARHINT" },
+    dui     = { "showDialogueUI",   "OPT_DUI" },
     tooltip = { "showTooltip",      "OPT_TOOLTIP" },
     stats   = { "showTooltipStats", "OPT_TOOLTIP_STATS" },
     diff    = { "tooltipDiff",      "OPT_DIFF" },

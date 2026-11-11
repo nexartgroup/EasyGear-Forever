@@ -754,6 +754,17 @@ return function(T)
         local tip = W.tooltipFor(W.bagButton(0, 1), W.I.lvl41)
         T.eq(tip:HasLine(string.format(W.EG.L.GROUP_AT_LEVEL, 41)), true, "... with the level he needs")
         T.eq(W.tooltipFor(W.bagButton(0, 1), W.I.robe):HasLine(string.format(W.EG.L.GROUP_AT_LEVEL, 41)), false)
+        -- what the colors mean (another window, Dialogue UI, paints them in its own): level short = warn, gain = good
+        local lines = W.EG.Group.TooltipLines(W.I.lvl41)
+        T.eq(lines[1].role, "title")
+        local warned = 0
+        for i = 2, #lines do
+            local short = lines[i].right:find(string.format(W.EG.L.GROUP_AT_LEVEL, 41), 1, true) ~= nil
+            if short then warned = warned + 1 end
+            T.eq(lines[i].role, "text") T.eq(lines[i].indent, true, lines[i].left)
+            T.eq(lines[i].rightRole, short and "warn" or "good", lines[i].left)
+        end
+        T.eq(warned, 1, "only the mage is a level short")
         T.eq(names(W.I.warlockOnly), "Lok")
         T.eq(names(W.I.leather), "", "cloth wearers do not wear leather")
     end)
@@ -1022,6 +1033,7 @@ return function(T)
         local lines = W.EG.Group.TooltipLines(W.I.robe)
         T.eq(#lines, 6, "header, four members and the rest")
         T.eq(lines[6].left, string.format(W.EG.L.GROUP_MORE, 2))
+        T.eq(lines[6].role, "muted") T.eq(lines[6].indent, true)
     end)
 
     T.test("group: no group lines on the character window, in compare tooltips or for non-gear", function()

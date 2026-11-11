@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Mutation check for the unit tests.
 
-    python3 tests/mutate.py [name filter]
+    python3 tests/mutate.py [name filter]        (MUT_SHARD=i/n splits the run: every n-th mutation, from the i-th;
+                                                  MUT_FROM=k skips the first k)
 
 Copies EasyGear/ to a temporary folder, applies one small change at a time (a flipped comparison, a dropped
 condition, a changed constant, ...) and runs the test suite on the copy. A mutation counts as killed when the
@@ -251,12 +252,12 @@ MUTATIONS = [
     ('grp trade line', 'Group.lua', 'if line.type == want then return true end', ''),
     ('grp tooltip max', 'Group.lua', 'local MAX_TOOLTIP = 4', 'local MAX_TOOLTIP = 5'),
     ('grp tooltip more', 'Group.lua', 'if #list > MAX_TOOLTIP then', 'if #list >= MAX_TOOLTIP then'),
-    ('grp tooltip header', 'Group.lua', 'local lines = { { left = L.GROUP_BETTER, color = PURPLE } }', 'local lines = {}'),
+    ('grp tooltip header', 'Group.lua', 'local lines = { { left = L.GROUP_BETTER, color = PURPLE, role = "title" } }', 'local lines = {}'),
     ('grp tooltip level', 'Group.lua', 'if e.needLevel then right = right .. "  " .. sformat(L.GROUP_AT_LEVEL, e.needLevel) end', ''),
     ('grp who profile', 'Group.lua', 'if profile then text = text .. " (" .. profile.name .. ")" end', ''),
     ('grp who color', 'Group.lua', 'local text = ClassColored(m.class, m.name or "?")', 'local text = m.name or "?"'),
-    ('grp tooltip mode', 'Tooltip.lua', 'if mode == "FULL" and item.isGear and EG.Group and NamesGroup(tooltip, item) then', 'if item.isGear and EG.Group and NamesGroup(tooltip, item) then'),
-    ('grp tooltip call', 'Tooltip.lua', 'local group = EG.Group.TooltipLines(item.link)', 'local group = nil'),
+    ('grp tooltip mode', 'Tooltip.lua', 'if withGroup and mode == "FULL" and item.isGear and EG.Group then', 'if withGroup and item.isGear and EG.Group then'),
+    ('grp tooltip call', 'Tooltip.lua', 'content.group = EG.Group.TooltipLines(item.link)', 'content.group = nil'),
     ('grp marks call', 'Marks.lua', 'if state == nil and not loading and EG.Group then\n                state = EG.Group.State(data.link, data.ctx, data.bag, data.slot)\n            end', ''),
     ('grp marks slot', 'Marks.lua', 'EG.Group.State(data.link, data.ctx, data.bag, data.slot)', 'EG.Group.State(data.link, data.ctx)'),
     ('grp marks bag stored', 'Marks.lua', '    data.bag = opts and opts.bag or nil\n', ''),
@@ -304,7 +305,7 @@ MUTATIONS = [
     ('grp tooltip gate', 'Tooltip.lua', 'if data and (data.ctx == "bag" or data.ctx == "bank") and EG.Group.Untradable(data.bag, data.slot, data.link or item.link) then', 'if false then'),
     ('grp tooltip gate bank', 'Tooltip.lua', 'if data and (data.ctx == "bag" or data.ctx == "bank") and EG.Group.Untradable', 'if data and data.ctx == "bag" and EG.Group.Untradable'),
     ('grp tooltip owner', 'Tooltip.lua', 'local data = type(owner) == "table" and EG.Marks and EG.Marks.registry[owner] or nil', 'local data = nil'),
-    ('grp tooltip call gate', 'Tooltip.lua', 'if mode == "FULL" and item.isGear and EG.Group and NamesGroup(tooltip, item) then', 'if mode == "FULL" and item.isGear and EG.Group then'),
+    ('grp tooltip call gate', 'Tooltip.lua', 'if type(withGroup) ~= "function" or withGroup() then', 'if true then'),
     # ---- Recommend
     ("tie by value", "Recommend.lua", "if delta > bestUpDelta or (delta == bestUpDelta and total > bestUpValue) then", "if delta > bestUpDelta then"),
     ("upgrade sort", "Recommend.lua", "if a.delta ~= b.delta then return a.delta > b.delta end", "if a.delta ~= b.delta then return a.delta < b.delta end"),
@@ -496,15 +497,140 @@ MUTATIONS = [
     ('look slash unknown kind', 'Slash.lua', 'EG:Print(C.bad .. sformat(L.MARKER_UNKNOWN_KIND, word) .. C.reset)', ''),
     ('look slash unknown shape', 'Slash.lua', 'EG:Print(C.bad .. sformat(L.MARKER_UNKNOWN_SHAPE, token) .. C.reset)', ''),
     ('look slash unknown stops', 'Slash.lua', '                Slash.PrintMarkers()\n                return\n            end\n        end\n        if shape or color then', '                Slash.PrintMarkers()\n            end\n        end\n        if shape or color then'),
+    # ---- Dialogue UI (4.4.0): look, tooltip block, reward buttons, status; roles of the lines
+    ('dui title color', 'DialogueUI.lua', 'title = GOLD, warn = GOLD, text = WHITE,', 'title = WHITE, warn = GOLD, text = WHITE,'),
+    ('dui warn color', 'DialogueUI.lua', 'title = GOLD, warn = GOLD, text = WHITE,', 'title = GOLD, warn = WHITE, text = WHITE,'),
+    ('dui text color', 'DialogueUI.lua', 'title = GOLD, warn = GOLD, text = WHITE,', 'title = GOLD, warn = GOLD, text = GOLD,'),
+    ('dui good color', 'DialogueUI.lua', 'good = { 0.098, 1.000, 0.098 },', 'good = { 0.000, 1.000, 0.000 },'),
+    ('dui bad color', 'DialogueUI.lua', 'bad = { 1.000, 0.125, 0.125 },', 'bad = { 1.000, 0.000, 0.000 },'),
+    ('dui muted color', 'DialogueUI.lua', 'muted = { 0.50, 0.50, 0.50 },', 'muted = { 0.62, 0.62, 0.62 },'),
+    ('dui indent', 'DialogueUI.lua', 'local INDENT = 12', 'local INDENT = 0'),
+    ('dui font size', 'DialogueUI.lua', 'local SIZE_BODY = 2', 'local SIZE_BODY = 3'),
+    ('dui wrap flag', 'DialogueUI.lua', 'ln.wrap and true or false, nil, SIZE_BODY,', 'false, nil, SIZE_BODY,'),
+    ('dui indent flag', 'DialogueUI.lua', 'ln.indent and INDENT or nil)', 'nil)'),
+    ('dui right text', 'DialogueUI.lua', 'if ln.right and fontString then', 'if false then'),
+    ('dui right color', 'DialogueUI.lua', 'local rc = ColorOf(ln.rightRole)', 'local rc = ColorOf(ln.role)'),
+    ('dui tooltip switch', 'DialogueUI.lua', 'return Active() and EG:Get("showTooltip") ~= false', 'return Active()'),
+    ('dui master switch tooltip', 'DialogueUI.lua', 'return Active() and EG:Get("showTooltip") ~= false', 'return EG:Get("showTooltip") ~= false'),
+    ('dui expanded flag', 'DialogueUI.lua', 'return type(db) == "table" and db.TooltipShowItemComparison == true', 'return type(db) == "table"'),
+    ('dui pick only best', 'DialogueUI.lua', 'if data and data.best then return', 'if data then return'),
+    ('dui pick kind', 'DialogueUI.lua', 'data.bestKind or "UPGRADE"', '"UPGRADE"'),
+    ('dui block needs switch', 'DialogueUI.lua', 'if not Enabled() or not link then return false end', 'if not link then return false end'),
+    ('dui compose mode', 'DialogueUI.lua', 'Tooltip.Compose(Items.Get(link), "FULL", PickOf(owner), expanded)', 'Tooltip.Compose(Items.Get(link), "SCORE", PickOf(owner), expanded)'),
+    ('dui compose pick', 'DialogueUI.lua', 'Tooltip.Compose(Items.Get(link), "FULL", PickOf(owner), expanded)', 'Tooltip.Compose(Items.Get(link), "FULL", nil, expanded)'),
+    ('dui compose group', 'DialogueUI.lua', 'Tooltip.Compose(Items.Get(link), "FULL", PickOf(owner), expanded)', 'Tooltip.Compose(Items.Get(link), "FULL", PickOf(owner), true)'),
+    ('dui detail filter all', 'DialogueUI.lua', 'if expanded or not ln.detail then', 'if true then'),
+    ('dui detail filter none', 'DialogueUI.lua', 'if expanded or not ln.detail then', 'if not ln.detail then'),
+    ('dui gap', 'DialogueUI.lua', 'if not any then\n                tooltip:AddBlankLine()\n                any = true\n            end', 'if not any then\n                any = true\n            end'),
+    ('dui group gap', 'DialogueUI.lua', 'if content.group then                      -- Compose liefert sie nur bei eingeblendetem Vergleich\n        tooltip:AddBlankLine()\n', 'if content.group then\n'),
+    ('dui group lines', 'DialogueUI.lua', 'for _, ln in ipairs(content.group) do AddLine(tooltip, ln) end', ''),
+    ('dui block answer', 'DialogueUI.lua', '    return any\nend', '    return false\nend'),
+    ('dui pawn kept', 'DialogueUI.lua', 'if type(original) == "function" then original(self, itemLink) end', ''),
+    ('dui wrap owner', 'DialogueUI.lua', 'EG:Try("dialogueui", AddBlock, self, itemLink, self.owner)', 'EG:Try("dialogueui", AddBlock, self, itemLink, nil)'),
+    ('dui wrap protected', 'DialogueUI.lua', 'EG:Try("dialogueui", AddBlock, self, itemLink, self.owner)', 'AddBlock(self, itemLink, self.owner)'),
+    ('dui check once', 'DialogueUI.lua', 'if not state.checked and not CheckTooltip(tooltip) then return false end', 'if not CheckTooltip(tooltip) then return false end'),
+    ('dui check methods 1', 'DialogueUI.lua', '{ "AddLeftLine", "AddRightLine", "AddBlankLine" }', '{ "AddRightLine", "AddBlankLine" }'),
+    ('dui check methods 2', 'DialogueUI.lua', '{ "AddLeftLine", "AddRightLine", "AddBlankLine" }', '{ "AddLeftLine", "AddBlankLine" }'),
+    ('dui check methods 3', 'DialogueUI.lua', '{ "AddLeftLine", "AddRightLine", "AddBlankLine" }', '{ "AddLeftLine", "AddRightLine" }'),
+    ('dui broken stops', 'DialogueUI.lua', 'if state.broken then return false end', ''),
+    ('dui not a table', 'DialogueUI.lua', 'if type(tooltip) ~= "table" then return false end', ''),
+    ('dui wrap once', 'DialogueUI.lua', 'if not IsWrapped(tooltip)\n       and type(tooltip.ProcessItemExternal)', 'if true\n       and type(tooltip.ProcessItemExternal)'),
+    ('dui wrap needs reprocess', 'DialogueUI.lua', 'and type(tooltip.ReprocessInfo) == "function" then\n        Wrap(tooltip)', 'then\n        Wrap(tooltip)'),
+    ('dui rebuild after wrap', 'DialogueUI.lua', 'then tooltip:ReprocessInfo() end\n        return false', 'then end\n        return false'),
+    ('dui rebuild when off', 'DialogueUI.lua', 'if Enabled() and tooltip.IsShown and tooltip:IsShown() then tooltip:ReprocessInfo() end', 'if tooltip.IsShown and tooltip:IsShown() then tooltip:ReprocessInfo() end'),
+    ('dui rebuild only shown', 'DialogueUI.lua', 'if Enabled() and tooltip.IsShown and tooltip:IsShown() then tooltip:ReprocessInfo() end', 'if Enabled() then tooltip:ReprocessInfo() end'),
+    ('dui wrap answer', 'DialogueUI.lua', 'then tooltip:ReprocessInfo() end\n        return false', 'then tooltip:ReprocessInfo() end\n        return true'),
+    ('dui gear not twice', 'DialogueUI.lua', 'if item and item.isGear and IsWrapped(tooltip) then return false end', ''),
+    ('dui gear needs wrapped', 'DialogueUI.lua', 'if item and item.isGear and IsWrapped(tooltip) then return false end', 'if item and item.isGear then return false end'),
+    ('dui processor answer', 'DialogueUI.lua', 'return ok and changed == true', 'return false'),
+    ('dui refresh only shown', 'DialogueUI.lua', 'if tooltip and tooltip.IsShown and tooltip:IsShown() and type(tooltip.ReprocessInfo)', 'if tooltip and tooltip.IsShown and type(tooltip.ReprocessInfo)'),
+    ('dui refresh on settings', 'DialogueUI.lua', 'EG:Listen("INVALIDATED", function()\n        MarkDirty()\n        EG:Debounce("dialogueuiTooltip", 0.1, function() EG:Try("dialogueui", RefreshTooltip) end)\n    end)', 'EG:Listen("INVALIDATED", function()\n        MarkDirty()\n    end)'),
+    ('dui dirty on settings', 'DialogueUI.lua', 'EG:Listen("INVALIDATED", function()\n        MarkDirty()\n', 'EG:Listen("INVALIDATED", function()\n'),
+    ('dui refresh on loaded', 'DialogueUI.lua', 'EG:Listen("ITEMS_LOADED", function()\n        MarkDirty()\n        EG:Debounce("dialogueuiTooltip", 0.1, function() EG:Try("dialogueui", RefreshTooltip) end)\n    end)', 'EG:Listen("ITEMS_LOADED", function()\n        MarkDirty()\n    end)'),
+    ('dui dirty on loaded', 'DialogueUI.lua', 'EG:Listen("ITEMS_LOADED", function()\n        MarkDirty()\n', 'EG:Listen("ITEMS_LOADED", function()\n'),
+    ('dui currency guard', 'DialogueUI.lua', 'button.objectType == "item" and (button.type == "choice" or button.type == "reward")', '(button.type == "choice" or button.type == "reward")'),
+    ('dui reward buttons', 'DialogueUI.lua', '(button.type == "choice" or button.type == "reward")', 'button.type == "choice"'),
+    ('dui marks switch', 'DialogueUI.lua', 'return Active() and Marks.Enabled("quest")', 'return Marks.Enabled("quest")'),
+    ('dui marks quest switch', 'DialogueUI.lua', 'return Active() and Marks.Enabled("quest")', 'return Active()'),
+    ('dui clear when off', 'DialogueUI.lua', 'if next(known) then ClearAll() end\n        return', 'return'),
+    ('dui reassigned key', 'DialogueUI.lua', 'local key = tostring(button.type) .. ":" .. tostring(button.index) .. ":" .. tostring(link)', 'local key = tostring(button.type)'),
+    ('dui reassigned reset', 'DialogueUI.lua', 'if button.type == "choice" then Marks.Set(button, nil, { ctx = "quest" }) end', ''),
+    ('dui reassigned dirty', 'DialogueUI.lua', '            dirty = true\n        end\n        if button.type == "choice" and link then', '        end\n        if button.type == "choice" and link then'),
+    ('dui one choice', 'DialogueUI.lua', 'if #entries >= 2 then best, kind = Recommend.BestReward(entries) end', 'if #entries >= 1 then best, kind = Recommend.BestReward(entries) end'),
+    ('dui best kind', 'DialogueUI.lua', 'Marks.SetBest(button, best ~= nil and idx == best, kind)', 'Marks.SetBest(button, best ~= nil and idx == best, nil)'),
+    ('dui arrow pending', 'DialogueUI.lua', 'if loading then pending = true end', ''),
+    ('dui arrow animation', 'DialogueUI.lua', 'dialog:IsChoosingReward() or false', 'false'),
+    ('dui arrow needs verdict', 'DialogueUI.lua', 'if verdict == "UPGRADE" then', 'if verdict then'),
+    ('dui arrow marker check', 'DialogueUI.lua', 'and not button:DoesButtonHaveMarker("upgrade") then', 'then'),
+    ('dui driver tick slow', 'DialogueUI.lua', 'local TICK = 0.25', 'local TICK = 1.0'),
+    ('dui driver tick fast', 'DialogueUI.lua', 'local TICK = 0.25', 'local TICK = 0.05'),
+    ('dui driver first pass', 'DialogueUI.lua', 'driver:SetScript("OnShow", function() elapsed = TICK end)', 'driver:SetScript("OnShow", function() end)'),
+    ('dui driver hide', 'DialogueUI.lua', 'driver:SetScript("OnHide", function() ClearAll() end)', 'driver:SetScript("OnHide", function() end)'),
+    ('dui release hook', 'DialogueUI.lua', 'pcall(hooksecurefunc, dialog, "ReleaseAllObjects", function() EG:Try("dialogueui", ClearAll) end)', 'nil'),
+    ('dui wrapper identity', 'DialogueUI.lua', 'return state.wrapper ~= nil and tooltip.ProcessItemExternal == state.wrapper', 'return state.wrapper ~= nil'),
+    ('dui wrapper kept', 'DialogueUI.lua', 'state.wrapper, state.tooltip = wrapper, tooltip', 'state.tooltip = tooltip'),
+    ('dui arrow usable', 'DialogueUI.lua', 'if link and known[button].usable ~= false\n               and type(button.ShowUpgradeIcon)', 'if link\n               and type(button.ShowUpgradeIcon)'),
+    ('dui key usable', 'DialogueUI.lua', '.. ":" .. tostring(usable)', ''),
+    ('dui key count', 'DialogueUI.lua', 'tostring(link) .. ":" .. tostring(count)', 'tostring(link)'),
+    ('dui clear marks', 'DialogueUI.lua', 'known[button] = nil\n        Marks.Clear(button)', 'known[button] = nil'),
+    ('dui register once', 'DialogueUI.lua', 'if state.registered then return true end', ''),
+    ('dui loaded check', 'DialogueUI.lua', 'if not IsLoaded() then return false end', ''),
+    ('dui api check', 'DialogueUI.lua', 'if type(api) == "table" and type(api.AddItemTooltipProcessorExternal) == "function" then', 'if true then'),
+    ('dui frame check', 'DialogueUI.lua', 'if type(dialog) == "table" and type(dialog.itemButtonPool) == "table"\n       and type(dialog.itemButtonPool.ProcessActiveObjects) == "function" then', 'if true then'),
+    ('dui status not found', 'DialogueUI.lua', 'if not state.found then return "Dialogue UI: " .. L.COMPAT_NOT_FOUND end', ''),
+    ('dui status problem', 'DialogueUI.lua', 'if #state.problems > 0 then return "Dialogue UI: " .. L.DUI_PROBLEM', 'if false then return "Dialogue UI: " .. L.DUI_PROBLEM'),
+    ('dui hook result', 'DialogueUI.lua', 'EG:HookResult("dialogueui", #state.problems == 0, #state.problems > 0 and tconcat(state.problems, ", ") or nil)', ''),
+    ('dui login', 'DialogueUI.lua', 'EG:OnLogin("dialogueui", function() DUI.Register() end)', ''),
+    ('dui default', 'Core.lua', 'showDialogueUI    = true,', 'showDialogueUI    = false,'),
+    ('dui option', 'Options.lua', '    { key = "showDialogueUI",   name = "OPT_DUI",          tip = "OPT_DUI_TIP" },\n', ''),
+    ('dui slash toggle', 'Slash.lua', '    dui     = { "showDialogueUI",   "OPT_DUI" },\n', ''),
+    ('dui slash help', 'Slash.lua', '    { "/eg dui [on|off]",                     "H_DUI" },\n', ''),
+    ('dui slash status', 'Slash.lua', 'if EG.DialogueUI then EG:Raw(EG.DialogueUI.StatusLine()) end', ''),
+    ('roles title', 'Tooltip.lua', 'role = "title", rightRole = "text" }', 'role = "muted", rightRole = "text" }'),
+    ('roles title right', 'Tooltip.lua', 'role = "title", rightRole = "text" }', 'role = "title", rightRole = "muted" }'),
+    ('roles pick', 'Tooltip.lua', 'color = GREEN, role = "good" }\nend', 'color = GREEN, role = "muted" }\nend'),
+    ('roles hint', 'Tooltip.lua', 'color = YELLOW, rightColor = WHITE, role = "warn", rightRole = "text",', 'color = YELLOW, rightColor = WHITE, role = "good", rightRole = "text",'),
+    ('roles slot', 'Tooltip.lua', 'role = "muted", rightRole = "muted",\n                                  detail = true }', 'role = "text", rightRole = "muted",\n                                  detail = true }'),
+    ('roles slot detail', 'Tooltip.lua', 'role = "muted", rightRole = "muted",\n                                  detail = true }', 'role = "muted", rightRole = "muted" }'),
+    ('roles not usable', 'Tooltip.lua', 'verdict = { left = L.NOT_USABLE, color = RED, role = "bad" }', 'verdict = { left = L.NOT_USABLE, color = RED, role = "muted" }'),
+    ('roles at level', 'Tooltip.lua', 'color = YELLOW, role = "warn" }', 'color = YELLOW, role = "good" }'),
+    ('roles upgrade', 'Tooltip.lua', 'verdict = { left = t, color = GREEN, role = "good" }', 'verdict = { left = t, color = GREEN, role = "warn" }'),
+    ('roles no upgrade', 'Tooltip.lua', 'verdict = { left = L.NO_UPGRADE, color = RED, role = "bad" }', 'verdict = { left = L.NO_UPGRADE, color = RED, role = "muted" }'),
+    ('roles delta', 'Tooltip.lua', 'verdict.rightRole = (result.delta > 0) and "good" or ((result.delta < 0) and "bad" or "muted")', 'verdict.rightRole = "good"'),
+    ('roles delta zero', 'Tooltip.lua', '((result.delta < 0) and "bad" or "muted")', '((result.delta < 0) and "bad" or "bad")'),
+    ('roles reason', 'Tooltip.lua', 'lines[#lines + 1] = { left = result.reason, color = GREY, wrap = true, role = "muted" }', 'lines[#lines + 1] = { left = result.reason, color = GREY, wrap = true, role = "bad" }'),
+    ('roles reason wrap', 'Tooltip.lua', 'lines[#lines + 1] = { left = result.reason, color = GREY, wrap = true, role = "muted" }', 'lines[#lines + 1] = { left = result.reason, color = GREY, role = "muted" }'),
+    ('roles diff role', 'Tooltip.lua', 'role = (d.delta > 0) and "good" or "bad", indent = true, detail = true,', 'role = "good", indent = true, detail = true,'),
+    ('roles diff indent', 'Tooltip.lua', 'role = (d.delta > 0) and "good" or "bad", indent = true, detail = true,', 'role = (d.delta > 0) and "good" or "bad", detail = true,'),
+    ('roles diff detail', 'Tooltip.lua', 'role = (d.delta > 0) and "good" or "bad", indent = true, detail = true,', 'role = (d.delta > 0) and "good" or "bad", indent = true,'),
+    ('roles empty diff', 'Tooltip.lua', 'color = GREEN, role = "good",\n                                  indent = true, detail = true }', 'color = GREEN, role = "good",\n                                  indent = true }'),
+    ('roles empty diff indent', 'Tooltip.lua', 'color = GREEN, role = "good",\n                                  indent = true, detail = true }', 'color = GREEN, role = "good",\n                                  detail = true }'),
+    ('roles note', 'Tooltip.lua', 'lines[#lines + 1] = { left = result.note, color = GREY, wrap = true, role = "muted", detail = true }', 'lines[#lines + 1] = { left = result.note, color = GREY, wrap = true, role = "muted" }'),
+    ('roles note wrap', 'Tooltip.lua', 'lines[#lines + 1] = { left = result.note, color = GREY, wrap = true, role = "muted", detail = true }', 'lines[#lines + 1] = { left = result.note, color = GREY, role = "muted", detail = true }'),
+    ('compose pick for others', 'Tooltip.lua', 'if not item.isGear and not (extra and extra.pick) then return nil end', 'if not item.isGear then return nil end'),
+    ('compose needs result', 'Tooltip.lua', 'result = Score.Compare(item)\n        if not result then return nil end', 'result = Score.Compare(item)'),
+    ('compose group asked', 'Tooltip.lua', 'if withGroup and mode == "FULL" and item.isGear and EG.Group then', 'if mode == "FULL" and item.isGear and EG.Group then'),
+    ('group title role', 'Group.lua', '{ left = L.GROUP_BETTER, color = PURPLE, role = "title" }', '{ left = L.GROUP_BETTER, color = PURPLE, role = "muted" }'),
+    ('group member role', 'Group.lua', 'role = "text", rightRole = e.needLevel and "warn" or "good", indent = true }', 'role = "muted", rightRole = e.needLevel and "warn" or "good", indent = true }'),
+    ('group member right role', 'Group.lua', 'role = "text", rightRole = e.needLevel and "warn" or "good", indent = true }', 'role = "text", rightRole = "good", indent = true }'),
+    ('group member indent', 'Group.lua', 'role = "text", rightRole = e.needLevel and "warn" or "good", indent = true }', 'role = "text", rightRole = e.needLevel and "warn" or "good" }'),
+    ('group more role', 'Group.lua', 'color = GREY, role = "muted", indent = true }', 'color = GREY, role = "text", indent = true }'),
+    ('group more indent', 'Group.lua', 'color = GREY, role = "muted", indent = true }', 'color = GREY, role = "muted" }'),
 ]
 
 
 def main():
     flt = sys.argv[1] if len(sys.argv) > 1 else None
+    # MUT_SHARD="i/n": only every n-th mutation, starting with the i-th (several runs side by side)
+    shard = os.environ.get("MUT_SHARD")
+    part, parts = (int(x) for x in shard.split("/")) if shard else (0, 1)
+    first = int(os.environ.get("MUT_FROM", "0"))        # skip the mutations before this number (the new ones only)
     src = "EasyGear"
     survivors, killed, bad = [], 0, []
-    for name, fname, old, new in MUTATIONS:
+    for number, (name, fname, old, new) in enumerate(MUTATIONS):
         if flt and flt not in name:
+            continue
+        if number % parts != part or number < first:
             continue
         tmp = tempfile.mkdtemp(prefix="eg_mut_")
         dst = os.path.join(tmp, "EasyGear")
@@ -517,9 +643,13 @@ def main():
             continue
         open(path, "w", encoding="utf-8").write(text.replace(old, new))
         env = dict(os.environ, EASYGEAR_DIR=dst)
-        r = subprocess.run(["lua5.1", "tests/run.lua"], env=env, capture_output=True, text=True, timeout=300)
+        try:
+            r = subprocess.run(["lua5.1", "tests/run.lua"], env=env, capture_output=True, text=True, timeout=120)
+            passed = r.returncode == 0
+        except subprocess.TimeoutExpired:
+            passed = False                  # a suite that no longer ends has noticed the change as well
         shutil.rmtree(tmp)
-        if r.returncode == 0:
+        if passed:
             survivors.append(name)
             print("SURVIVED  %s  (%s)" % (name, fname))
         else:

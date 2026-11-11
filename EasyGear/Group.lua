@@ -684,15 +684,16 @@ end
 function Group.TooltipLines(link)
     local list = Group.Beneficiaries(link)
     if not (list and #list > 0) then return nil end
-    local lines = { { left = L.GROUP_BETTER, color = PURPLE } }
+    local lines = { { left = L.GROUP_BETTER, color = PURPLE, role = "title" } }
     for i = 1, mmin(#list, MAX_TOOLTIP) do
         local e = list[i]
         local right = e.empty and L.NOTHING_EQUIPPED or EG.FmtPct(e.percent or 0)
         if e.needLevel then right = right .. "  " .. sformat(L.GROUP_AT_LEVEL, e.needLevel) end
-        lines[#lines + 1] = { left = Group.Who(e.member), right = right, color = WHITE, rightColor = e.needLevel and YELLOW or GREEN }
+        lines[#lines + 1] = { left = Group.Who(e.member), right = right, color = WHITE, rightColor = e.needLevel and YELLOW or GREEN,
+                              role = "text", rightRole = e.needLevel and "warn" or "good", indent = true }
     end
     if #list > MAX_TOOLTIP then
-        lines[#lines + 1] = { left = sformat(L.GROUP_MORE, #list - MAX_TOOLTIP), color = GREY }
+        lines[#lines + 1] = { left = sformat(L.GROUP_MORE, #list - MAX_TOOLTIP), color = GREY, role = "muted", indent = true }
     end
     return lines
 end
