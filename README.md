@@ -360,8 +360,8 @@ and the exact text of any Lua error (`/console scriptErrors 1` shows them). For 
 Run from the root of this repository:
 
 ```
-lua5.1 tests/run.lua                 # unit tests on a model of the client (Lua 5.1 only), ~430 checks
-python3 tests/mutate.py              # mutation check: breaks the addon in ~570 small ways, the tests must notice
+lua5.1 tests/run.lua                 # unit tests on a model of the client (Lua 5.1 only), ~445 checks
+python3 tests/mutate.py              # mutation check: breaks the addon in ~600 small ways, the tests must notice
                                      # (MUT_SHARD=0/3 ... 2/3 splits it over several processes)
 tools/check.sh <Interface/AddOns of the Forever UI source> [<folder of the Dialogue UI addon>]
                                      # luacheck against a std built from the UI source + checks that every

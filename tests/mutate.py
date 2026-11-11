@@ -640,7 +640,6 @@ MUTATIONS = [
     ('dui matters', 'DialogueUI.lua', 'return item ~= nil and (item.isGear or PickOf(tooltip.owner) ~= nil)', 'return true'),
     ('dui matters gear', 'DialogueUI.lua', '(item.isGear or PickOf(tooltip.owner) ~= nil)', '(PickOf(tooltip.owner) ~= nil)'),
     ('dui matters pick', 'DialogueUI.lua', '(item.isGear or PickOf(tooltip.owner) ~= nil)', '(item.isGear)'),
-    ('dui matters link', 'DialogueUI.lua', 'if type(link) ~= "string" then return false end\n    local item = Items.Get(link)', 'local item = Items.Get(link)'),
     ('dui processor shown', 'DialogueUI.lua', 'if tooltip.IsShown and not tooltip:IsShown() then return false end', ''),
     ('dui processor link', 'DialogueUI.lua', 'if tooltip.GetHyperlink and tooltip:GetHyperlink() ~= itemLink then return false end', ''),
     ('dui state tooltip', 'DialogueUI.lua', '    state.tooltip = tooltip\n    local handled = state.handled', '    local handled = state.handled'),

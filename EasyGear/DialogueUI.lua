@@ -163,8 +163,7 @@ end
 -- Zeigt der offene Tooltip einen Gegenstand, zu dem EasyGear etwas zu sagen hat (Ausruestung, oder die empfohlene Belohnung)?
 local function Matters(tooltip)
     local link = tooltip.GetHyperlink and tooltip:GetHyperlink()
-    if type(link) ~= "string" then return false end
-    local item = Items.Get(link)
+    local item = link and Items.Get(link) or nil
     return item ~= nil and (item.isGear or PickOf(tooltip.owner) ~= nil)
 end
 
