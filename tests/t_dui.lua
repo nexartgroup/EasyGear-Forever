@@ -144,6 +144,108 @@ return function(T)
         T.eq(W.EG.lastError, nil)
     end)
 
+    T.test("dui: what Dialogue UI adds after building a tooltip survives - a required item as the first tooltip, late data, a rebuild", function()
+        local W, D = world({}, function(w) w.I.cloth = F.gear(w, 7070, "Linen Cloth", "", 1, {}, { sellPrice = 5 }) end)
+        local b = D.showQuest({ choices = { { link = W.I.better, context = true }, W.I.weak }, required = { W.I.cloth } })
+        D.tick(0.3)
+        D.hover(b[3])                                        -- the very first item tooltip of the session: a required item (no gear)
+        T.eq(count(D.lines(), "You have 3"), 1, D.text()) T.eq(D.builds, 1, "nothing to add, so nothing is rebuilt")
+        W.EG:InvalidateAll() W.fire("GET_ITEM_INFO_RECEIVED", 7070, true) W.flush()
+        T.eq(D.builds, 1, "and late data do not rebuild what is none of our business") T.eq(count(D.lines(), "You have 3"), 1)
+        D.leave(b[3])
+
+        D.hover(b[1])                                        -- gear: rebuilt once, one frame later, the way Dialogue UI rebuilds itself
+        W.flush()
+        T.eq(count(D.lines(), "EasyGear |"), 1, D.text())
+        T.eq(count(D.lines(), "First-time bonus"), 1, "the line that its OnEnter adds after the build is still there: " .. D.text())
+        local enters = D.enters
+        W.EG:InvalidateAll() W.flush()
+        T.eq(D.enters, enters + 1, "a refresh is its OnEnter again, not a reprocessing") T.eq(count(D.lines(), "First-time bonus"), 1)
+        local lines = D.lines()
+        T.ok(index(lines, "EasyGear |") < index(lines, "Show Comparison") and index(lines, "Show Comparison") < index(lines, "First-time bonus"),
+            "the block, then Dialogue UI's hint, then what its OnEnter adds last: " .. D.text())
+        T.eq(W.EG.lastError, nil)
+    end)
+
+    T.test("dui: the pick line of a reward that is no gear follows the recommendation in an open tooltip, too", function()
+        local W, D = world({})
+        local spec = { choices = { { link = W.I.gem }, { link = W.I.pebble } } }
+        local b = D.showQuest(spec)
+        D.tick(0.3)
+        D.hover(b[2]) D.leave(b[2]) D.hover(b[2])             -- the pebble: not the best (100 against 900)
+        T.eq(count(D.lines(), "best choice"), 0)
+        spec.choices[2].count = 10                             -- ten of them: 1000, so the pebble is the best now
+        D.tick(0.3) W.advance(0)
+        T.eq(checked(b[2]), true)
+        T.eq(count(D.lines(), "EasyGear: best choice (highest vendor price)"), 1, D.text())
+        T.eq(W.EG.lastError, nil)
+    end)
+
+    T.test("dui: a tooltip that is open while the mouse is elsewhere (keyboard) is still rebuilt, by reprocessing", function()
+        local W, D = world({})
+        local b = D.showQuest({ choices = { W.I.better, W.I.weak } })
+        D.tick(0.3)
+        D.hover(b[1]) W.flush()
+        T.eq(count(D.lines(), "EasyGear |"), 1)
+        D.mouseOver = nil                                    -- Dialogue UI's keyboard control: the tooltip stays, the mouse is not on the button
+        W.slash("dui off") W.flush()
+        T.eq(D.tooltip:IsShown(), true) T.eq(count(D.lines(), "EasyGear"), 0, "the block is taken back all the same")
+        W.slash("dui on") W.flush()
+        T.eq(count(D.lines(), "EasyGear |"), 1)
+        T.eq(W.EG.lastError, nil)
+    end)
+
+    T.test("dui: a tooltip that is already closed when the processor comes gets nothing - and is not opened by it", function()
+        local W, D = world({})
+        local b = D.showQuest({ choices = { W.I.gem, W.I.pebble } })       -- the gem is the recommendation: no hook for it, the processor writes
+        D.tick(0.3)
+        D.hover(b[1]) D.leave(b[1])                          -- past the first call
+        b[1].__scripts.OnEnter(b[1]) b[1].__scripts.OnLeave(b[1])          -- the mouse is gone within the frame
+        W.advance(0)
+        T.eq(D.tooltip:IsShown(), false) T.eq(#D.tooltip.rows, 0, "no stray lines in a closed tooltip")
+
+        b[1].__scripts.OnEnter(b[1])                         -- and one that meanwhile shows something else (a hyperlink: no processor for that)
+        D.tooltip:SetHyperlink(W.I.better)
+        W.advance(0)
+        T.eq(count(D.lines(), "EasyGear"), 0, "the line of the gem does not land in the other tooltip: " .. D.text())
+        T.eq(W.EG.lastError, nil)
+    end)
+
+    T.test("dui: the open tooltip drops its pick line even when the hovered button was re-read in the same pass", function()
+        local W, D = world({}, function(w) w.I.cheap = F.gear(w, 7030, "Cheap Chestplate", "INVTYPE_CHEST", 10, { STR = 1 }, { sellPrice = 50 }) end)
+        local spec = { choices = { { link = W.I.better }, { link = W.I.cheap } } }
+        local b = D.showQuest(spec)
+        D.tick(0.3)
+        D.hover(b[1]) W.flush()
+        T.eq(count(D.lines(), "EasyGear: best choice (largest upgrade)"), 1, D.text())
+        spec.choices[1].usable = false                       -- the client's word on the hovered reward changes: it is read anew AND the best moves
+        D.tick(0.3) W.advance(0)
+        T.eq(checked(b[1]), false) T.eq(checked(b[2]), true)
+        T.eq(count(D.lines(), "best choice"), 0, "the line went with the check mark: " .. D.text())
+        T.eq(W.EG.lastError, nil)
+    end)
+
+    T.test("dui: a Dialogue UI without the hook for Pawn is still told when the switch changes (the tooltip is known from the first call)", function()
+        local W, D = world({ noProcessItemExternal = true })
+        local b = D.showQuest({ choices = { W.I.better, W.I.weak } })
+        D.tick(0.3)
+        D.hover(b[1]) W.flush()
+        T.eq(count(D.lines(), "EasyGear |"), 1, D.text())
+        W.slash("dui off") W.flush()
+        T.eq(count(D.lines(), "EasyGear"), 0, "taken back from the open tooltip: " .. D.text())
+        T.eq(W.EG.lastError, nil)
+    end)
+
+    T.test("dui: a failure while the quest window closes does not reach Dialogue UI's Hide", function()
+        local W, D = world({})
+        local b = D.showQuest({ choices = { W.I.better, W.I.weak } })
+        D.tick(0.3)
+        T.eq(checked(b[1]), true)
+        W.EG.Marks.Clear = function() error("boom") end
+        D.hide()                                             -- the model calls the OnHide scripts of the window's children, unprotected, like the client
+        T.ok(W.EG.lastError and tostring(W.EG.lastError.err):find("boom", 1, true), "reported for /eg status")
+    end)
+
     T.test("dui: two displays within one frame - the processor serves the later one and does not take it for the earlier", function()
         local W, D = world({}, function(w)
             w.I.bag = F.gear(w, 7060, "Big Bag", "INVTYPE_BAG", 10, {}, { sellPrice = 500, typeText = "Bag" })
@@ -275,6 +377,7 @@ return function(T)
         T.eq(lines[#lines], "EasyGear: best choice (highest vendor price)", D.text())
         T.eq(count(lines, "EasyGear"), 1)
         T.eq(D.relayouts, 1, "the processor changed the tooltip: Dialogue UI lays it out again")
+        T.eq(D.builds, 1, "and nothing was rebuilt for it, not even at the first tooltip of the session")
         T.eq(count(hoverText(W, D, b[1]), "EasyGear"), 0, "the other one has nothing to say")
         T.eq(W.EG.lastError, nil)
     end)
@@ -807,8 +910,9 @@ return function(T)
         end)
         local buttons = {}
         for step = 1, 60 do
-            local action = rnd(8)
+            local action = rnd(11)
             if action == 1 or action == 2 then
+                D.tooltip:Hide()                                     -- a new quest: the old buttons are gone, so is their tooltip
                 local choices, rewards = {}, {}
                 for _ = 1, rnd(4) do choices[#choices + 1] = W.I.list[rnd(#W.I.list)] end
                 for _ = 1, rnd(2) - 1 do rewards[#rewards + 1] = W.I.list[rnd(#W.I.list)] end
@@ -833,12 +937,30 @@ return function(T)
                 W.EG:Set(({ "showDialogueUI", "showTooltip", "showQuestIcons", "tooltipDiff" })[rnd(4)], rnd(3) ~= 1)
             elseif action == 7 then
                 D.hide() D.show()
+            elseif action == 8 and #buttons > 0 then               -- the mouse is on a button for less than a frame
+                local bt = buttons[rnd(#buttons)]
+                bt.__scripts.OnEnter(bt) bt.__scripts.OnLeave(bt)
+                W.advance(0)
+            elseif action == 9 and #buttons > 0 then               -- two buttons within one frame (the processor comes once)
+                local first, second = buttons[rnd(#buttons)], buttons[rnd(#buttons)]
+                first.__scripts.OnEnter(first) second.__scripts.OnEnter(second)
+            elseif action == 10 then
+                D.mouseOver = nil                                  -- keyboard control: the tooltip stays, the mouse is not on the button
             else
                 W.flush()
             end
             D.tick(0.3)
             local P = D.processor
             T.eq(P.anyDelayedTrigger == true, P.triggerQueue ~= nil, "the queue of Dialogue UI is whole, step " .. step)
+            -- the settled tooltip: nothing in a closed one; in an open one a single block, and only for gear while switched on
+            if not D.tooltip:IsShown() then
+                T.eq(#D.tooltip.rows, 0, "no stray lines in a closed tooltip, step " .. step .. ": " .. D.text())
+            else
+                local item = D.tooltip.hyperlink and W.EG.Items.Get(D.tooltip.hyperlink)
+                local on = W.EG:Get("showDialogueUI") ~= false and W.EG:Get("showTooltip") ~= false
+                T.eq(count(D.lines(), "EasyGear |"), (item and item.isGear and on) and 1 or 0, "the block of an open tooltip, step " .. step .. ": " .. D.text())
+                T.ok(count(D.lines(), "EasyGear: ") <= 1, "one pick line at most, step " .. step .. ": " .. D.text())
+            end
             local shown, shownIndex = 0, nil
             for _, bt in ipairs(buttons) do if checked(bt) then shown = shown + 1 shownIndex = bt.index end end
             T.ok(shown <= 1, "at most one best choice on screen, step " .. step)

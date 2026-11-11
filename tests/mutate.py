@@ -557,7 +557,7 @@ MUTATIONS = [
     ('dui driver tick slow', 'DialogueUI.lua', 'local TICK = 0.25', 'local TICK = 1.0'),
     ('dui driver tick fast', 'DialogueUI.lua', 'local TICK = 0.25', 'local TICK = 0.05'),
     ('dui driver first pass', 'DialogueUI.lua', 'driver:SetScript("OnShow", function() elapsed = TICK end)', 'driver:SetScript("OnShow", function() end)'),
-    ('dui driver hide', 'DialogueUI.lua', 'driver:SetScript("OnHide", function() ClearAll() end)', 'driver:SetScript("OnHide", function() end)'),
+    ('dui driver hide', 'DialogueUI.lua', 'driver:SetScript("OnHide", function() EG:Try("dialogueui", ClearAll) end)', 'driver:SetScript("OnHide", function() end)'),
     ('dui release hook', 'DialogueUI.lua', '            EG:Try("dialogueui", ClearAll)\n        end)', '        end)'),
     ('dui wrapper identity', 'DialogueUI.lua', 'return state.wrapper ~= nil and tooltip.ProcessItemExternal == state.wrapper', 'return state.wrapper ~= nil'),
     ('dui wrapper kept', 'DialogueUI.lua', 'state.wrapper, state.tooltip = wrapper, tooltip', 'state.tooltip = tooltip'),
@@ -609,9 +609,6 @@ MUTATIONS = [
     ('group more role', 'Group.lua', 'color = GREY, role = "muted", indent = true }', 'color = GREY, role = "text", indent = true }'),
     ('group more indent', 'Group.lua', 'color = GREY, role = "muted", indent = true }', 'color = GREY, role = "muted" }'),
     # ---- Dialogue UI: findings of the independent review (rebuild outside the loop, one block per build, status, refresh)
-    ('dui rebuild inside the loop', 'DialogueUI.lua', 'Wrap(tooltip)\n        EG:After(0, RefreshTooltip)', 'Wrap(tooltip)\n        RefreshTooltip()'),
-    ('dui rebuild after wrap', 'DialogueUI.lua', 'EG:After(0, RefreshTooltip)\n        return false', 'return false'),
-    ('dui wrap answer', 'DialogueUI.lua', 'EG:After(0, RefreshTooltip)\n        return false', 'EG:After(0, RefreshTooltip)\n        return true'),
     ('dui wrap once', 'DialogueUI.lua', 'if not IsWrapped(tooltip) and state.wraps < MAX_WRAPS', 'if state.wraps < MAX_WRAPS'),
     ('dui wrap limit', 'DialogueUI.lua', 'state.wraps < MAX_WRAPS', 'true'),
     ('dui wrap limit value', 'DialogueUI.lua', 'local MAX_WRAPS = 5', 'local MAX_WRAPS = 50'),
@@ -632,6 +629,23 @@ MUTATIONS = [
     ('dui status quest off', 'DialogueUI.lua', 'if not Marks.Enabled("quest") then off[#off + 1] = L.OPT_QUESTREWARD .. ": " .. L.SET_OFF end', ''),
     ('dui status separator', 'DialogueUI.lua', 'tconcat(off, "; ")', 'tconcat(off, "")'),
     ('dui status problems first', 'DialogueUI.lua', 'if #state.problems > 0 then return "Dialogue UI: " .. L.DUI_PROBLEM .. " (" .. tconcat(state.problems, ", ") .. ")" end\n    if not Active()', 'if not Active() then return "Dialogue UI: " .. L.DUI_OFF end\n    if #state.problems > 0 then return "Dialogue UI: " .. L.DUI_PROBLEM .. " (" .. tconcat(state.problems, ", ") .. ")" end\n    if false'),
+    # ---- Dialogue UI: findings of the second review (rebuild by the button's own OnEnter, only what matters, closed tooltips)
+    ('dui rebuild inside the loop', 'DialogueUI.lua', 'EG:After(0, RefreshTooltip)         -- Ausruestung', 'RefreshTooltip()         -- Ausruestung'),
+    ('dui rebuild after wrap', 'DialogueUI.lua', '            EG:After(0, RefreshTooltip)         -- Ausruestung: der Haken schreibt den Block im neuen Aufbau\n            return false', '            return false'),
+    ('dui wrap answer', 'DialogueUI.lua', 'im neuen Aufbau\n            return false', 'im neuen Aufbau\n            return true'),
+    ('dui first call gear only', 'DialogueUI.lua', 'if item and item.isGear then\n            EG:After(0, RefreshTooltip)', 'if item then\n            EG:After(0, RefreshTooltip)'),
+    ('dui rebuild native', 'DialogueUI.lua', '        tooltip:ReTriggerOnEnter()\n    elseif', '        tooltip:ReprocessInfo()\n    elseif'),
+    ('dui rebuild needs mouse', 'DialogueUI.lua', 'owner.IsMouseOver and owner:IsMouseOver()', 'true'),
+    ('dui rebuild fallback', 'DialogueUI.lua', '    elseif type(tooltip.ReprocessInfo) == "function" then\n        tooltip:ReprocessInfo()', '    elseif false then\n        tooltip:ReprocessInfo()'),
+    ('dui matters', 'DialogueUI.lua', 'return item ~= nil and (item.isGear or PickOf(tooltip.owner) ~= nil)', 'return true'),
+    ('dui matters gear', 'DialogueUI.lua', '(item.isGear or PickOf(tooltip.owner) ~= nil)', '(PickOf(tooltip.owner) ~= nil)'),
+    ('dui matters pick', 'DialogueUI.lua', '(item.isGear or PickOf(tooltip.owner) ~= nil)', '(item.isGear)'),
+    ('dui matters link', 'DialogueUI.lua', 'if type(link) ~= "string" then return false end\n    local item = Items.Get(link)', 'local item = Items.Get(link)'),
+    ('dui processor shown', 'DialogueUI.lua', 'if tooltip.IsShown and not tooltip:IsShown() then return false end', ''),
+    ('dui processor link', 'DialogueUI.lua', 'if tooltip.GetHyperlink and tooltip:GetHyperlink() ~= itemLink then return false end', ''),
+    ('dui state tooltip', 'DialogueUI.lua', '    state.tooltip = tooltip\n    local handled = state.handled', '    local handled = state.handled'),
+    ('dui pick before', 'DialogueUI.lua', 'local before = PickKind(owner)              -- vor allem anderen', 'local before = false              -- vor allem anderen'),
+    ('dui OnHide try', 'DialogueUI.lua', 'driver:SetScript("OnHide", function() EG:Try("dialogueui", ClearAll) end)', 'driver:SetScript("OnHide", function() ClearAll() end)'),
 ]
 
 

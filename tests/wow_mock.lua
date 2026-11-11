@@ -1306,7 +1306,7 @@ function Mock.new(opts)
     function H.installDialogueUI(options)
         options = options or {}
         self.addons.DialogueUI = true
-        local D = { processors = {}, upgrades = {}, buttons = {}, hints = 0, builds = 0, calls = {}, relayouts = 0 }
+        local D = { processors = {}, upgrades = {}, buttons = {}, hints = 0, builds = 0, calls = {}, relayouts = 0, enters = 0 }
         env.DialogueUI_DB = { TooltipShowItemComparison = options.expanded and true or false }
         env.DialogueUIAPI = {}
 
@@ -1382,7 +1382,16 @@ function Mock.new(opts)
         if options.missingMethods then
             for name in pairs(options.missingMethods) do tip[name] = nil end
         end
-        tip:SetScript("OnHide", function(self) self.tooltipData, self.tooltipInfo = nil, nil end)
+        tip:SetScript("OnHide", function(self)
+            self.tooltipData, self.tooltipInfo = nil, nil                    -- SharedTooltip:SetScript("OnHide")
+            self.rows, self.hasHotkey = {}, false                             -- TooltipBaseMixin:Hide: ClearLines (and the anchors)
+        end)
+        -- TooltipBaseMixin:ReTriggerOnEnter: the OnEnter of the hovered owner again
+        function tip:ReTriggerOnEnter()
+            if self:IsVisible() and self.owner and self.owner.OnEnter and self.owner:IsShown() and self.owner:IsMouseOver() then
+                self.owner:OnEnter()
+            end
+        end
         function tip:SetOwner(owner) self.owner = owner end
         function tip:GetHyperlink() return self.hyperlink end
         function tip:GetItemID() return self.hyperlink and tonumber(self.hyperlink:match("item:(%d+)")) end
@@ -1507,6 +1516,10 @@ function Mock.new(opts)
                     self.rewardAmount = 1
                     self.isEquippable = (it and it.equipLoc and it.equipLoc ~= "") or nil
                     if self.isEquippable and options.nativeArrow and options.nativeArrow[link] then self:ShowUpgradeIcon() end
+                    self.context = nil
+                    local list = (kind == "choice") and D.spec.choices or ((kind == "reward") and D.spec.rewards or D.spec.required)
+                    local c = list and list[index]
+                    if type(c) == "table" and c.context then self.context = true end
                 end
                 b.itemFromAny = self.itemFromAny
                 function b:DoesButtonHaveMarker(name) return self.markers ~= nil and self.markers[name] == true end
@@ -1517,12 +1530,25 @@ function Mock.new(opts)
                     D.upgrades[#D.upgrades + 1] = { button = self, animation = playAnimation }
                 end
                 function b:OnRelease() self:ClearAllPoints() self:Hide() self.markers = nil end
-                b:SetScript("OnEnter", function(self)
+                function b:IsMouseOver() return D.mouseOver == self and self:IsShown() end
+                -- CustomTooltip_OnEnter: hide, build, then add lines AFTER the build (not part of the tooltip data)
+                function b:OnEnter()
                     tip:Hide()
                     tip:SetOwner(self, "ANCHOR_NONE")
                     tip:SetQuestItem(self.type, self.index, true)
-                end)
-                b:SetScript("OnLeave", function() tip:Hide() end)
+                    if self.type == "required" then                                     -- "You have N" for a required item
+                        tip:AddLeftLine("You have 3", 1, 0.82, 0)
+                        tip:Show()
+                    end
+                    if self.context then                                                -- the reward context line (bonus)
+                        tip:AddBlankLine()
+                        tip:AddLeftLine("First-time bonus", 0.4, 1, 0.4)
+                        tip:Show()
+                    end
+                    D.enters = D.enters + 1
+                end
+                b:SetScript("OnEnter", function(self) D.mouseOver = self self:OnEnter() end)
+                b:SetScript("OnLeave", function(self) if D.mouseOver == self then D.mouseOver = nil end tip:Hide() end)
                 return b
             end
             if not options.noItemButtonPool then
@@ -1545,9 +1571,11 @@ function Mock.new(opts)
             -- (a currency reward is a button of type "reward" and objectType "currency": same type name, other kind of index)
             function D.showQuest(spec)
                 spec = spec or {}
-                local choices, rewards = spec.choices or {}, spec.rewards or {}
+                spec.choices, spec.rewards, spec.required = spec.choices or {}, spec.rewards or {}, spec.required or {}
+                D.spec = spec
+                local choices, rewards, required = spec.choices, spec.rewards, spec.required
                 local function entry(kind, i)
-                    local list = (kind == "choice") and choices or ((kind == "reward") and rewards or {})
+                    local list = (kind == "choice") and choices or ((kind == "reward") and rewards or required)
                     local c = list[i]
                     if type(c) == "table" then return c end
                     return c and { link = c } or nil
@@ -1568,6 +1596,11 @@ function Mock.new(opts)
                 for i = 1, #rewards do
                     local b = frame.itemButtonPool:Acquire()
                     b:SetItem("reward", i)
+                    D.buttons[#D.buttons + 1] = b
+                end
+                for i = 1, #required do
+                    local b = frame.itemButtonPool:Acquire()
+                    b:SetItem("required", i)
                     D.buttons[#D.buttons + 1] = b
                 end
                 for i = 1, spec.currencies or 0 do
@@ -1600,6 +1633,7 @@ function Mock.new(opts)
             end
             function D.hover(button) button.__scripts.OnEnter(button) H.advance(0) end
             function D.leave(button) button.__scripts.OnLeave(button) end
+            D.spec = { choices = {}, rewards = {}, required = {} }
         end
         return D
     end

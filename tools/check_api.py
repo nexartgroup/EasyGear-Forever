@@ -39,7 +39,7 @@ THIRD_PARTY = {"Baganator", "Syndicator", "EllesmereUI", "EUI_Bags", "DialogueUI
 # methods of Dialogue UI's own objects (tooltip, quest frame, reward buttons, object pools) that DialogueUI.lua calls; they
 # are not in the Forever UI source - tools/check_dui.py checks them against the source of Dialogue UI itself
 THIRD_PARTY_METHODS = {"AddLeftLine", "AddRightLine", "AddBlankLine", "ReprocessInfo", "ProcessActiveObjects",
-                       "DoesButtonHaveMarker", "ShowUpgradeIcon", "IsChoosingReward"}
+                       "DoesButtonHaveMarker", "ShowUpgradeIcon", "IsChoosingReward", "ReTriggerOnEnter", "GetHyperlink"}
 
 STRING_METHODS = {"find", "format", "gmatch", "gsub", "len", "lower", "match", "rep", "reverse", "sub", "upper", "byte"}
 # Methods of Lua tables from the standard library or of objects that are not UI objects

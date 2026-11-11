@@ -160,14 +160,38 @@ local function AddBlock(tooltip, link, owner)
     return any
 end
 
+-- Zeigt der offene Tooltip einen Gegenstand, zu dem EasyGear etwas zu sagen hat (Ausruestung, oder die empfohlene Belohnung)?
+local function Matters(tooltip)
+    local link = tooltip.GetHyperlink and tooltip:GetHyperlink()
+    if type(link) ~= "string" then return false end
+    local item = Items.Get(link)
+    return item ~= nil and (item.isGear or PickOf(tooltip.owner) ~= nil)
+end
+
+--[[ Den offenen Tooltip neu bauen lassen. Wo der Knopf unter der Maus liegt, geht das auf dem Weg, den Dialogue UI selbst
+     nimmt, wenn Daten spaeter eintreffen (ReTriggerOnEnter: das ganze OnEnter des Knopfes noch einmal) - dann bleibt, was
+     Dialogue UI nach dem Aufbau anhaengt ("Du hast N", der Hinweis auf den Bonus der ersten Abgabe). Sonst baut ReprocessInfo
+     aus den vorhandenen Daten neu (das tut auch die Umschalttaste von Dialogue UI).                                          ]]
+local function Rebuild(tooltip)
+    local owner = tooltip.owner
+    if type(tooltip.ReTriggerOnEnter) == "function" and type(owner) == "table" and type(owner.OnEnter) == "function"
+       and owner.IsShown and owner:IsShown() and owner.IsMouseOver and owner:IsMouseOver() then
+        tooltip:ReTriggerOnEnter()
+    elseif type(tooltip.ReprocessInfo) == "function" then
+        tooltip:ReprocessInfo()
+    end
+end
+
 -- Daten, die erst spaeter ankommen (ein Gegenstand wird geladen, eine Einstellung aendert sich, die Empfehlung wechselt):
 -- der offene Tooltip baut sich neu, damit der Block erscheint, sich aendert oder verschwindet. Nichts tun, wo es nichts zu
--- setzen und nichts zurueckzunehmen gibt: jedes Neubauen laesst den Tooltip von Dialogue UI neu einblenden.
+-- setzen und nichts zurueckzunehmen gibt: jedes Neubauen laesst den Tooltip von Dialogue UI neu einblenden (und ein
+-- Tooltip, der keinen Gegenstand von uns zeigt - Waehrung, Zauber, Pflichtgegenstand -, geht uns nichts an).
 local function RefreshTooltip()
     local tooltip = state.tooltip
-    if not (tooltip and tooltip.IsShown and tooltip:IsShown() and type(tooltip.ReprocessInfo) == "function") then return end
+    if not (tooltip and tooltip.IsShown and tooltip:IsShown()) then return end     -- Dialogue UI leert beim Schliessen die Daten
+    if not Matters(tooltip) then return end
     if not (Enabled() or state.wrote) then return end
-    tooltip:ReprocessInfo()
+    Rebuild(tooltip)
 end
 
 -- EasyGear haengt sich hinter das, was schon an tooltip.ProcessItemExternal haengt (Pawn setzt dort seine Zeilen). Ersetzt
@@ -203,15 +227,23 @@ local function OnSetItem(tooltip, _, itemLink)
     if type(tooltip) ~= "table" then return false end
     if not state.checked and not CheckTooltip(tooltip) then return false end
     if state.broken then return false end
+    state.tooltip = tooltip
+    local handled = state.handled
+    state.handled = nil
     if not IsWrapped(tooltip) and state.wraps < MAX_WRAPS
        and type(tooltip.ProcessItemExternal) == "function" and type(tooltip.ReprocessInfo) == "function" then
         Wrap(tooltip)
-        EG:After(0, RefreshTooltip)
-        return false
+        local item = Enabled() and itemLink and Items.Get(itemLink) or nil
+        if item and item.isGear then
+            EG:After(0, RefreshTooltip)         -- Ausruestung: der Haken schreibt den Block im neuen Aufbau
+            return false
+        end
     end
-    local handled = state.handled
-    state.handled = nil
     if handled ~= nil and handled == itemLink then return false end      -- der Haken hat den Block in diesem Aufbau gesetzt
+    -- Dialogue UI ruft uns ein Bild nach dem Aufbau: war die Maus nur kurz da, ist der Tooltip schon wieder zu (Schliessen
+    -- leert Zeilen und Anker) oder zeigt etwas anderes - dann gehoert die Zeile nirgends hin, und true wuerde ihn zeigen
+    if tooltip.IsShown and not tooltip:IsShown() then return false end
+    if tooltip.GetHyperlink and tooltip:GetHyperlink() ~= itemLink then return false end
     return AddBlock(tooltip, itemLink, tooltip.owner)
 end
 
@@ -279,6 +311,8 @@ local function Update(dialog)
         return
     end
 
+    local owner = state.tooltip and state.tooltip.owner
+    local before = PickKind(owner)              -- vor allem anderen: das Anmelden neu belegter Knoepfe setzt die Wahl zurueck
     local entries, choiceButtons = {}, {}
     for _, button in ipairs(buttons) do
         local link = RewardLink(button.type, button.index)
@@ -300,8 +334,6 @@ local function Update(dialog)
 
     if dirty then
         -- die beste Wahl (nur bei mehreren Belohnungen zur Auswahl); die Zeile "beste Wahl" im offenen Tooltip folgt ihr
-        local owner = state.tooltip and state.tooltip.owner
-        local before = PickKind(owner)
         local best, kind
         if #entries >= 2 then best, kind = Recommend.BestReward(entries) end
         for idx, button in pairs(choiceButtons) do Marks.SetBest(button, best ~= nil and idx == best, kind) end
@@ -336,7 +368,7 @@ local function StartDriver(dialog)
         EG:Try("dialogueui", Update, dialog)
     end)
     driver:SetScript("OnShow", function() elapsed = TICK end)
-    driver:SetScript("OnHide", function() ClearAll() end)
+    driver:SetScript("OnHide", function() EG:Try("dialogueui", ClearAll) end)       -- Dialogue UI ruft das in seinem Hide()
     -- Dialogue UI raeumt bei jedem Wechsel der Quest alle Knoepfe weg und belegt sie neu: nichts soll stehen bleiben
     if type(dialog.ReleaseAllObjects) == "function" and hooksecurefunc then
         pcall(hooksecurefunc, dialog, "ReleaseAllObjects", function()
