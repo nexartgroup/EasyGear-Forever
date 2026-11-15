@@ -129,6 +129,56 @@ return function(T)
         T.eq(#shown(V), 0, "it was worn at the last look into the bags")
     end)
 
+    T.test("toast: a second piece of something worn is new - the same ring again, for the other finger", function()
+        local W = world()
+        W.equip(11, W.I.ring) W.fire("PLAYER_EQUIPMENT_CHANGED", 11) W.flush()
+        W.fire("BAG_UPDATE_DELAYED")
+        T.eq(W.EG.Score.UpgradeState(W.I.ring), "UPGRADE", "a second one beats what is on the other finger")
+        loot(W, 1, W.I.ring)
+        T.eq(#shown(W), 1, "worn once, looted once more: announced")
+        T.has(shown(W)[1].detail:GetText(), "Finger 2")
+        -- taking one of two off is still no gain: both are worn, one goes to the bags
+        local V = world()
+        V.equip(11, V.I.ring) V.equip(12, V.I.ring) V.fire("PLAYER_EQUIPMENT_CHANGED", 11) V.flush()
+        V.fire("BAG_UPDATE_DELAYED")
+        V.equip(12, nil) V.fire("PLAYER_EQUIPMENT_CHANGED", 12)
+        loot(V, 1, V.I.ring)
+        T.eq(#shown(V), 0, "one of the two rings was taken off")
+        -- taken off AND one more looted in the same moment: one of the two in the bags is new
+        local U = world()
+        U.equip(11, U.I.ring) U.fire("PLAYER_EQUIPMENT_CHANGED", 11) U.flush()
+        U.fire("BAG_UPDATE_DELAYED")
+        U.equip(11, nil) U.fire("PLAYER_EQUIPMENT_CHANGED", 11)
+        U.put(0, 1, U.I.ring) U.put(0, 2, U.I.ring)
+        U.fire("BAG_UPDATE_DELAYED")
+        T.eq(#shown(U), 1, "two arrive, one was worn before: one is new")
+        for _, w in ipairs({ W, V, U }) do T.eq(w.EG.lastError, nil) end
+    end)
+
+    T.test("toast: what is worn is known by its item, not its link - a link that changed on the body (a level-up) does not make it new when taken off", function()
+        local W = world()
+        local leveled = W.I.chest:gsub("item:(%d+)", "item:%1:0:0:0:0:0:0:0:61")
+        T.ok(leveled ~= W.I.chest)
+        W.equip(5, leveled)                              -- the client rewrites the link of worn gear; no event tells of it
+        W.equip(5, nil) W.fire("PLAYER_EQUIPMENT_CHANGED", 5)
+        loot(W, 1, leveled)
+        T.eq(W.EG.Score.UpgradeState(leveled), "UPGRADE", "it beats the empty slot")
+        T.eq(#shown(W), 0, "the chest piece that was worn all along")
+        T.eq(W.EG.lastError, nil)
+    end)
+
+    T.test("toast: gear put on without passing through the bags (from the bank, from a vendor) is not new when it is taken off", function()
+        local W = world()
+        W.equip(5, W.I.better) W.fire("PLAYER_EQUIPMENT_CHANGED", 5) W.flush()     -- no look into the bags in between
+        W.equip(5, nil) W.fire("PLAYER_EQUIPMENT_CHANGED", 5)
+        loot(W, 1, W.I.better)
+        T.eq(W.EG.Score.UpgradeState(W.I.better), "UPGRADE")
+        T.eq(#shown(W), 0, "it was worn a moment ago")
+        W.advance(120)
+        loot(W, 2, W.I.better)
+        T.eq(#shown(W), 1, "a second one that drops later is new: the worn one is long counted")
+    end)
+
     T.test("toast: moving an item between bags or changing its link (an enchant) is not getting a new one", function()
         local W = world(function(w) w.bag(1, 8, {}) end)
         W.EG:Set("showToast", false)
@@ -302,6 +352,8 @@ return function(T)
         T.eq(f:IsShown(), true, "the toast stays until its time is up")
         f.__scripts.OnClick(f, "RightButton")
         T.eq(f:IsShown(), false) T.eq(#shown(W), 0)
+        T.eq(W.env.EasyGearCharDB.toast, nil, "closing a toast that was not dragged saves no place")
+        T.eq(W.env.EasyGearToastAnchor.__moving, nil, "and touches no movement")
     end)
 
     T.test("toast: dragging moves the place of the toasts; it is remembered, and reset puts it back", function()
@@ -315,6 +367,7 @@ return function(T)
         T.eq(anchor.__moving, false)
         local saved = W.env.EasyGearCharDB.toast
         T.eq(saved.point, "BOTTOMRIGHT") T.eq(saved.x, -300) T.eq(saved.y, 200)
+        T.eq(saved.rel, "BOTTOMRIGHT", "the point of the screen it is measured from")
 
         W.clearChat() W.slash("toast reset")
         T.eq(W.env.EasyGearCharDB.toast, nil) T.eq(anchor:GetPoint(1), "TOP") T.eq(select(5, anchor:GetPoint(1)), -170)
@@ -323,10 +376,64 @@ return function(T)
         -- a saved place is used at the next login
         local V = world(function(w) w.env.EasyGearCharDB = { toast = { point = "LEFT", x = 40, y = -20 } } end)
         loot(V, 1, V.I.better)
-        local p, _, _, x, y = V.env.EasyGearToastAnchor:GetPoint(1)
-        T.eq(p, "LEFT") T.eq(x, 40) T.eq(y, -20)
+        local p, _, rp, x, y = V.env.EasyGearToastAnchor:GetPoint(1)
+        T.eq(p, "LEFT") T.eq(rp, "LEFT") T.eq(x, 40) T.eq(y, -20)
         V.slash("reset")
         T.eq(V.env.EasyGearToastAnchor:GetPoint(1), "TOP", "/eg reset puts it back as well")
+        -- the client may measure a moved frame from another point of the screen than the frame's own
+        local U = world(function(w) w.env.EasyGearCharDB = { toast = { point = "TOP", rel = "CENTER", x = 12, y = 90 } } end)
+        loot(U, 1, U.I.better)
+        local up, _, urel, ux, uy = U.env.EasyGearToastAnchor:GetPoint(1)
+        T.eq(up, "TOP") T.eq(urel, "CENTER") T.eq(ux, 12) T.eq(uy, 90)
+    end)
+
+    T.test("toast: while it is dragged the time stands; a toast that goes while dragged lets go of the place and remembers it", function()
+        local W = world()
+        loot(W, 1, W.I.better)
+        loot(W, 2, W.I.ring)
+        local f, anchor = shown(W)[1], W.env.EasyGearToastAnchor
+        W.tick(0.1)                                      -- grabbed while it still fades in
+        f.__scripts.OnDragStart(f)
+        f.__scripts.OnLeave(f)                           -- a fast pull: the mouse is ahead of the toast
+        W.tick(30)
+        T.eq(f:IsShown(), true, "held while dragged") T.eq(f.__alpha, 1, "and fully visible, wherever its fading was")
+        T.eq(#shown(W), 1, "the other one ran out meanwhile")
+        anchor:ClearAllPoints() anchor:SetPoint("LEFT", W.env.UIParent, "LEFT", 55, 66)
+        f.__scripts.OnClick(f, "RightButton")            -- closed in mid-drag: the client sends no OnDragStop for a hidden frame
+        T.eq(f:IsShown(), false)
+        T.eq(anchor.__moving, false, "the place no longer follows the mouse")
+        T.eq(W.env.EasyGearCharDB.toast.point, "LEFT") T.eq(W.env.EasyGearCharDB.toast.x, 55, "and is remembered where it was dropped")
+        -- the frame is used again: it does not think it is still dragged
+        W.advance(120)
+        loot(W, 3, W.I.better)
+        local again = shown(W)[1]
+        T.eq(again, f, "the same frame from the pool") T.eq(again.dragging, false)
+        W.tick(16)
+        T.eq(#shown(W), 0, "its time runs again")
+        -- switched off in mid-drag: the same
+        loot(W, 4, W.I.helm)
+        local g = shown(W)[1]
+        g.__scripts.OnDragStart(g)
+        T.eq(anchor.__moving, true)
+        W.slash("toast off") W.flush()
+        T.eq(#shown(W), 0) T.eq(anchor.__moving, false)
+        T.eq(W.EG.lastError, nil)
+    end)
+
+    T.test("toast: the cards lie above EasyGear's windows and below the game's dialogs", function()
+        local W = world()
+        loot(W, 1, W.I.better)
+        local f = shown(W)[1]
+        T.eq(f:GetFrameStrata(), "HIGH", "never over a dialog of the game (those are DIALOG)")
+        T.eq(f:GetFrameLevel(), 200, "far up in its strata")
+        T.eq(f.icon:GetFrameLevel(), 201, "its parts with it")
+        W.EG.Window.SetItem(W.I.better)
+        local win = W.env.EasyGearWindow
+        T.eq(win:GetFrameStrata(), "HIGH")
+        T.ok(win:GetFrameLevel() < 200 - 20, "a window nobody clicked lies below the card with all its parts")
+        T.eq(win:IsToplevel(), true, "a click brings a window to the front - whole, not in parts")
+        W.EG.ProfileWindow.Open()
+        T.eq(W.env.EasyGearProfileWindow:IsToplevel(), true)
     end)
 
     ------------------------------------------------------------------ settings and commands

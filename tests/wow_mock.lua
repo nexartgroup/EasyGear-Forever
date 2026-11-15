@@ -176,9 +176,28 @@ function Region:SetAutoFocus() end
 function Region:ClearFocus() end
 function Region:HighlightText() self.__highlighted = true end
 function Region:SetBlendMode() end
-function Region:SetFrameStrata() end
-function Region:SetFrameLevel(l) self.__level = l end
-function Region:GetFrameLevel() return self.__level or 1 end
+function Region:SetFrameStrata(strata) self.__strata = strata end
+function Region:GetFrameStrata()
+    local f = self
+    while f do
+        if f.__strata then return f.__strata end
+        f = f.__parent
+    end
+    return "MEDIUM"
+end
+-- a frame's level: the one set, else one above its parent's (as the client gives a new child)
+function Region:SetFrameLevel(l)
+    assert(type(l) == "number" and l >= 0 and l <= 10000, "SetFrameLevel: a level from 0 to 10000 expected")
+    self.__level = l
+end
+function Region:GetFrameLevel()
+    if self.__level then return self.__level end
+    local parent = self.__parent
+    if parent then return parent:GetFrameLevel() + 1 end
+    return 1
+end
+function Region:SetToplevel(on) self.__toplevel = on and true or false end
+function Region:IsToplevel() return self.__toplevel or false end
 function Region:SetParent(p) self.__parent = p end
 function Region:GetAlpha() return self.__alpha end
 -- the child frames (regions - textures and font strings - come from GetRegions)
@@ -1698,58 +1717,196 @@ function Mock.new(opts)
            * no interface for other addons; the feed's frame ("anchor") is reachable through the unlock element
              EllesmereUI._unlockRegisteredElements.EUI_LootFeed, whose getFrame() builds and returns the anchor while the
              feature is on and returns nil while it is off
-           * rows are nameless child frames of the anchor, made by NewRow (bg, bar, icon, iconBg, badge, name, sub, value),
-             pooled: Release hides a row and clears r.key / r.data, Push takes one from the pool (or the oldest shown one
-             when Max Rows are in use), sets r.key / r.data and THEN fills it - Fill sets the icon first, the texts after
-           * a repeated gain of the same thing refills its row (the amount adds up); StyleRow hides name and value of the
-             tiles of the Icon Tray style and shows the badge; the font of the second line is the feed's own, two sizes
-             smaller than the name; an item the client does not have yet gets its row when it has loaded
+           * rows are nameless child frames of the anchor, made by NewRow (bg, bar, icon, iconBg, badge, name, sub, value;
+             the value hangs at the right, vertically centred; the second line runs from the icon to the value), pooled:
+             Release hides a row and clears r.key / r.data / r.history, Push takes one from the pool (or the oldest shown
+             one when Max Rows are in use), sets r.key / r.data and THEN fills it
+           * Fill sets icon, name, sub (text and shown), value, badge in this order - the badge text last - and then hangs
+             the name in anew (above the second line, or centred without one); Box rows show the one-line form (flat)
+             without a second line, tiles of the Icon Tray none either
+           * the row's border is a child frame one level above the row (PP.CreateBorder); with a border texture chosen
+             there is a second one (r.lootBorder), over the row or - Border Behind - below it
+           * a repeated gain of the same thing refills its row (the amount adds up); StyleRow sizes and places the icon
+             per style, hides name and value of the tiles of the Icon Tray style and shows the badge; the font of the
+             second line is the feed's own, two sizes smaller than the name; an item the client does not have yet gets
+             its row when it has loaded
+           * keys: "item:<link>" for what the player got, "money", "roll:<encounter>:<n>" for what somebody else won
+             (that row carries the item's link too); in the history view the rows are "history:<n>" and show kept
+             entries (the first key is in entry.key)
            * the pinned tracker row is a row as well (r.pinned, data without a link); other children are not rows
-         options: enabled = false, style = "BAR" | "BOX" | "TRAY" | "TOAST", maxRows, rowHeight, tracker, noRegistry    ]]
+         options: enabled = false, style = "BAR" | "BOX" | "TRAY" | "TOAST", maxRows, rowHeight, textSize, width, barWidth,
+                  ilvl = false (Show Item Level off), borderTexture, borderBehind, tracker, noRegistry                  ]]
+    --[[ Where a region lies: left, bottom, width, height in pixels of a 1280 x 800 screen, worked out from its
+         points as the client does it. An edge decides before a centre (a text hung in by TOPLEFT and RIGHT starts at
+         that top and ends at that right - EllesmereUI's Loot Feed relies on it); a font string without a width of
+         its own is as wide as its text and as high as its font.                                                    ]]
+    local HF = { LEFT = 0, CENTER = 0.5, RIGHT = 1, TOP = 0.5, BOTTOM = 0.5, TOPLEFT = 0, TOPRIGHT = 1, BOTTOMLEFT = 0, BOTTOMRIGHT = 1 }
+    local VF = { LEFT = 0.5, CENTER = 0.5, RIGHT = 0.5, TOP = 1, BOTTOM = 0, TOPLEFT = 1, TOPRIGHT = 1, BOTTOMLEFT = 0, BOTTOMRIGHT = 0 }
+    local function solve(cons, size)
+        local low, high, mid
+        for _, c in ipairs(cons) do
+            if c[1] == 0 then low = low or c[2] elseif c[1] == 1 then high = high or c[2] else mid = mid or c[2] end
+        end
+        if low and high then return low, high - low end
+        if low then return low, size end
+        if high then return high - size, size end
+        if mid then return mid - size / 2, size end
+        return 0, size
+    end
+    function H.rect(r, seen)
+        if r == env.UIParent then return 0, 0, 1280, 800 end
+        seen = seen or {}
+        assert(not seen[r], "rect: the points of a region depend on itself")
+        seen[r] = true
+        local parent = r.__parent or env.UIParent
+        local l, b, w, h
+        if r.__allPoints then
+            l, b, w, h = H.rect(r.__allPoints == true and parent or r.__allPoints, seen)
+        else
+            w, h = r.__w or 0, r.__h or 0
+            if r.__kind == "FontString" then
+                if w == 0 then w = r:GetStringWidth() end
+                if h == 0 then h = r.__fontSize or 12 end
+            end
+            local xs, ys = {}, {}
+            for _, p in ipairs(r.__points) do
+                local rl, rb, rw, rh = H.rect(p[2] or parent, seen)
+                local rp = p[3] or p[1]
+                xs[#xs + 1] = { HF[p[1]], rl + rw * HF[rp] + p[4] }
+                ys[#ys + 1] = { VF[p[1]], rb + rh * VF[rp] + p[5] }
+            end
+            l, w = solve(xs, w)
+            b, h = solve(ys, h)
+        end
+        seen[r] = nil
+        return l, b, w, h
+    end
+
     function H.installLootFeed(options)
         options = options or {}
         env.EllesmereUI = env.EllesmereUI or { IS_FOREVER = true }
         self.addons.EllesmereUI = true
         self.addons.EllesmereUIForeverEssentials = true
         local FONT = "Interface\\AddOns\\EllesmereUI\\media\\fonts\\Expressway.ttf"
-        local LF = { active = {}, pool = {}, waiting = {}, built = 0, fills = 0,
+        local LF = { active = {}, pool = {}, waiting = {}, entries = {}, borders = {}, built = 0, fills = 0,
                      enabled = options.enabled ~= false, style = options.style or "BAR",
-                     maxRows = options.maxRows or 6, rowHeight = options.rowHeight or 36, textSize = 13 }
+                     maxRows = options.maxRows or 6, rowHeight = options.rowHeight or 36, textSize = options.textSize or 13,
+                     width = options.width or 300, barWidth = options.barWidth or 3, spacing = 2,
+                     borderTexture = options.borderTexture, borderBehind = options.borderBehind }
         local active, pool = LF.active, LF.pool
         local anchor
 
+        local function Text(r)
+            local fs = r:CreateFontString(nil, "OVERLAY")
+            fs:SetJustifyH("LEFT")
+            fs:SetWordWrap(false)
+            return fs
+        end
         local function NewRow(parent)
             local r = env.CreateFrame("Frame", nil, parent or anchor)
             r.bg = r:CreateTexture(nil, "BACKGROUND")
+            r.bg:SetAllPoints()
             r.bar = r:CreateTexture(nil, "ARTWORK")
-            r.icon = r:CreateTexture(nil, "ARTWORK")
+            r.bar:SetPoint("TOPLEFT")
+            r.bar:SetPoint("BOTTOMLEFT")
+            r.icon = r:CreateTexture(nil, "ARTWORK", nil, 1)
             r.iconBg = r:CreateTexture(nil, "ARTWORK")
             r.badge = r:CreateFontString(nil, "OVERLAY")
-            r.name, r.sub, r.value = r:CreateFontString(nil, "OVERLAY"), r:CreateFontString(nil, "OVERLAY"), r:CreateFontString(nil, "OVERLAY")
+            r.badge:SetPoint("BOTTOMRIGHT", -2, 2)
+            r.name, r.sub, r.value = Text(r), Text(r), Text(r)
+            r.value:SetJustifyH("RIGHT")
+            r.value:SetPoint("RIGHT", -6, 0)
+            r.sub:SetPoint("TOPLEFT", r.icon, "RIGHT", 6, -1)
+            r.sub:SetPoint("RIGHT", r.value, "LEFT", -8, 0)
+            -- PP.CreateBorder: the row's border is a child frame one level above the row
+            local container = env.CreateFrame("Frame", nil, r)
+            container:SetAllPoints(r)
+            container:SetFrameLevel(r:GetFrameLevel() + 1)
+            LF.borders[r] = container
             LF.built = LF.built + 1
             return r
         end
         local function StyleRow(r)
-            local h = LF.rowHeight
+            local h, size = LF.rowHeight, LF.textSize
             local tray, bar, toast = LF.style == "TRAY", LF.style == "BAR", LF.style == "TOAST"
-            r:SetSize(tray and h or 300, h)
-            if bar then r.icon:SetSize(h - 8, h - 8) elseif toast then r.icon:SetSize(h - 10, h - 10) else r.icon:SetSize(h, h) end
+            r:SetSize(tray and h or LF.width, h)
+            r.icon:ClearAllPoints()
+            if bar then
+                r.bar:SetWidth(math.max(LF.barWidth, 1))
+                r.bar:SetShown(LF.barWidth > 0)
+                r.icon:SetSize(h - 8, h - 8)
+                r.icon:SetPoint("LEFT", LF.barWidth > 0 and LF.barWidth + 5 or 4, 0)
+            elseif toast then
+                r.bar:Hide()
+                r.icon:SetSize(h - 10, h - 10)
+                r.icon:SetPoint("LEFT", 6, 0)
+            else
+                r.bar:Hide()
+                r.icon:SetSize(h, h)
+                r.icon:SetPoint("LEFT")
+            end
+            r.bg:SetShown(not tray)
             r.name:SetShown(not tray)
             r.value:SetShown(not tray)
             r.badge:SetShown(tray)
-            r.name:SetFont(FONT, LF.textSize, "")
-            r.value:SetFont(FONT, LF.textSize, "")
-            r.sub:SetFont(FONT, LF.textSize - 2, "")
+            r.name:SetFont(FONT, size, "")
+            r.value:SetFont(FONT, size, "")
+            r.sub:SetFont(FONT, size - 2, "")
+            r.badge:SetFont(FONT, size - 1, "")
         end
+        -- StyleBorder with a border texture chosen: a second child frame (r.lootBorder), over the row or behind it
+        local function StyleBorder(r)
+            if not LF.borderTexture then
+                if r.lootBorder then r.lootBorder:Hide() end
+                return
+            end
+            local host = r.lootBorder
+            if not host then
+                host = env.CreateFrame("Frame", nil, r)
+                r.lootBorder = host
+            end
+            host:ClearAllPoints()
+            host:SetAllPoints(LF.style == "BAR" and r.icon or r)
+            host:SetFrameLevel(LF.borderBehind and math.max(0, r:GetFrameLevel() - 1) or r:GetFrameLevel() + 1)
+            host:Show()
+        end
+        -- Fill: the texts in this order, the badge last; the name is hung in again after them
         local function Fill(r)
-            local d = r.data
+            local d, style = r.data, LF.style
+            local text, sub, value = d.text, d.sub or d.questSub, d.value
+            if style == "BOX" then
+                sub = not d.flat and d.sub or nil
+                if d.flat then text, value = d.flat, nil end
+            elseif style == "TRAY" then
+                sub = nil
+            end
             LF.fills = LF.fills + 1
             r.icon:SetTexture(d.icon)
-            r.name:SetText(d.text)
-            r.sub:SetText(d.sub or "")
-            r.sub:SetShown(d.sub ~= nil)
-            r.value:SetText(d.value or "")
+            r.name:SetText(text)
+            r.sub:SetText(sub or "")
+            r.sub:SetShown(sub ~= nil)
+            r.value:SetText(value or "")
             r.badge:SetText(d.badge or "")
+            r.name:ClearAllPoints()
+            r.name:SetPoint("RIGHT", r.value, "LEFT", -8, 0)
+            if sub then
+                r.name:SetPoint("BOTTOMLEFT", r.icon, "RIGHT", 6, 1)
+            else
+                r.name:SetPoint("LEFT", r.icon, "RIGHT", 6, 0)
+            end
+            StyleBorder(r)
+        end
+        local function Layout()
+            local n = 0
+            for _, r in ipairs(active) do
+                r:ClearAllPoints()
+                if LF.style == "TRAY" then
+                    r:SetPoint("TOPRIGHT", anchor, "TOPRIGHT", -n * (LF.rowHeight + LF.spacing), 0)
+                else
+                    r:SetPoint("TOPRIGHT", anchor, "TOPRIGHT", 0, -n * (LF.rowHeight + LF.spacing))
+                end
+                n = n + 1
+            end
         end
         local function FindRow(key)
             for _, r in ipairs(active) do if r.key == key then return r end end
@@ -1760,8 +1917,13 @@ function Mock.new(opts)
         local function Release(r)
             Unlist(r)
             r:Hide()
-            r.key, r.data = nil, nil
+            r.key, r.data, r.entry, r.history = nil, nil, nil, nil
             pool[#pool + 1] = r
+        end
+        local ENTRY_KEYS = { "icon", "text", "sub", "questSub", "value", "link", "amount", "badge", "flat" }
+        local function Store(e, key, data)
+            for _, k in ipairs(ENTRY_KEYS) do e[k] = data[k] end
+            e.key = key
         end
         local function Push(key, data)
             local r = FindRow(key)
@@ -1774,13 +1936,21 @@ function Mock.new(opts)
             end
             table.insert(active, 1, r)
             r.key, r.data = key, data
+            if not r.entry then
+                r.entry = {}
+                table.insert(LF.entries, 1, r.entry)
+            end
+            Store(r.entry, key, data)
             Fill(r)
+            Layout()
             r:Show()
             return r
         end
         local function CreateAnchor()
             if anchor then return end
             anchor = env.CreateFrame("Frame", nil, env.UIParent)
+            anchor:SetSize(LF.width, 200)
+            anchor:SetPoint("BOTTOMRIGHT", env.UIParent, "BOTTOMRIGHT", -40, 200)
             LF.anchor = anchor
             -- the callout of the Icon Tray style: a child of the feed with name, sub and value, but no icon
             local callout = env.CreateFrame("Frame", nil, anchor)
@@ -1806,10 +1976,12 @@ function Mock.new(opts)
             }
         end
 
-        -- ShowItem: a row for a looted item; one the client does not know yet gets its row when it has loaded
-        function LF.loot(link, count)
+        -- ShowItem: a row for a looted item; one the client does not know yet gets its row when it has loaded.
+        -- options: won = "Need 87" (the roll behind a win of your own), ilvl = false (Show Item Level off)
+        function LF.loot(link, count, o)
             if not LF.enabled then return nil end
             CreateAnchor()
+            o = o or {}
             local it = self.itemFromAny(link)
             local function show()
                 local key = "item:" .. link
@@ -1818,8 +1990,10 @@ function Mock.new(opts)
                 local text = it.name
                 if amount > 1 then text = amount .. "x " .. text end
                 local gear = it.equipLoc and it.equipLoc ~= ""
-                return Push(key, { icon = it.texture or (100000 + it.id), text = text, sub = gear and ("ilvl: " .. tostring(it.ilvl)) or nil,
-                                   value = (it.sellPrice or 0) > 0 and tostring(it.sellPrice * amount) or nil,
+                local sub = (gear and o.ilvl ~= false and options.ilvl ~= false) and ("ilvl: " .. tostring(it.ilvl)) or nil
+                if o.won then sub = sub and ("Won: " .. o.won .. "  " .. sub) or ("Won: " .. o.won) end
+                return Push(key, { icon = it.texture or (100000 + it.id), text = text, sub = sub,
+                                   value = (it.sellPrice or 0) > 0 and (tostring(it.sellPrice * amount) .. "g") or nil,
                                    link = link, amount = amount, badge = amount > 1 and amount or nil })
             end
             if it.uncached then
@@ -1841,11 +2015,37 @@ function Mock.new(opts)
             CreateAnchor()
             return Push("money", { icon = "Interface\\Icons\\INV_Misc_Coin_02", text = "Money", value = tostring(copper), amount = copper })
         end
+        -- ShowRoll: somebody else won an item of the group loot - the row carries the item's link too
+        LF.rolls = 0
+        function LF.roll(link, winner, roll)
+            if not LF.enabled then return nil end
+            CreateAnchor()
+            LF.rolls = LF.rolls + 1
+            local it = self.itemFromAny(link)
+            local text = winner .. " won " .. it.name
+            return Push("roll:1:" .. LF.rolls, { icon = it.texture or (100000 + it.id), text = text, sub = roll, link = link,
+                                                 flat = roll and (text .. " (" .. roll .. ")") or text, badge = roll and roll:match("%d+") })
+        end
+        -- ShowHistory (Shift and the mouse wheel): the live rows go, rows of the kept entries come - named "history:<n>"
+        function LF.showHistory()
+            while active[1] do Release(active[1]) end
+            for i = 1, math.min(#LF.entries, LF.maxRows) do
+                local r = table.remove(pool) or NewRow()
+                StyleRow(r)
+                r.history, r.key, r.data = true, "history:" .. i, LF.entries[i]
+                active[#active + 1] = r
+                Fill(r)
+                r:Show()
+            end
+            Layout()
+            return active
+        end
         function LF.release(r) Release(r) end
         -- ApplyStyle: every shown row is styled and filled again
         function LF.setStyle(style)
             LF.style = style
             for _, r in ipairs(active) do StyleRow(r) Fill(r) end
+            if anchor then Layout() end
         end
         -- Apply: switched off, the rows go (the anchor stays)
         function LF.setEnabled(on)

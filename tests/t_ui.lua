@@ -73,6 +73,69 @@ return function(T)
         T.eq(clicks, 1)
         b:SetText("Stop")
         T.eq(b.label:GetText(), "Stop")
+        -- a button that switches itself off under the mouse (it gets no OnLeave any more) does not stay lit
+        b.__scripts.OnEnter(b)
+        T.near(b.fill.__color[4], 0.09, 1e-9)
+        b:SetEnabled(false)
+        T.near(b.fill.__color[4], 0.04, 1e-9, "the light goes with the switching off")
+        b.__scripts.OnEnter(b)
+        b:SetEnabled(true)
+        T.near(b.fill.__color[4], 0.04, 1e-9, "switching on does not light it")
+    end)
+
+    T.test("ui: the font is the one chosen in EllesmereUI - asked only when its fonts are set up, never on clients with a script of their own", function()
+        local asked = 0
+        local function eui(path)
+            return { EXPRESSWAY = "Interface\\AddOns\\EllesmereUI\\media\\fonts\\Expressway.ttf",
+                     GetFontPath = function(key)
+                         asked = asked + 1
+                         assert(key == nil, "the global font: no module key")
+                         if path == "error" then error("fonts not ready") end
+                         return path
+                     end }
+        end
+        local W = world(function(w)
+            w.env.EllesmereUI = eui("Interface\\AddOns\\SharedMedia\\fonts\\Chosen.ttf")
+            w.env.EllesmereUIDB = { fonts = { global = "Chosen" } }
+        end)
+        T.has(W.EG.UI.FontFile(), "Chosen", "the font picked under Fonts in EllesmereUI")
+        T.ok(asked > 0)
+        local fs = W.EG.UI.Text(W.env.UIParent, 12, "text")
+        T.has(select(1, fs:GetFont()), "Chosen", "and it is what the texts are set in")
+
+        -- EllesmereUI has not set its fonts up yet (asking would make it create them): its standard font, without asking
+        asked = 0
+        local early = world(function(w) w.env.EllesmereUI = eui("Interface\\Chosen.ttf") end)
+        T.has(early.EG.UI.FontFile(), "Expressway") T.eq(asked, 0, "not asked")
+        early.env.EllesmereUIDB = { profiles = {} }
+        T.has(early.EG.UI.FontFile(), "Expressway") T.eq(asked, 0, "a database without fonts: not asked either")
+        T.eq(early.env.EllesmereUIDB.fonts, nil, "and nothing was created in it")
+
+        -- the question fails or answers nonsense: the standard font
+        for _, answer in ipairs({ "error", "", 17 }) do
+            local V = world(function(w)
+                w.env.EllesmereUI = eui(answer)
+                w.env.EllesmereUIDB = { fonts = {} }
+            end)
+            T.has(V.EG.UI.FontFile(), "Expressway", "answer " .. tostring(answer))
+            T.eq(V.EG.lastError, nil)
+        end
+
+        -- Korean, Chinese, Russian clients: item names come in the client's script, which EllesmereUI's fonts lack
+        for _, locale in ipairs({ "koKR", "zhCN", "zhTW", "ruRU" }) do
+            asked = 0
+            local K = T.world(F.arms({ locale = locale }), function(w)
+                w.env.EllesmereUI = eui("Interface\\Chosen.ttf")
+                w.env.EllesmereUIDB = { fonts = { global = "Chosen" } }
+            end)
+            T.eq(K.EG.UI.FontFile(), "Fonts\\FRIZQT__.TTF", locale .. ": the game's own font")
+            T.eq(asked, 0, locale)
+        end
+        local D = T.world(F.arms({ locale = "deDE" }), function(w)
+            w.env.EllesmereUI = eui("Interface\\Chosen.ttf")
+            w.env.EllesmereUIDB = { fonts = { global = "Chosen" } }
+        end)
+        T.has(D.EG.UI.FontFile(), "Chosen", "a Latin client follows EllesmereUI")
     end)
 
     T.test("ui: a tab is text with an underline in the accent color when chosen, as wide as its text", function()

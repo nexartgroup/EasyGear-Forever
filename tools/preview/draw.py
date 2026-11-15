@@ -30,10 +30,21 @@ for op in ops:
     elif op["t"] == "icon":
         c = op["c"]
         tint = (int(120 * c[0]) + 40, int(150 * c[1]) + 40, int(110 * c[2]) + 40, int(255 * c[3]))
+        marker = "arrow" in op["n"] or "star" in op["n"]
         if w >= 1 and h >= 1:
-            d.rectangle([x, y, x + w - 1, y + h - 1], fill=tint)
-            if "arrow" in op["n"]: d.polygon([(x + w / 2, y + 2), (x + w - 2, y + h - 2), (x + 2, y + h - 2)], fill=(64, 255, 64, int(255 * c[3])))
-            if "star" in op["n"]: d.polygon([(x + w / 2, y), (x + w, y + h), (x, y + h * .4), (x + w, y + h * .4), (x, y + h)], fill=(255, 220, 60, int(255 * c[3])))
+            # a marker is its shape only, in its own color - or the chosen one (the addon tints a decolored picture)
+            plain = c[0] > 0.99 and c[1] > 0.99 and c[2] > 0.99
+            own = (64, 255, 64) if "arrow" in op["n"] else (255, 220, 60)
+            shade = own if plain else (int(255 * c[0]), int(255 * c[1]), int(255 * c[2]))
+            fill = shade + (int(255 * c[3]),)
+            if not marker: d.rectangle([x, y, x + w - 1, y + h - 1], fill=tint)
+            if "arrow" in op["n"]:
+                d.polygon([(x + w / 2, y + 1), (x + w - 1, y + h * .55), (x + w * .68, y + h * .55), (x + w * .68, y + h - 1),
+                           (x + w * .32, y + h - 1), (x + w * .32, y + h * .55), (x + 1, y + h * .55)], fill=fill, outline=(0, 0, 0, fill[3]))
+            if "star" in op["n"]:
+                d.polygon([(x + w / 2, y), (x + w * .62, y + h * .38), (x + w, y + h * .38), (x + w * .69, y + h * .62), (x + w * .81, y + h),
+                           (x + w / 2, y + h * .76), (x + w * .19, y + h), (x + w * .31, y + h * .62), (x, y + h * .38), (x + w * .38, y + h * .38)],
+                          fill=fill, outline=(0, 0, 0, fill[3]))
     else:
         f = font(op["size"])
         s = op["s"]

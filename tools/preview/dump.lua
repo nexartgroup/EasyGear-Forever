@@ -4,7 +4,9 @@
      not the look of the client's text rendering.
 
        lua5.1 tools/preview/dump.lua <scene> > scene.json        (run from the repository root)
-       scenes: window | ring | profile | edit | toast             EUI=1 in the environment: with EllesmereUI's accent
+       scenes: window | ring | profile | edit | toast | feed      EUI=1 in the environment: with EllesmereUI's accent
+       feed: rows of EllesmereUI's Loot Feed with EasyGear's marks - on the model of the feed (tests/wow_mock.lua),
+             whose rows are given plain colors here; it shows where the marks sit, not the feed's real look
 ]]
 package.path = "tests/?.lua;" .. package.path
 local Mock = require("wow_mock")
@@ -17,6 +19,9 @@ W.I = F.armsWarrior(W)
 W.I.better = F.gear(W, 7001, "Sturmgepeitschte Brustplatte", "INVTYPE_CHEST", 40, { STR = 30, STA = 40, CRIT = 20 }, { armor = 500, minLevel = 35, quality = 3 })
 W.I.ring = F.gear(W, 7002, "Ring der Entschlossenheit", "INVTYPE_FINGER", 40, { STR = 20, HIT = 15 }, { typeText = "", quality = 2 })
 W.I.helm = F.gear(W, 7003, "Helm des Vorreiters", "INVTYPE_HEAD", 40, { STR = 20 }, { quality = 4 })
+W.I.weak = F.gear(W, 7004, "Rissige Lederweste", "INVTYPE_CHEST", 10, { STR = 1 }, { quality = 1, sellPrice = 3 })
+W.I.late = F.gear(W, 7005, "Brustplatte des Feldherrn", "INVTYPE_CHEST", 90, { STR = 100 }, { minLevel = 65, quality = 4, sellPrice = 41 })
+local LF = scene == "feed" and W.installLootFeed({ rowHeight = tonumber(os.getenv("ROW")) or 36, style = os.getenv("STYLE") or "BAR" }) or nil
 W.bag(0, 16, {})
 if os.getenv("EUI") then W.env.EllesmereUI = { ELLESMERE_GREEN = { r = 0.88, g = 0.66, b = 0.51 } } end
 W.boot()
@@ -44,6 +49,24 @@ elseif scene == "toast" then
     W.fire("BAG_UPDATE_DELAYED")
     W.tick(4)
     for _, f in ipairs(W.EG.Toast.shown) do roots[#roots + 1] = f end
+elseif scene == "feed" then
+    W.state.items[7001].sellPrice = 12
+    W.state.items[7002].sellPrice = 7
+    local rows = { LF.loot(W.I.weak), LF.money(1840), LF.loot(W.I.late), LF.loot(W.I.ring), LF.loot(W.I.better) }
+    W.fire("CHAT_MSG_LOOT", "x")
+    W.flush()
+    -- the model of the feed has no colors of its own: a dark row, the bar and the name in the quality color
+    local QUALITY = { [1] = { 1, 1, 1 }, [2] = { 0.12, 1, 0 }, [3] = { 0, 0.44, 0.87 }, [4] = { 0.64, 0.21, 0.93 } }
+    for _, r in ipairs(rows) do
+        local item = r.data.link and W.state.itemFromAny(r.data.link)
+        local c = item and QUALITY[item.quality or 1] or { 1, 0.82, 0 }
+        r.bg:SetColorTexture(0.05, 0.05, 0.05, 0.80)
+        r.bar:SetColorTexture(c[1], c[2], c[3], 1)
+        r.name:SetTextColor(c[1], c[2], c[3], 1)
+        r.sub:SetTextColor(0.7, 0.7, 0.7, 1)
+        r.value:SetTextColor(1, 1, 1, 1)
+    end
+    roots = { LF.anchor }
 end
 
 local SW, SH = 1280, 800
@@ -81,15 +104,17 @@ local function rect(r)
             xs[#xs + 1] = { HF[p[1]], rl + rw * HF[rp] + p[4] }
             ys[#ys + 1] = { VF[p[1]], rb + rh * VF[rp] + p[5] }
         end
+        -- an edge decides before a centre: a text hung in by TOPLEFT and RIGHT starts at that top (as the client does it)
         local function solve(cons, size)
-            if #cons == 0 then return 0, size end
-            for i = 2, #cons do
-                if cons[i][1] ~= cons[1][1] then
-                    local span = (cons[i][2] - cons[1][2]) / (cons[i][1] - cons[1][1])
-                    return cons[1][2] - cons[1][1] * span, span
-                end
+            local low, high, mid
+            for _, c in ipairs(cons) do
+                if c[1] == 0 then low = low or c[2] elseif c[1] == 1 then high = high or c[2] else mid = mid or c[2] end
             end
-            return cons[1][2] - cons[1][1] * size, size
+            if low and high then return low, high - low end
+            if low then return low, size end
+            if high then return high - size, size end
+            if mid then return mid - size / 2, size end
+            return 0, size
         end
         l, w = solve(xs, w)
         b, h = solve(ys, h)

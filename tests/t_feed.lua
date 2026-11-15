@@ -21,33 +21,155 @@ return function(T)
         return W, W.LF
     end
     -- the feed shows the item, the client sends the chat line, a moment passes
-    local function loot(W, LF, link, count)
-        local row = LF.loot(link, count)
+    local function loot(W, LF, link, count, options)
+        local row = LF.loot(link, count, options)
         W.fire("CHAT_MSG_LOOT", "You receive loot")
         W.flush()
         return row
     end
     local function on(part) return part ~= nil and part:IsShown() end
     local function marked(row) return on(row.EasyGearMark) end
+    -- left, right, bottom, top of a region on the screen
+    local function box(W, region)
+        local l, b, w, h = W.rect(region)
+        return { l = l, r = l + w, b = b, t = b + h, w = w, h = h }
+    end
+    local function inside(inner, outer, slack)
+        slack = slack or 0
+        return inner.l >= outer.l - slack and inner.r <= outer.r + slack and inner.b >= outer.b - slack and inner.t <= outer.t + slack
+    end
 
     ------------------------------------------------------------------ the marking
-    T.test("feed: the row of a better item gets the marker on its icon, a tint in the marker's color and the gain at the bottom right", function()
+    T.test("feed: the row of a better item gets the marker in the corner of its icon, a tint in the marker's color and the gain behind the second line", function()
         local W, LF = world({})
         local row = loot(W, LF, W.I.better)
         T.eq(marked(row), true)
         local mark, tint, text = row.EasyGearMark, row.EasyGearTint, row.EasyGearText
         T.eq(mark:GetAtlas(), "bags-greenarrow")
         local point, rel = mark:GetPoint(1)
-        T.eq(point, "TOPLEFT") T.eq(rel, row.icon, "on the corner of the row's icon")
+        T.eq(point, "TOPLEFT") T.eq(rel, row.icon, "in the corner of the row's icon")
         T.near(mark:GetWidth(), 28 * 0.6, 1e-9, "60 % of the icon (28 pixels in a 36 pixel bar row)")
         T.eq(on(tint), true)
+        T.eq(tint:GetParent(), row, "the tint lies in the row itself, under its icon and texts") T.eq(tint.__layer, "BORDER")
         T.near(tint.__color[1], 0x40 / 255) T.eq(tint.__color[2], 1) T.near(tint.__color[4], 0.16, 1e-9, "a light tint in the green of the marker")
         T.eq(on(text), true) T.eq(text:GetText(), "+83.1%")
         T.eq(text.__textColor[2], 1) T.near(text.__textColor[1], 0x40 / 255)
-        T.eq(select(1, text:GetPoint(1)), "BOTTOMRIGHT") T.eq(select(2, text:GetPoint(1)), row)
         local file, size = text:GetFont()
         T.has(file, "Expressway") T.eq(size, 11, "the font and size of the feed's second line")
+        T.eq(text.__wordWrap, false, "one line: the client shortens it when the room runs out")
         T.eq(row.name:GetText(), "Better Chestplate", "the feed's own texts are untouched") T.eq(row.sub:GetText(), "ilvl: 40")
+        -- where the words are: on the second line, right behind the feed's text, ending before the price
+        local words, sub, value = box(W, text), box(W, row.sub), box(W, row.value)
+        T.near(words.l, sub.l + row.sub:GetStringWidth() + 8, 1e-9, "eight pixels behind 'ilvl: 40'")
+        T.near(words.t, sub.t, 1e-9, "on the feed's second line")
+        T.ok(value.w > 0, "this item has a price") T.ok(words.r <= value.l - 8 + 1e-9, "the words end before the price")
+        T.ok(words.r > words.l + text:GetStringWidth(), "and have room for all of '+83.1%'")
+        T.eq(W.EG.lastError, nil)
+    end)
+
+    T.test("feed: the words never lie on the price - any row height, style and text size; without room they shrink to nothing", function()
+        for _, style in ipairs({ "BAR", "BOX", "TOAST" }) do
+            for _, height in ipairs({ 18, 20, 24, 28, 36, 48 }) do
+                for _, size in ipairs({ 10, 13, 18 }) do
+                    local W, LF = world({ style = style, rowHeight = height, textSize = size })
+                    local row = loot(W, LF, W.I.better)
+                    local where = style .. " " .. height .. " " .. size
+                    T.eq(on(row.EasyGearText), true, where)
+                    local words, value = box(W, row.EasyGearText), box(W, row.value)
+                    T.ok(value.w > 0, where)
+                    T.ok(words.r <= value.l + 1e-9, where .. ": the words end left of the price")
+                end
+            end
+        end
+        -- a narrow feed: the second line reaches the price, nothing is left for the words
+        local W, LF = world({ width = 150 })
+        local row = loot(W, LF, W.I.better, 1, { won = "Need 87" })
+        T.eq(row.sub:GetText(), "Won: Need 87  ilvl: 40")
+        local words, value = box(W, row.EasyGearText), box(W, row.value)
+        T.ok(words.w <= 0, "no room: the words have no width (the client draws nothing)") T.ok(words.r <= value.l)
+    end)
+
+    T.test("feed: without a second line the words follow the name", function()
+        local W, LF = world({ ilvl = false })             -- Show Item Level is off in EllesmereUI
+        local row = loot(W, LF, W.I.better)
+        T.eq(on(row.sub), false, "no second line") T.eq(on(row.EasyGearText), true)
+        local words, name, value = box(W, row.EasyGearText), box(W, row.name), box(W, row.value)
+        T.near(words.l, name.l + row.name:GetStringWidth() + 8, 1e-9, "eight pixels behind the name")
+        T.near((words.b + words.t) / 2, (name.b + name.t) / 2, 1e-9, "on the line of the name")
+        T.ok(words.r <= value.l - 8 + 1e-9, "ending before the price")
+        -- the same row gets its second line back (the same item again, now won by a roll): the words move there
+        local again = loot(W, LF, W.I.better, 1, { won = "Greed 12", ilvl = false })
+        T.eq(again, row) T.eq(on(row.sub), true)
+        T.near(box(W, row.EasyGearText).t, box(W, row.sub).t, 1e-9, "on the second line now")
+        T.near(box(W, row.EasyGearText).l, box(W, row.sub).l + row.sub:GetStringWidth() + 8, 1e-9)
+        -- Box rows of a roll-less item keep name and second line; the words go where the second line is
+        LF.setStyle("BOX")
+        T.near(box(W, row.EasyGearText).t, box(W, row.sub).t, 1e-9)
+        T.eq(W.EG.lastError, nil)
+        -- a narrow feed: the name fills its line up to the price, the words get no room and do not run over it
+        local N, NLF = world({ ilvl = false, width = 150 })
+        local narrow = loot(N, NLF, N.I.better)
+        local nwords, nvalue = box(N, narrow.EasyGearText), box(N, narrow.value)
+        T.ok(nwords.w <= 0, "no width") T.ok(nwords.r <= nvalue.l, "ending before the price all the same")
+    end)
+
+    T.test("feed: marker and words lie on a layer of their own above the row's border, the marker inside the row in every style", function()
+        for _, style in ipairs({ "BAR", "BOX", "TRAY", "TOAST" }) do
+            for _, height in ipairs({ 10, 14, 20, 36, 60 }) do
+                local W, LF = world({ style = style, rowHeight = height, borderTexture = "pixels" })
+                local row = loot(W, LF, W.I.better)
+                local where = style .. " " .. height
+                local layer = row.EasyGearLayer
+                T.eq(layer:GetParent(), row, where .. ": a child of the row - it fades and hides with it")
+                T.eq(row.EasyGearMark:GetParent(), layer, where) T.eq(row.EasyGearText:GetParent(), layer, where)
+                T.ok(layer:GetFrameLevel() > LF.borders[row]:GetFrameLevel(), where .. ": above the row's border")
+                T.ok(layer:GetFrameLevel() > row.lootBorder:GetFrameLevel(), where .. ": above the textured border")
+                local mark, icon = box(W, row.EasyGearMark), box(W, row.icon)
+                T.ok(inside(mark, box(W, row), 1e-9), where .. ": the marker stays inside the row")
+                if mark.w + 1 <= icon.w then
+                    T.ok(inside(mark, icon), where .. ": inside the icon")
+                    T.near(mark.l, icon.l + 1, 1e-9, where .. ": in its top left corner") T.near(mark.t, icon.t - 1, 1e-9, where)
+                else
+                    T.near((mark.l + mark.r) / 2, (icon.l + icon.r) / 2, 1e-9, where .. ": larger than a tiny icon - centred on it")
+                    T.near((mark.b + mark.t) / 2, (icon.b + icon.t) / 2, 1e-9, where)
+                end
+                T.ok(mark.w >= math.min(12, height), where .. ": readable")
+                T.ok(inside(box(W, layer), box(W, row)) and inside(box(W, row), box(W, layer)), where .. ": the layer covers the row")
+            end
+        end
+        -- the feed moves a row to another level (it does for Border Behind): the layer follows at the next filling
+        local W, LF = world({})
+        local row = loot(W, LF, W.I.better)
+        row:SetFrameLevel(40)
+        loot(W, LF, W.I.better)
+        T.eq(row.EasyGearLayer:GetFrameLevel(), 43)
+        -- the style changes under a shown row: a low Box row (icon 14) becomes a Bar row (icon 6) - the marker leaves
+        -- the corner for the middle of the icon, hung in anew each time
+        local S, SLF = world({ style = "BOX", rowHeight = 14 })
+        local low = loot(S, SLF, S.I.better)
+        T.eq(select(1, low.EasyGearMark:GetPoint(1)), "TOPLEFT")
+        SLF.setStyle("BAR")
+        T.eq(select(1, low.EasyGearMark:GetPoint(1)), "CENTER") T.eq(low.EasyGearMark:GetPoint(2), nil, "one point, not one more each time")
+        T.ok(inside(box(S, low.EasyGearMark), box(S, low), 1e-9), "still inside the row")
+        SLF.setStyle("BOX")
+        T.eq(select(1, low.EasyGearMark:GetPoint(1)), "TOPLEFT") T.eq(low.EasyGearMark:GetPoint(2), nil)
+    end)
+
+    T.test("feed: only what the player got is marked - not what somebody else won, and the history shows the marks again", function()
+        local W, LF = world({})
+        local roll = LF.roll(W.I.better, "Bob", "Need 99")
+        W.fire("CHAT_MSG_LOOT", "x") W.flush()
+        T.eq(roll.data.link, W.I.better, "the row carries the link of the better item")
+        T.eq(marked(roll), false, "but Bob has it") T.eq(on(roll.EasyGearTint), false) T.eq(on(roll.EasyGearText), false)
+        local own = loot(W, LF, W.I.better, 1, { won = "Need 100" })
+        T.eq(marked(own), true, "the player's own win is a row of its own")
+        T.eq(marked(roll), false)
+        -- looking back (Shift and the mouse wheel): the rows are called "history:<n>", the entries know what they were
+        local rows = LF.showHistory()
+        T.eq(#rows, 2)
+        T.eq(rows[1].key, "history:1") T.eq(rows[1].data.key, "item:" .. W.I.better)
+        T.eq(marked(rows[1]), true, "the player's item is marked in the history as well")
+        T.eq(rows[2].data.key, "roll:1:1") T.eq(marked(rows[2]), false, "Bob's is not")
         T.eq(W.EG.lastError, nil)
     end)
 
@@ -142,9 +264,10 @@ return function(T)
     T.test("feed: each row is taken once - one hook per row however often it is filled or looked at", function()
         local W, LF = world({})
         local row = loot(W, LF, W.I.better)
-        local hooked = row.icon.SetTexture
+        local hooked = row.badge.SetText
         for _ = 1, 5 do loot(W, LF, W.I.better) end       -- the same item again: the feed refills the same row
-        T.eq(row.icon.SetTexture, hooked, "no hook on top of the hook")
+        T.eq(row.badge.SetText, hooked, "no hook on top of the hook")
+        T.eq(rawget(row.icon, "SetTexture"), nil, "the icon is not hooked: its texture comes before the texts")
         T.eq(row.data.amount, 6) T.eq(marked(row), true)
         W.clearChat() W.slash("status")
         T.has(W.chatText(), "EllesmereUI Loot Feed: found - better items are marked in it (1 rows taken so far)")
@@ -196,8 +319,15 @@ return function(T)
         T.eq(marked(row), true)
         T.eq(marked(LF.summary), false) T.eq(LF.summary.EasyGearTint, nil, "nothing was even made on the tracker row")
         T.eq(LF.callout.EasyGearMark, nil, "the callout has no icon: not a row")
+        -- a child that looks like a row but lacks the text EasyGear listens to: left alone as well
+        local odd = W.env.CreateFrame("Frame", nil, LF.anchor)
+        odd.icon, odd.name, odd.sub, odd.value = odd:CreateTexture(), odd:CreateFontString(), odd:CreateFontString(), odd:CreateFontString()
+        odd.key, odd.data = "item:" .. W.I.better, { link = W.I.better }
+        loot(W, LF, W.I.ring)
+        T.eq(odd.EasyGearMark, nil) T.eq(odd.EasyGearLayer, nil)
+        T.eq(W.EG.lastError, nil)
         W.clearChat() W.slash("status")
-        T.has(W.chatText(), "(2 rows taken so far)", "the tracker row counts as a row, it just never holds an item")
+        T.has(W.chatText(), "(3 rows taken so far)", "two item rows and the tracker row - it counts as a row, it just never holds an item")
     end)
 
     T.test("feed: without EllesmereUI, without its Loot Feed, or with the feed switched off nothing happens - /eg status says which", function()
@@ -229,8 +359,10 @@ return function(T)
         W.EG.Score.UpgradeState = function() error("boom") end
         local ring = LF.loot(W.I.ring)                   -- the one row is filled again: the hook runs inside the feed's Fill
         T.eq(ring, row)
-        T.eq(ring.name:GetText(), "Good Ring", "the feed finished its row: name and the rest come after the icon")
+        T.eq(ring.name:GetText(), "Good Ring", "the feed finished its row")
         T.eq(ring.sub:GetText(), "ilvl: 40")
+        T.eq(select(1, ring.name:GetPoint(1)), "RIGHT", "the name was hung in after the badge text - the hook did not stop it")
+        T.eq(select(1, ring.name:GetPoint(2)), "BOTTOMLEFT")
         T.ok(W.EG.lastError and tostring(W.EG.lastError.err):find("boom", 1, true), "reported for /eg status")
     end)
 
@@ -247,12 +379,14 @@ return function(T)
         end)
         local styles = { "BAR", "BOX", "TRAY", "TOAST" }
         for step = 1, 100 do
-            local action = rnd(8)
+            local action = rnd(9)
             if action <= 3 then
-                LF.loot(W.I.pool[rnd(#W.I.pool)], rnd(2))
+                LF.loot(W.I.pool[rnd(#W.I.pool)], rnd(2), { ilvl = rnd(3) ~= 1 })
                 W.fire("CHAT_MSG_LOOT", "x")
             elseif action == 4 then
                 LF.money(rnd(50))
+            elseif action == 9 then
+                LF.roll(W.I.pool[rnd(#W.I.pool)], "Bob", rnd(2) == 1 and ("Need " .. rnd(100)) or nil)
             elseif action == 5 and LF.active[1] then
                 LF.release(LF.active[rnd(#LF.active)])
             elseif action == 6 then
@@ -265,13 +399,21 @@ return function(T)
             W.flush()
             local enabled = W.EG:Get("showItemIcons") ~= false
             for _, row in ipairs(LF.active) do
-                local link = row.data.link
+                local link = row.key:sub(1, 5) == "item:" and row.data.link or nil
                 local want = (enabled and link) and W.EG.Score.UpgradeState(link) or nil
                 T.eq(marked(row), want ~= nil, "step " .. step .. ": the marker of " .. tostring(row.data.text))
                 T.eq(on(row.EasyGearTint), want ~= nil, "step " .. step .. ": the tint")
                 T.eq(on(row.EasyGearText), want ~= nil and LF.style ~= "TRAY", "step " .. step .. ": the words")
                 if want == "UPGRADE" then T.eq(row.EasyGearMark.__desaturated, false, "step " .. step) end
                 if want == "LEVEL" then T.eq(row.EasyGearMark.__desaturated, true, "step " .. step) end
+                if want ~= nil and LF.style ~= "TRAY" then
+                    T.ok(box(W, row.EasyGearText).r <= box(W, row.value).l + 1e-9, "step " .. step .. ": the words end before the price")
+                    local line = on(row.sub) and row.sub or row.name
+                    T.eq(select(2, row.EasyGearText:GetPoint(1)), line, "step " .. step .. ": the words follow the line that is shown")
+                end
+                if want ~= nil then
+                    T.ok(inside(box(W, row.EasyGearMark), box(W, row)), "step " .. step .. ": the marker inside the row")
+                end
             end
             if LF.summary then T.eq(marked(LF.summary), false, "the tracker row, step " .. step) end
             T.eq(W.EG.lastError, nil, "no internal error, step " .. step .. ": " .. tostring(W.EG.lastError and W.EG.lastError.err))

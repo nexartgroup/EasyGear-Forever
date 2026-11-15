@@ -66,10 +66,24 @@ function UI.Color(role, alpha)
     return r, g, b, alpha or a
 end
 
--- Die Schriftdatei: die von EllesmereUI, sonst die der Standardschrift des Spiels
+-- Client-Sprachen, deren Schrift die mitgelieferten Schriften von EllesmereUI nicht enthalten
+local OWN_GLYPHS = { koKR = true, zhCN = true, zhTW = true, ruRU = true }
+
+--[[ Die Schriftdatei: die in EllesmereUI gewaehlte (Schriften -> global), sonst dessen Standardschrift, sonst die der
+     Standardschrift des Spiels. Bei Client-Sprachen mit eigener Schrift (Koreanisch, Chinesisch, Russisch) immer die
+     des Spiels: EllesmereUI richtet seine Schrift nach seiner Anzeigesprache, Gegenstandsnamen kommen aber in der
+     Sprache des Clients.                                                                                            ]]
 function UI.FontFile()
     local eui = _G.EllesmereUI
-    if type(eui) == "table" and type(eui.EXPRESSWAY) == "string" and eui.EXPRESSWAY ~= "" then return eui.EXPRESSWAY end
+    if type(eui) == "table" and not OWN_GLYPHS[GetLocale and GetLocale() or ""] then
+        -- nur fragen, wenn EllesmereUI seine Schriften schon eingerichtet hat (die Frage legt sie sonst an)
+        local db = _G.EllesmereUIDB
+        if type(eui.GetFontPath) == "function" and type(db) == "table" and type(db.fonts) == "table" then
+            local ok, file = pcall(eui.GetFontPath)
+            if ok and type(file) == "string" and file ~= "" then return file end
+        end
+        if type(eui.EXPRESSWAY) == "string" and eui.EXPRESSWAY ~= "" then return eui.EXPRESSWAY end
+    end
     local font = _G.GameFontNormal
     if type(font) == "table" and type(font.GetFont) == "function" then
         local ok, file = pcall(font.GetFont, font)
@@ -158,6 +172,8 @@ function UI.Button(parent, text, width, height, onClick)
     b.SetEnabled = function(self, on)
         setEnabled(self, on and true or false)
         UI.Paint(self.label, on and "text" or "faint")
+        -- ein Knopf, der sich unter der Maus abschaltet, bekommt kein OnLeave mehr: die Hervorhebung jetzt zuruecknehmen
+        self.fill:SetColorTexture(UI.Color("card"))
     end
     b:SetText(text or "")
     b:SetScript("OnEnter", function(self)
@@ -237,6 +253,7 @@ function UI.Window(name, width, height, title)
     local f = CreateFrame("Frame", name, UIParent)
     f:SetSize(width, height)
     f:SetFrameStrata("HIGH")
+    f:SetToplevel(true)                 -- ein Klick holt das Fenster vor die anderen seiner Ebene
     f:SetClampedToScreen(true)
     f:SetMovable(true)
     f:EnableMouse(true)

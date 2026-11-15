@@ -4,17 +4,23 @@
     Der Loot Feed zeigt, was der Spieler gerade bekommt, als kurzlebige Zeilen: Symbol, Name, zweite Zeile
     (Gegenstandsstufe), rechts der Preis. EasyGear kennzeichnet darin, was besser ist als das Angelegte:
 
-        [Markierung auf der Ecke des Symbols]   die Zeile in der Farbe der Markierung getoent   "+83.1%" unten rechts
+        [Markierung in der Ecke des Symbols]   die Zeile in der Farbe der Markierung getoent
+        Name des Gegenstands                                                        Preis
+        ilvl: 12   +83.1%          <- der Zugewinn, hinter der zweiten Zeile (ohne sie: hinter dem Namen)
 
     Verbesserung: Pfeil und Zugewinn; Verbesserung erst mit hoeherer Stufe: gelber Pfeil und die Stufe; besser fuer
     ein Gruppenmitglied: violetter Stern. Form und Farbe sind die der Optionen (Aussehen der Markierungen).
+    Gekennzeichnet wird nur, was der Spieler selbst bekommt (Zeilen "item:..."), nicht was andere erwuerfeln.
 
     Der Loot Feed bietet anderen Addons keine Schnittstelle; seine Zeilen sind namenlose Rahmen. EasyGear findet sie
     ueber den Rahmen des Feeds - EllesmereUI fuehrt ihn im Entsperrmodus unter dem Schluessel "EUI_LootFeed"
-    (EllesmereUI._unlockRegisteredElements) - und erkennt eine Zeile an ihrem Aufbau (icon, name, sub, value). Jede
-    Zeile wird einmal angenommen: von da an meldet ein Haken auf icon:SetTexture jede neue Belegung (der Feed fuellt
-    eine Zeile immer zuerst mit dem Symbol; r.data traegt dann schon den neuen Gegenstand). Die eigenen Teile sind
-    Kinder der Zeile und blenden mit ihr aus. Gesucht wird nur, wenn etwas gepluendert wurde oder Daten eintreffen.
+    (EllesmereUI._unlockRegisteredElements) - und erkennt eine Zeile an ihrem Aufbau (icon, badge, name, sub, value).
+    Jede Zeile wird einmal angenommen: von da an meldet ein Haken auf badge:SetText jede neue Belegung (der Feed
+    setzt beim Fuellen diesen Text als letzten; Name, zweite Zeile und Preis stehen dann schon). Der Text haengt an
+    den Texten des Feeds und endet wie sie vor dem Preis - er ueberdeckt ihn nie; reicht der Platz nicht, kuerzt
+    ihn das Spiel. Markierung und Text liegen auf einer eigenen Schicht ueber der Zeile (ueber deren Rand), die
+    Toenung in der Zeile selbst. Alles sind Kinder der Zeile und blendet mit ihr aus. Gesucht wird nur, wenn etwas
+    gepluendert wurde oder Daten eintreffen.
 
     Gelesen aus EllesmereUIForeverEssentials_LootFeed.lua (9.8.6). Fehlt etwas davon, sagt /eg status es.
 -----------------------------------------------------------------------------]]
@@ -27,12 +33,14 @@ local L = EG.L
 local Score, Marks = EG.Score, EG.Marks
 
 local type, pcall, ipairs = type, pcall, ipairs
-local sformat = string.format
+local sformat, ssub = string.format, string.sub
 local mmax, mmin = math.max, math.min
 
 local ELEMENT = "EUI_LootFeed"      -- Schluessel des Loot Feeds im Entsperrmodus von EllesmereUI
 local TINT_ALPHA = 0.16             -- so stark toent die Farbe der Markierung die Zeile
 local MARK_MIN, MARK_MAX = 12, 20   -- Groesse der Markierung auf dem Symbol (60 % des Symbols, in diesen Grenzen)
+local GAP = 8                       -- Abstand des eigenen Textes zum Text des Feeds davor
+local LEVEL = 3                     -- so weit liegt die eigene Schicht ueber der Zeile (deren Rand liegt 1 darueber)
 
 local rows = setmetatable({}, { __mode = "k" })     -- Zeile -> true: Zeilen, an denen EasyGear haengt
 local adopted = 0
@@ -62,8 +70,21 @@ end
 local function IsRow(f)
     return type(f) == "table"
        and type(f.icon) == "table" and type(f.icon.SetTexture) == "function"
+       and type(f.badge) == "table" and type(f.badge.SetText) == "function"
        and type(f.name) == "table" and type(f.sub) == "table" and type(f.value) == "table"
-       and type(f.CreateTexture) == "function" and type(f.CreateFontString) == "function"
+       and type(f.CreateTexture) == "function" and type(f.GetFrameLevel) == "function"
+end
+
+--[[ Der Gegenstand einer Zeile - nur wenn der Spieler ihn selbst bekommen hat. Der Feed nennt solche Zeilen
+     "item:<Link>"; was andere erwuerfelt haben ("roll:..."), traegt auch einen Link, ist aber nicht zu haben.
+     Im Verlauf (Umschalt + Mausrad) heissen die Zeilen "history:<n>", der urspruengliche Name steht im Eintrag. ]]
+local function ItemLink(row)
+    local data = row.data
+    if type(data) ~= "table" or type(data.link) ~= "string" then return nil end
+    local key = row.key
+    if row.history then key = data.key end
+    if type(key) ~= "string" or ssub(key, 1, 5) ~= "item:" then return nil end
+    return data.link
 end
 
 ------------------------------------------------------------------------------
@@ -76,7 +97,7 @@ local function Hide(row)
     if row.EasyGearText then row.EasyGearText:Hide() end
 end
 
--- Was unten rechts steht: der Zugewinn, die Stufe, oder dass es der Gruppe nuetzt
+-- Der Text: der Zugewinn, die Stufe, oder dass es der Gruppe nuetzt
 local function Label(state, link)
     if state == "GROUP" then return L.FEED_GROUP end
     local result = Score.Compare(link)
@@ -93,9 +114,49 @@ local function MatchFont(fs, like)
     if ok and type(file) == "string" and type(size) == "number" then pcall(fs.SetFont, fs, file, size, flags or "") end
 end
 
+local function Shown(region)
+    return type(region.IsShown) ~= "function" or region:IsShown() and true or false
+end
+
+-- Hoehe eines Rahmens oder Bildes (Symbol und Zeile haben feste Groessen)
+local function Size(region)
+    local h = type(region.GetHeight) == "function" and region:GetHeight() or 0
+    return type(h) == "number" and h or 0
+end
+
+local function TextWidth(fs)
+    local w = type(fs.GetStringWidth) == "function" and fs:GetStringWidth() or 0
+    return type(w) == "number" and w or 0
+end
+
+--[[ Die eigene Schicht einer Zeile: ein Rahmen ueber der Zeile fuer Markierung und Text. Der Rand der Zeile ist
+     ein Kindrahmen eine Ebene ueber ihr (PP.CreateBorder, r.lootBorder) - direkt in der Zeile laegen sie darunter. ]]
+local function Layer(row)
+    local layer = row.EasyGearLayer
+    if not layer then
+        layer = CreateFrame("Frame", nil, row)
+        layer:SetAllPoints(row)
+        row.EasyGearLayer = layer
+    end
+    layer:SetFrameLevel(row:GetFrameLevel() + LEVEL)
+    return layer
+end
+
+--[[ Den Text setzen: hinter die zweite Zeile des Feeds, ohne sie hinter den Namen - bis dorthin, wo deren Platz
+     endet (vor dem Preis). Der Feed haengt den Namen bei jedem Fuellen neu ein; der eigene Text folgt ihm.      ]]
+local function PlaceText(row, text)
+    text:ClearAllPoints()
+    if Shown(row.sub) then
+        text:SetPoint("TOPLEFT", row.sub, "TOPLEFT", TextWidth(row.sub) + GAP, 0)
+        text:SetPoint("TOPRIGHT", row.sub, "TOPRIGHT", 0, 0)
+    else
+        text:SetPoint("LEFT", row.name, "LEFT", TextWidth(row.name) + GAP, 0)
+        text:SetPoint("RIGHT", row.name, "RIGHT", 0, 0)
+    end
+end
+
 local function Paint(row)
-    local data = row.data
-    local link = type(data) == "table" and type(data.link) == "string" and data.link or nil
+    local link = ItemLink(row)
     local state, loading
     if link and Feed.Enabled() then
         state, loading = Score.UpgradeState(link)
@@ -107,15 +168,27 @@ local function Paint(row)
         return
     end
 
+    local layer = Layer(row)
     local icon = row.icon
     local mark = row.EasyGearMark
     if not mark then
-        mark = row:CreateTexture(nil, "OVERLAY")
-        mark:SetPoint("TOPLEFT", icon, "TOPLEFT", -3, 3)
+        mark = layer:CreateTexture(nil, "OVERLAY")
         row.EasyGearMark = mark
     end
-    local side = type(icon.GetHeight) == "function" and icon:GetHeight() or 0
-    Marks.Style(mark, state, mmax(MARK_MIN, mmin(MARK_MAX, side * 0.6)))
+    -- 60 % des Symbols, mindestens lesbar, nie hoeher als die Zeile
+    local side = Size(icon)
+    local size = mmax(MARK_MIN, mmin(MARK_MAX, side * 0.6))
+    local height = Size(row)
+    if height > 0 then size = mmin(size, height) end
+    Marks.Style(mark, state, size)
+    mark:ClearAllPoints()
+    if size + 1 <= side then
+        -- in der Ecke des Symbols, nicht darueber hinaus: bei Kacheln und Kaesten ist das Symbol so gross wie die Zeile
+        mark:SetPoint("TOPLEFT", icon, "TOPLEFT", 1, -1)
+    else
+        -- ein winziges Symbol (niedrige Zeilen): die Markierung liegt mittig darauf und bleibt so in der Zeile
+        mark:SetPoint("CENTER", icon, "CENTER", 0, 0)
+    end
     mark:Show()
 
     local r, g, b = Marks.Tint(state)
@@ -130,17 +203,17 @@ local function Paint(row)
 
     local text = row.EasyGearText
     if not text then
-        text = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        text:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", -6, 3)
-        text:SetJustifyH("RIGHT")
+        text = layer:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        text:SetJustifyH("LEFT")
+        text:SetWordWrap(false)
         row.EasyGearText = text
     end
-    -- Kacheln (Icon Tray) zeigen keinen Namen und tragen unten rechts die Anzahl: dort steht nur die Markierung
-    local named = type(row.name.IsShown) ~= "function" or row.name:IsShown()
-    if named then
+    -- Kacheln (Icon Tray) zeigen keinen Namen: dort steht nur die Markierung
+    if Shown(row.name) then
         MatchFont(text, row.sub)
         text:SetText(Label(state, link))
         text:SetTextColor(r, g, b, 1)
+        PlaceText(row, text)
         text:Show()
     else
         text:Hide()
@@ -154,8 +227,8 @@ end
 local function Adopt(row)
     rows[row] = true
     adopted = adopted + 1
-    -- der Feed fuellt eine Zeile immer zuerst mit dem Symbol (Fill): da traegt r.data schon den neuen Gegenstand
-    pcall(hooksecurefunc, row.icon, "SetTexture", function() EG:Try("feed", Paint, row) end)
+    -- der Feed setzt beim Fuellen (Fill) diesen Text als letzten: Name, zweite Zeile und Preis stehen dann schon
+    pcall(hooksecurefunc, row.badge, "SetText", function() EG:Try("feed", Paint, row) end)
 end
 
 -- Die Zeilen des Feeds durchgehen: neue annehmen, alle sichtbaren neu kennzeichnen

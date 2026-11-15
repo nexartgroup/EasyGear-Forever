@@ -17,6 +17,9 @@
     Taschen gestiegen (BAG_UPDATE_DELAYED). Nicht neu ist, was beim Anmelden schon da war, was gerade abgelegt
     wurde (es war angelegt), was nur seinen Link wechselt (verzaubert) und was aus der offenen Bank kommt.
     EasyGear legt nichts an: die Einblendung weist nur hin.
+
+    Die Karten liegen in der Ebene der eigenen Fenster (HIGH), dort weit oben: ueber den Fenstern, aber unter
+    den Rueckfragen des Spiels (DIALOG) - eine Einblendung verdeckt nie einen Knopf einer Rueckfrage.
 -----------------------------------------------------------------------------]]
 
 local _, EG = ...
@@ -31,6 +34,7 @@ local tremove, tconcat = table.remove, table.concat
 local mmax, mmin = math.max, math.min
 
 local WIDTH, HEIGHT, GAP = 320, 64, 6
+local LEVEL = 200                   -- Rahmenebene der Karten in "HIGH": ueber Fenstern, die niemand nach vorn geholt hat
 local MAX_SHOWN = 3                 -- so viele stehen zugleich
 local MAX_QUEUE = 8                 -- so viele warten hoechstens; aeltere fallen weg
 local FADE_IN, FADE_OUT = 0.25, 0.5 -- Sekunden Ein- und Ausblenden (Teil der Standzeit)
@@ -64,16 +68,27 @@ local anchor
 local pool, shown, queue = {}, {}, {}
 Toast.shown, Toast.queue = shown, queue
 
+-- Nach dem Verschieben haelt das Spiel den Rahmen an einem Punkt des Bildschirms fest: Punkt, Bezugspunkt, Abstand
 local function SavePosition()
     if not (anchor and EG.cdb) then return end
-    local point, _, _, x, y = anchor:GetPoint(1)
-    EG.cdb.toast = { point = point, x = x, y = y }
+    local point, _, rel, x, y = anchor:GetPoint(1)
+    EG.cdb.toast = { point = point, rel = rel, x = x, y = y }
 end
 
 local function Place()
     local pos = EG.cdb and EG.cdb.toast or DEFAULT_POS
+    local point = pos.point or DEFAULT_POS.point
     anchor:ClearAllPoints()
-    anchor:SetPoint(pos.point or DEFAULT_POS.point, UIParent, pos.point or DEFAULT_POS.point, pos.x or 0, pos.y or 0)
+    anchor:SetPoint(point, UIParent, pos.rel or point, pos.x or 0, pos.y or 0)
+end
+
+-- Das Ziehen beenden und den Platz merken. Verschwindet eine Karte, waehrend sie gezogen wird, meldet das Spiel
+-- kein OnDragStop mehr: darum auch beim Schliessen.
+local function StopDrag(f)
+    if not f.dragging then return end
+    f.dragging = false
+    anchor:StopMovingOrSizing()
+    SavePosition()
 end
 
 -- Der Platz der Einblendungen: ein unsichtbarer Rahmen, an dem die Karten haengen und der sich verschieben laesst
@@ -97,6 +112,7 @@ end
 local Display
 
 local function Release(f)
+    StopDrag(f)
     for i = #shown, 1, -1 do
         if shown[i] == f then tremove(shown, i) end
     end
@@ -107,9 +123,9 @@ local function Release(f)
     Layout()
 end
 
--- Standzeit: einblenden, stehen, ausblenden; die Linie unten laeuft ab. Unter der Maus steht die Zeit.
+-- Standzeit: einblenden, stehen, ausblenden; die Linie unten laeuft ab. Unter der Maus und beim Ziehen steht die Zeit.
 local function OnUpdate(self, elapsed)
-    if not self.hover then self.age = self.age + elapsed end
+    if not (self.hover or self.dragging) then self.age = self.age + elapsed end
     local total = self.seconds
     if self.age >= total then
         Release(self)
@@ -121,7 +137,7 @@ local function OnUpdate(self, elapsed)
     elseif self.age > total - FADE_OUT then
         alpha = (total - self.age) / FADE_OUT
     end
-    if self.hover then alpha = 1 end
+    if self.hover or self.dragging then alpha = 1 end
     self:SetAlpha(alpha)
     self.timer:SetWidth(mmax(1, (WIDTH - 2) * (1 - self.age / total)))
 end
@@ -156,6 +172,7 @@ local function NewFrame()
     local f = CreateFrame("Button", nil, UIParent)
     f:SetSize(WIDTH, HEIGHT)
     f:SetFrameStrata("HIGH")
+    f:SetFrameLevel(LEVEL)
     UI.Box(f, "bg", "border")
 
     f.bar = f:CreateTexture(nil, "ARTWORK")              -- links: ein Balken in der Farbe der Markierung
@@ -190,11 +207,11 @@ local function NewFrame()
     f:SetScript("OnEnter", EG:Guard("toast", OnEnter))
     f:SetScript("OnLeave", EG:Guard("toast", OnLeave))
     f:SetScript("OnClick", EG:Guard("toast", OnClick))
-    f:SetScript("OnDragStart", EG:Guard("toast", function() anchor:StartMoving() end))
-    f:SetScript("OnDragStop", EG:Guard("toast", function()
-        anchor:StopMovingOrSizing()
-        SavePosition()
+    f:SetScript("OnDragStart", EG:Guard("toast", function(self)
+        self.dragging = true
+        anchor:StartMoving()
     end))
+    f:SetScript("OnDragStop", EG:Guard("toast", StopDrag))
     f:Hide()
     return f
 end
@@ -296,17 +313,35 @@ end
 
 local counts            -- Link -> Zahl der Faecher beim letzten Blick (nil: noch nie geschaut)
 local ids = {}          -- Gegenstandsnummer -> Zahl der Faecher beim letzten Blick
-local wornSince = {}    -- Links, die beim letzten Blick angelegt waren (was davon jetzt in den Taschen liegt, wurde abgelegt)
+local wornSeen = {}     -- Gegenstandsnummer -> wie oft seit dem letzten Blick hoechstens angelegt
 local pending = {}      -- Link -> bis wann auf seine Daten gewartet wird
 local lastShown = {}    -- Link -> wann zuletzt eingeblendet
 local quietUntil = 0
 local bankOpen = false
 
-local function NoteWorn()
+-- Gegenstandsnummer -> wie oft gerade angelegt (zwei gleiche Ringe: 2)
+local function Worn()
+    local out = {}
     for slot = 1, 19 do
         local link = Items.EquippedLink(slot)
-        if link then wornSince[link] = true end
+        if link then
+            local id = Items.IDFromLink(link) or link
+            out[id] = (out[id] or 0) + 1
+        end
     end
+    return out
+end
+
+--[[ Merken, was angelegt ist oder war. Gezaehlt wird nach Gegenstandsnummer, nicht nach Link: der Link eines
+     angelegten Gegenstands aendert sich mit der Stufe des Charakters und beim Verzaubern, die Nummer nicht.
+     Zwischen zwei Blicken in die Taschen zaehlt der hoechste Stand - was davon nicht mehr angelegt ist und in
+     den Taschen auftaucht, wurde abgelegt. Rueckgabe: der Stand von eben.                                      ]]
+local function NoteWorn()
+    local now = Worn()
+    for id, n in pairs(now) do
+        if n > (wornSeen[id] or 0) then wornSeen[id] = n end
+    end
+    return now
 end
 
 local function ByID(byLink)
@@ -334,19 +369,21 @@ end
 
 local function OnBags()
     local now = Recommend.BagGear()
-    local before, idsBefore, worn = counts, ids, wornSince
-    counts, ids, wornSince = now, ByID(now), {}
-    NoteWorn()
+    local before, idsBefore, seen = counts, ids, wornSeen
+    local worn = NoteWorn()             -- hebt seen auf den Stand von jetzt: seen[id] >= worn[id]
+    counts, ids, wornSeen = now, ByID(now), worn
     if not before or not Toast.Enabled() or bankOpen or Now() < quietUntil then return end
     for link, n in pairs(now) do
         local id = Items.IDFromLink(link) or link
-        if n > (before[link] or 0) and (ids[id] or 0) > (idsBefore[id] or 0) and not worn[link] then
-            Consider(link)
-        end
+        -- neu in den Taschen, abzueglich dessen, was nur abgelegt wurde (ein zweites Stueck eines angelegten Rings zaehlt)
+        local gained = (ids[id] or 0) - (idsBefore[id] or 0) - ((seen[id] or 0) - (worn[id] or 0))
+        if n > (before[link] or 0) and gained > 0 then Consider(link) end
     end
 end
 
 EG:On("BAG_UPDATE_DELAYED", OnBags)
+-- auch was angelegt wird, ohne durch die Taschen zu gehen (aus der Bank, vom Haendler), gilt spaeter als abgelegt
+EG:On("PLAYER_EQUIPMENT_CHANGED", NoteWorn)
 EG:On("PLAYER_ENTERING_WORLD", function() quietUntil = Now() + QUIET end)
 EG:On("BANKFRAME_OPENED", function() bankOpen = true end)
 EG:On("BANKFRAME_CLOSED", function() bankOpen = false end)

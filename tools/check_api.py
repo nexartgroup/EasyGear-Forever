@@ -35,7 +35,7 @@ CLIENT_STRINGS = {
 OWN_GLOBALS = {"EasyGear", "EasyGearDB", "EasyGearCharDB", "EasyGearLocales"}
 OWN_PREFIXES = ("SLASH_EASYGEAR", "EasyGear_")
 # globals of optional third-party addons that Compat.lua reaches through _G (never required)
-THIRD_PARTY = {"Baganator", "Syndicator", "EllesmereUI", "EUI_Bags", "DialogueUI_DB", "DialogueUIAPI", "DUIQuestFrame"}
+THIRD_PARTY = {"Baganator", "Syndicator", "EllesmereUI", "EllesmereUIDB", "EUI_Bags", "DialogueUI_DB", "DialogueUIAPI", "DUIQuestFrame"}
 # methods of Dialogue UI's own objects (tooltip, quest frame, reward buttons, object pools) that DialogueUI.lua calls; they
 # are not in the Forever UI source - tools/check_dui.py checks them against the source of Dialogue UI itself
 THIRD_PARTY_METHODS = {"AddLeftLine", "AddRightLine", "AddBlankLine", "ReprocessInfo", "ProcessActiveObjects",

@@ -317,7 +317,10 @@ taken from mail or a trade - a card in the shape of the item appears for **15 se
 * **What counts as new:** the number of bag slots holding an item rose since the last look into the bags. Not new: what
   was there at login or right after a loading screen (5 seconds), what you just took off, an item that only changed its
   link (enchanted), anything taken from the open bank, and the same item again within a minute. An upgrade that needs a
-  higher level (yellow arrow) is not announced.
+  higher level (yellow arrow) is not announced. What you wear is known by the item, not by its link: the ring you take
+  off is not new, a second one of the ring you wear is.
+* The cards lie above EasyGear's windows, but below the game's dialogs (confirmations and the like): a card never
+  covers a button of a dialog.
 * EasyGear equips nothing: the card only points at the item.
 
 ## EllesmereUI Loot Feed
@@ -325,19 +328,25 @@ taken from mail or a trade - a card in the shape of the item appears for **15 se
 The **Loot Feed** of EllesmereUI (*Forever Essentials > Loot*) lists what you just received as short-lived rows. EasyGear
 marks the rows of items that matter:
 
-| Item | Marker on the icon | Row | Words at the bottom right |
+| Item | Marker on the icon | Row | Words on the second line |
 |---|---|---|---|
 | better than what you wear | upgrade marker (green arrow) | tinted in the marker's colour | the gain, e.g. `+83.1%` |
 | an upgrade, but your level is too low yet | level marker (yellow arrow) | tinted yellow | `level 45` |
 | no upgrade for you, but for a group member | group marker (violet star) | tinted violet | `group` |
 
 * Shape and colour follow [Marker look](#marker-look); the words use the feed's own font and size.
+* The marker sits in the top left corner of the icon. The words follow the feed's second line (`ilvl: 12   +83.1%`) -
+  or the name, when the feed shows no second line - and end where that line ends, before the price: they never lie on
+  it. In a feed too narrow for them the client shortens them.
+* Only what **you** received is marked - not the rows that tell what somebody else won on a roll. Looking back in the
+  feed's history (Shift and the mouse wheel) shows the marks again, judged by what you wear now.
 * In the feed's *Icon Tray* style the tiles get the marker and the tint only (their corner holds the count).
 * The marking belongs to the marker group *Vendors, loot, rolls, trade, mail* (`/eg items`): switched off there, the feed
   stays untouched.
 * Hovering a row shows the feed's item tooltip - with EasyGear's comparison in it, like every item tooltip.
 * The feed offers no interface to other addons. EasyGear reaches its rows through the frame EllesmereUI registers for
-  its unlock mode and follows each row with a hook on its icon; nothing of EllesmereUI is changed. Written against
+  its unlock mode and follows each row with a hook on the last text the feed sets when it fills the row; marker and
+  words lie on a layer of their own above the row's border. Nothing of EllesmereUI is changed. Written against
   EllesmereUI 9.8.6 (read from its source) and **tested here on a model of the feed, not in the game** - `/eg status`
   has a line `EllesmereUI Loot Feed: ...` that says whether the feed was found, is switched off in EllesmereUI, or was
   not found (another version).
@@ -347,9 +356,12 @@ marks the rows of items that matter:
 The comparison window (`/eg`) and the profile window (`/egprofile`) are drawn by EasyGear itself: flat dark surfaces with
 a thin border, one accent colour, section labels in capitals, tabs with an underline, flat buttons.
 
-* **With EllesmereUI** the accent colour is the one of your EllesmereUI theme and the font is EllesmereUI's, so the
-  windows match the rest of your interface - a changed theme is followed the next time a window opens. **Without it**
-  the accent is EasyGear's blue and the font is the game's.
+* **With EllesmereUI** the accent colour is the one of your EllesmereUI theme and the font is the one you chose there
+  (*Fonts*, the global font), so the windows match the rest of your interface - a changed theme is followed the next
+  time a window opens. **Without it** the accent is EasyGear's blue and the font is the game's. On Korean, Chinese and
+  Russian clients the game's font is always used: item names come in the client's script, which EllesmereUI's fonts
+  need not contain.
+* A click brings a window to the front of the others on its level.
 * **Comparison window:** two cards (*new item*, *equipped*) with icon (ringed in the quality colour), name, the score
   as a large number and the calculation as a table. Behind every row a **bar** shows how much it contributes to the
   score - the largest contribution fills the row. The slots of rings, trinkets and one-hand weapons are tabs on the
@@ -433,8 +445,8 @@ and the exact text of any Lua error (`/console scriptErrors 1` shows them). For 
 Run from the root of this repository:
 
 ```
-lua5.1 tests/run.lua                 # unit tests on a model of the client (Lua 5.1 only), ~490 checks
-python3 tests/mutate.py              # mutation check: breaks the addon in ~780 small ways, the tests must notice
+lua5.1 tests/run.lua                 # unit tests on a model of the client (Lua 5.1 only), ~500 checks
+python3 tests/mutate.py              # mutation check: breaks the addon in ~840 small ways, the tests must notice
                                      # (MUT_SHARD=0/3 ... 2/3 splits it over several processes)
 tools/check.sh <Interface/AddOns of the Forever UI source> [<folder of the Dialogue UI addon>]
                                      # luacheck against a std built from the UI source + checks that every
@@ -491,7 +503,9 @@ What this proves and what it does not:
   checked on a drawn preview, not in the game: fonts of the real client may need a pixel here or there.
 * The Loot Feed of EllesmereUI is reached through names of EllesmereUI that are not meant for other addons (the frame
   it registers for its unlock mode, the fields of its rows). Another version may rename them; then nothing is marked and
-  `/eg status` says that the feed was not found. Rows in the feed's options preview are not marked.
+  `/eg status` says that the feed was not found. Rows in the feed's options preview are not marked. Where marker and
+  words sit was worked out from the feed's source (its anchors, its border frames) on a model with a simple layout
+  calculation - in the game a pixel may differ.
 * Dialogue UI is connected through the interface it offers to other addons (a processor for its item tooltip, the hook
   point it keeps for Pawn, its reward buttons) and tested against a model of it. Tooltips that Dialogue UI opens for
   links inside quest text are no item tooltips for that interface (no comparison, no Pawn, no EasyGear). The sell
@@ -515,14 +529,17 @@ This edition is a new codebase for the Forever client, not an update of that one
   item shows for 15 seconds - icon, name, gain, what it replaces. Hover holds it and shows the tooltip, a click opens
   the comparison, a right-click closes it, dragging moves it. Setting, seconds (3-60) and `/eg toast` (see
   [Notification for better items](#notification-for-better-items)).
-* **EllesmereUI Loot Feed:** rows of better items are tinted, carry the marker on their icon and the gain; yellow for
-  a later level, violet for a group member (see [EllesmereUI Loot Feed](#ellesmereui-loot-feed)).
+* **EllesmereUI Loot Feed:** rows of better items are tinted, carry the marker on their icon and the gain behind the
+  second line; yellow for a later level, violet for a group member (see [EllesmereUI Loot Feed](#ellesmereui-loot-feed)).
 * **New look:** comparison window and profile window are rebuilt in a flat dark style of EasyGear's own - cards, a bar
   behind each row for its share of the score, the verdict on a coloured strip, tabs, flat selectors and buttons - with the
   accent colour and font of EllesmereUI when it is installed (see [Look of the windows](#look-of-the-windows)). The
   templates of the default interface are no longer used for them.
-* Tests and tools: a model of the Loot Feed built after its source, tests for the kit, the windows, the notification
-  and the feed, and the mutations for all of it.
+* Tests and tools: a model of the Loot Feed built after its source (fill order, anchors, border frames, roll rows,
+  history), a layout calculation in the model of the client (where a region lies on the screen), tests for the kit,
+  the windows, the notification and the feed, and the mutations for all of it. An independent review of the new parts
+  against the sources of the client and of EllesmereUI found ten defects of placement and detection (words on the
+  price, layers, a missed and a false notification, fonts); all are fixed and covered by tests.
 
 ## Changes in 4.4.0
 
@@ -857,7 +874,11 @@ aus der Post oder einem Handel -, erscheint für **15 Sekunden** eine Karte in F
 * **Was als neu gilt:** die Zahl der Taschenplätze, die ein Item halten, ist seit dem letzten Blick in die Taschen gestiegen.
   Nicht neu ist, was beim Anmelden oder direkt nach einem Ladebildschirm (5 Sekunden) schon da war, was du gerade abgelegt hast,
   ein Item, das nur seinen Link gewechselt hat (verzaubert), alles aus der offenen Bank und dasselbe Item noch einmal innerhalb
-  einer Minute. Eine Verbesserung, die erst mit höherer Stufe nutzbar ist (gelber Pfeil), wird nicht eingeblendet.
+  einer Minute. Eine Verbesserung, die erst mit höherer Stufe nutzbar ist (gelber Pfeil), wird nicht eingeblendet. Was du
+  trägst, wird am Item erkannt, nicht an seinem Link: der Ring, den du ablegst, ist nicht neu - ein zweiter desselben Rings,
+  den du trägst, schon.
+* Die Karten liegen über den Fenstern von EasyGear, aber unter den Rückfragen des Spiels (Bestätigungen und dergleichen):
+  eine Karte verdeckt nie einen Knopf einer Rückfrage.
 * EasyGear legt nichts an: die Karte weist nur auf das Item hin.
 
 ## Loot Feed von EllesmereUI
@@ -865,19 +886,25 @@ aus der Post oder einem Handel -, erscheint für **15 Sekunden** eine Karte in F
 Der **Loot Feed** von EllesmereUI (*Forever Essentials > Beute*) zeigt als kurzlebige Zeilen, was du gerade bekommen hast.
 EasyGear kennzeichnet die Zeilen der Items, auf die es ankommt:
 
-| Item | Markierung am Symbol | Zeile | Text unten rechts |
+| Item | Markierung am Symbol | Zeile | Text in der zweiten Zeile |
 |---|---|---|---|
 | besser als das Angelegte | Markierung „Verbesserung“ (grüner Pfeil) | in der Farbe der Markierung getönt | der Zugewinn, z. B. `+83.1%` |
 | Verbesserung, aber die Stufe reicht noch nicht | Markierung „Stufe“ (gelber Pfeil) | gelb getönt | `Stufe 45` |
 | für dich keine, aber für ein Gruppenmitglied | Markierung „Gruppe“ (violetter Stern) | violett getönt | `Gruppe` |
 
 * Form und Farbe folgen [Aussehen der Markierungen](#aussehen-der-markierungen); der Text benutzt Schrift und Größe des Feeds.
+* Die Markierung sitzt in der linken oberen Ecke des Symbols. Der Text folgt der zweiten Zeile des Feeds (`ilvl: 12   +83.1%`) -
+  oder dem Namen, wenn der Feed keine zweite Zeile zeigt - und endet, wo diese Zeile endet, vor dem Preis: er liegt nie darauf.
+  Ist der Feed dafür zu schmal, kürzt ihn das Spiel.
+* Gekennzeichnet wird nur, was **du** bekommen hast - nicht die Zeilen, die sagen, was jemand anderes erwürfelt hat. Im Verlauf
+  des Feeds (Umschalt und Mausrad) erscheinen die Markierungen wieder, beurteilt nach dem, was du jetzt trägst.
 * Im Stil *Icon Tray* des Feeds bekommen die Kacheln nur Markierung und Tönung (in ihrer Ecke steht die Anzahl).
 * Die Kennzeichnung gehört zur Markierungsgruppe *Händler, Beute, Würfeln, Handel, Post* (`/eg items`): dort abgeschaltet,
   bleibt der Feed unberührt.
 * Fährst du über eine Zeile, zeigt der Feed seinen Item-Tooltip - mit dem Vergleich von EasyGear darin, wie in jedem Item-Tooltip.
 * Der Feed bietet anderen Addons keine Schnittstelle. EasyGear erreicht seine Zeilen über den Rahmen, den EllesmereUI für
-  seinen Entsperrmodus anmeldet, und folgt jeder Zeile mit einem Haken an ihrem Symbol; an EllesmereUI wird nichts geändert.
+  seinen Entsperrmodus anmeldet, und folgt jeder Zeile mit einem Haken an dem Text, den der Feed beim Füllen der Zeile als
+  letzten setzt; Markierung und Text liegen auf einer eigenen Schicht über dem Rand der Zeile. An EllesmereUI wird nichts geändert.
   Gebaut gegen EllesmereUI 9.8.6 (aus dem Quelltext gelesen) und **hier an einem Modell des Feeds getestet, nicht im Spiel** -
   `/eg status` hat eine Zeile `EllesmereUI Loot Feed: ...`, die sagt, ob der Feed gefunden wurde, in EllesmereUI abgeschaltet
   ist oder nicht gefunden wurde (andere Fassung).
@@ -887,9 +914,12 @@ EasyGear kennzeichnet die Zeilen der Items, auf die es ankommt:
 Das Vergleichsfenster (`/eg`) und das Profilfenster (`/egprofile`) zeichnet EasyGear selbst: flache dunkle Flächen mit dünnem
 Rand, eine Akzentfarbe, Abschnittstitel in Versalien, Reiter mit Unterstrich, flache Knöpfe.
 
-* **Mit EllesmereUI** ist die Akzentfarbe die deines EllesmereUI-Themas und die Schrift die von EllesmereUI, sodass die Fenster
-  zum Rest deiner Oberfläche passen - ein gewechseltes Thema gilt beim nächsten Öffnen eines Fensters. **Ohne** gilt das Blau
-  von EasyGear und die Schrift des Spiels.
+* **Mit EllesmereUI** ist die Akzentfarbe die deines EllesmereUI-Themas und die Schrift die dort gewählte (*Schriften*, die
+  globale Schrift), sodass die Fenster zum Rest deiner Oberfläche passen - ein gewechseltes Thema gilt beim nächsten Öffnen
+  eines Fensters. **Ohne** gilt das Blau von EasyGear und die Schrift des Spiels. Auf koreanischen, chinesischen und russischen
+  Clients gilt immer die Schrift des Spiels: Itemnamen kommen in der Schrift des Clients, die die Schriften von EllesmereUI
+  nicht enthalten müssen.
+* Ein Klick holt ein Fenster vor die anderen seiner Ebene.
 * **Vergleichsfenster:** zwei Karten (*neues Item*, *angelegt*) mit Symbol (im Ring der Qualitätsfarbe), Name, der Wertung als
   großer Zahl und der Rechnung als Tabelle. Hinter jeder Zeile zeigt ein **Balken**, wie viel sie zur Wertung beiträgt - der
   größte Beitrag füllt die Zeile. Die Plätze von Ringen, Schmuck und Einhandwaffen sind Reiter auf der Karte des Angelegten.
@@ -1012,7 +1042,8 @@ im Spiel**.
 * Der Loot Feed von EllesmereUI wird über Namen erreicht, die EllesmereUI nicht für andere Addons gedacht hat (der Rahmen,
   den es für seinen Entsperrmodus anmeldet, die Felder seiner Zeilen). Eine andere Fassung kann sie umbenennen; dann wird
   nichts markiert, und `/eg status` sagt, dass der Feed nicht gefunden wurde. Zeilen in der Vorschau der Feed-Optionen
-  werden nicht markiert.
+  werden nicht markiert. Wo Markierung und Text sitzen, ist aus dem Quelltext des Feeds (seine Ankerpunkte, seine Rand-Rahmen)
+  an einem Modell mit einfacher Lageberechnung ermittelt - im Spiel kann ein Pixel abweichen.
 * Dialogue UI ist über die Schnittstelle angebunden, die es anderen Addons anbietet (ein Verarbeiter für seinen Item-Tooltip, die
   Stelle, die es für Pawn vorhält, seine Belohnungsknöpfe), und gegen ein Modell davon getestet. Tooltips, die Dialogue UI für
   Links im Questtext öffnet, sind für diese Schnittstelle keine Item-Tooltips (kein Vergleich, kein Pawn, kein EasyGear). Die
