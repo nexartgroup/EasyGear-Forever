@@ -530,7 +530,12 @@ function Mock.new(opts)
         RequestLoadItemDataByID = function(id)
             self.loadRequests[#self.loadRequests + 1] = id
         end,
-        GetItemQualityColor = function(q) return 1, 1, 1 end,
+        -- ITEM_QUALITY_COLORS: poor grey, common white, uncommon green, rare blue, epic purple, legendary orange
+        GetItemQualityColor = function(q)
+            local c = ({ [0] = { 0.62, 0.62, 0.62 }, { 1, 1, 1 }, { 0.12, 1, 0 }, { 0, 0.44, 0.87 }, { 0.64, 0.21, 0.93 }, { 1, 0.5, 0 } })[q or 1]
+                or { 1, 1, 1 }
+            return c[1], c[2], c[3]
+        end,
     }
 
     -- Tooltip data in the shape of C_TooltipInfo.GetHyperlink

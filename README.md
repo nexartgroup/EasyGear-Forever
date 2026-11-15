@@ -12,7 +12,7 @@ need any other addon: it is built on the default Forever interface and nothing e
 
 * Interface `16001`, Lua 5.1, no XML files
 * Settings page in *Options > AddOns*, entry in the minimap addon compartment, comparison window and
-  profile window in the standard frame style
+  profile window in a flat dark style of their own (see [Look of the windows](#look-of-the-windows))
 * Texts in English and German; other client languages are partly translated and fall back to English
 
 [Deutsche Version weiter unten](#easygear-für-wow-forever-deutsch)
@@ -37,11 +37,15 @@ need any other addon: it is built on the default Forever interface and nothing e
 - [Group hints](#group-hints)
 - [Marker look](#marker-look)
 - [Baganator and EllesmereUI](#baganator-and-ellesmereui)
+- [Notification for better items](#notification-for-better-items)
+- [EllesmereUI Loot Feed](#ellesmereui-loot-feed)
+- [Look of the windows](#look-of-the-windows)
 - [Dialogue UI](#dialogue-ui)
 - [Troubleshooting](#troubleshooting)
 - [Verification](#verification)
 - [Known limits](#known-limits)
 - [The 3.3.5a edition](#the-335a-edition)
+- [Changes in 4.5.0](#changes-in-450)
 - [Changes in 4.4.0](#changes-in-440)
 - [Changes in 4.3.1](#changes-in-431)
 - [Changes in 4.3.0](#changes-in-430)
@@ -60,7 +64,7 @@ Restart the game or `/reload`. Saved settings are `EasyGearDB` (account) and `Ea
 From GitHub: *Code > Download ZIP*, unpack it, and copy the inner folder `EasyGear` - not the folder of the
 ZIP itself (`EasyGear-Forever-main`), which also holds the tests and tools.
 
-At login the chat shows `EasyGear 4.4.0 loaded.`
+At login the chat shows `EasyGear 4.5.0 loaded.`
 
 ## What you see
 
@@ -72,6 +76,8 @@ At login the chat shows `EasyGear 4.4.0 loaded.`
 | Character window | an arrow on an equipment slot when something better for that slot is in your bags |
 | Item tooltips | `EasyGear  Score: 81` - the slot and score of the item you would replace, the verdict (`UPGRADE +37 (+83.1%)`, `NO UPGRADE`, `NOT USABLE`, `UPGRADE from level 45`) and the attribute differences |
 | Worn items, compare tooltips | only the score (comparing an item with itself is pointless) |
+| When better gear arrives in your bags | a **notification** in the shape of the item for 15 seconds - see [Notification for better items](#notification-for-better-items) |
+| [EllesmereUI Loot Feed](#ellesmereui-loot-feed) (if installed) | the row of a better item is tinted, carries the marker on its icon and the gain |
 | [Dialogue UI](#dialogue-ui) (if installed) | the same verdict in its own item tooltips, a check mark on the best quest reward, its own upgrade arrow on what EasyGear finds better |
 
 A **yellow** arrow means: it would be an upgrade, but your level is too low for it yet.
@@ -111,6 +117,7 @@ on the right, both applied to the gear you are wearing. See [Profiles](#profiles
 | `/eg mindelta <0-1000>` / `/eg mindeltapct <0-10>` | minimum gain for "upgrade" (absolute points / percent) |
 | `/eg icons \| items \| quest \| char \| tooltip \| stats \| diff` | switch marker groups and tooltip parts on or off |
 | `/eg dui [on\|off]` | the connection to [Dialogue UI](#dialogue-ui) (its tooltips and quest reward buttons) |
+| `/eg toast [on\|off\|test\|reset\|<3-60>]` | the [notification for better items](#notification-for-better-items): switch it, show an example, put it back in place, seconds on screen |
 | `/eg options` | open the settings page |
 | `/eg scale <0.5-2>` | window scale |
 | `/eg status` | profile, detected talent points, settings, state of every interface hook |
@@ -182,7 +189,7 @@ Stats the addon does not know can be weighted in a custom profile by their raw n
 
 *Options > AddOns > EasyGear*: marker groups (bags/bank, vendors/loot/rolls/trade/mail, quest rewards,
 character window, Dialogue UI), group hints (the star, inspecting members, raid members), the look of the markers
-(shape and colour), tooltip parts, enchants, Leveling profile, item level weight and scaling, minimum
+(shape and colour), the notification for better items (on or off, seconds on screen), tooltip parts, enchants, Leveling profile, item level weight and scaling, minimum
 gain, the profile choice and a reset button. Everything takes effect immediately - also when you change
 a value by chat command while the page is open.
 The addon-compartment entry on the minimap: left click opens the comparison window, right click the settings.
@@ -286,6 +293,72 @@ EasyGear found.
   interfaces; **they were tested here with models of those interfaces, not in the game with the real addons**
   (see [Known limits](#known-limits)).
 
+## Notification for better items
+
+When gear that is **better than what you wear** arrives in your bags - looted, won on a roll, bought, a quest reward,
+taken from mail or a trade - a card in the shape of the item appears for **15 seconds**:
+
+```
+| [icon with the upgrade marker]   BETTER ITEM
+|                                  Stormlashed Chestplate            (in the colour of its quality)
+|                                  +37  (+83.1%)   Chest: Worn Chestplate
+ =====================--------     (a line runs down with the time)
+```
+
+* The card takes **shape and colour of the upgrade marker** you chose under [Marker look](#marker-look) (the bar on
+  the left, the heading, the running line, the marker on the icon).
+* **Under the mouse** it holds (the time stops) and shows the item tooltip with the full comparison. A **click** opens
+  the comparison window with the item, a **right-click** closes the card, **dragging** moves the place where all
+  notifications appear (remembered per character).
+* At most three stand below each other; more wait their turn (the oldest of more than eight waiting are dropped).
+* *Options > AddOns > EasyGear > Notification* switches it and sets the seconds (3 to 60). By chat: `/eg toast on|off`,
+  `/eg toast 20`, `/eg toast test` (shows an example - the best upgrade in your bags, or something you wear - to look
+  at and to move), `/eg toast reset` (back to the original place; `/eg reset` does that too).
+* **What counts as new:** the number of bag slots holding an item rose since the last look into the bags. Not new: what
+  was there at login or right after a loading screen (5 seconds), what you just took off, an item that only changed its
+  link (enchanted), anything taken from the open bank, and the same item again within a minute. An upgrade that needs a
+  higher level (yellow arrow) is not announced.
+* EasyGear equips nothing: the card only points at the item.
+
+## EllesmereUI Loot Feed
+
+The **Loot Feed** of EllesmereUI (*Forever Essentials > Loot*) lists what you just received as short-lived rows. EasyGear
+marks the rows of items that matter:
+
+| Item | Marker on the icon | Row | Words at the bottom right |
+|---|---|---|---|
+| better than what you wear | upgrade marker (green arrow) | tinted in the marker's colour | the gain, e.g. `+83.1%` |
+| an upgrade, but your level is too low yet | level marker (yellow arrow) | tinted yellow | `level 45` |
+| no upgrade for you, but for a group member | group marker (violet star) | tinted violet | `group` |
+
+* Shape and colour follow [Marker look](#marker-look); the words use the feed's own font and size.
+* In the feed's *Icon Tray* style the tiles get the marker and the tint only (their corner holds the count).
+* The marking belongs to the marker group *Vendors, loot, rolls, trade, mail* (`/eg items`): switched off there, the feed
+  stays untouched.
+* Hovering a row shows the feed's item tooltip - with EasyGear's comparison in it, like every item tooltip.
+* The feed offers no interface to other addons. EasyGear reaches its rows through the frame EllesmereUI registers for
+  its unlock mode and follows each row with a hook on its icon; nothing of EllesmereUI is changed. Written against
+  EllesmereUI 9.8.6 (read from its source) and **tested here on a model of the feed, not in the game** - `/eg status`
+  has a line `EllesmereUI Loot Feed: ...` that says whether the feed was found, is switched off in EllesmereUI, or was
+  not found (another version).
+
+## Look of the windows
+
+The comparison window (`/eg`) and the profile window (`/egprofile`) are drawn by EasyGear itself: flat dark surfaces with
+a thin border, one accent colour, section labels in capitals, tabs with an underline, flat buttons.
+
+* **With EllesmereUI** the accent colour is the one of your EllesmereUI theme and the font is EllesmereUI's, so the
+  windows match the rest of your interface - a changed theme is followed the next time a window opens. **Without it**
+  the accent is EasyGear's blue and the font is the game's.
+* **Comparison window:** two cards (*new item*, *equipped*) with icon (ringed in the quality colour), name, the score
+  as a large number and the calculation as a table. Behind every row a **bar** shows how much it contributes to the
+  score - the largest contribution fills the row. The slots of rings, trinkets and one-hand weapons are tabs on the
+  equipped card. The **verdict** stands on a strip below, with a bar in its colour (green upgrade, red none, yellow from
+  a later level).
+* **Profile window:** class and profile are chosen from flat selectors (they open the game's menu), the two profiles
+  stand side by side as cards; points that are higher than on the other side are green, lower ones red.
+* The settings page stays the game's own (*Options > AddOns*).
+
 ## Dialogue UI
 
 [Dialogue UI](https://www.curseforge.com/wow/addons/dialogueui) replaces the quest and gossip windows and draws
@@ -360,13 +433,15 @@ and the exact text of any Lua error (`/console scriptErrors 1` shows them). For 
 Run from the root of this repository:
 
 ```
-lua5.1 tests/run.lua                 # unit tests on a model of the client (Lua 5.1 only), ~445 checks
-python3 tests/mutate.py              # mutation check: breaks the addon in ~600 small ways, the tests must notice
+lua5.1 tests/run.lua                 # unit tests on a model of the client (Lua 5.1 only), ~490 checks
+python3 tests/mutate.py              # mutation check: breaks the addon in ~780 small ways, the tests must notice
                                      # (MUT_SHARD=0/3 ... 2/3 splits it over several processes)
 tools/check.sh <Interface/AddOns of the Forever UI source> [<folder of the Dialogue UI addon>]
                                      # luacheck against a std built from the UI source + checks that every
                                      # method, event, template, font, atlas and global the addon names exists;
                                      # with the second argument also every name it uses of Dialogue UI
+tools/preview.sh <folder>            # pictures of EasyGear's own windows and the notification, drawn from the real
+                                     # code on the model (layout and colours; fonts and icons are stand-ins)
 ```
 
 What this proves and what it does not:
@@ -410,6 +485,13 @@ What this proves and what it does not:
   overlay interface of the Bags module), tested against models of them. If an arrow does not show there, `/eg status`
   tells which part was found. EllesmereUI's offline views of other characters' bags are not painted. Other bag addons
   (Bagnon, ElvUI bags, ...) are not supported specifically.
+* The notification decides from the contents of your bags, not from the loot messages: an item that goes straight
+  somewhere else (equipped by a quest, sent to the bank) is not announced, and getting back an item you put into the
+  bank while it was closed counts as new. The windows and the notification were laid out with the kit's numbers and
+  checked on a drawn preview, not in the game: fonts of the real client may need a pixel here or there.
+* The Loot Feed of EllesmereUI is reached through names of EllesmereUI that are not meant for other addons (the frame
+  it registers for its unlock mode, the fields of its rows). Another version may rename them; then nothing is marked and
+  `/eg status` says that the feed was not found. Rows in the feed's options preview are not marked.
 * Dialogue UI is connected through the interface it offers to other addons (a processor for its item tooltip, the hook
   point it keeps for Pawn, its reward buttons) and tested against a model of it. Tooltips that Dialogue UI opens for
   links inside quest text are no item tooltips for that interface (no comparison, no Pawn, no EasyGear). The sell
@@ -426,6 +508,21 @@ What this proves and what it does not:
 The addon for the old Wrath client (interface 30300, with ElvUI/Bagnon/Immersion support and the GM
 heirloom tools) lives in its own repository, [nexartgroup/EasyGear](https://github.com/nexartgroup/EasyGear).
 This edition is a new codebase for the Forever client, not an update of that one.
+
+## Changes in 4.5.0
+
+* **Notification for better items:** when gear that beats what you wear arrives in your bags, a card in the shape of the
+  item shows for 15 seconds - icon, name, gain, what it replaces. Hover holds it and shows the tooltip, a click opens
+  the comparison, a right-click closes it, dragging moves it. Setting, seconds (3-60) and `/eg toast` (see
+  [Notification for better items](#notification-for-better-items)).
+* **EllesmereUI Loot Feed:** rows of better items are tinted, carry the marker on their icon and the gain; yellow for
+  a later level, violet for a group member (see [EllesmereUI Loot Feed](#ellesmereui-loot-feed)).
+* **New look:** comparison window and profile window are rebuilt in a flat dark style of EasyGear's own - cards, a bar
+  behind each row for its share of the score, the verdict on a coloured strip, tabs, flat selectors and buttons - with the
+  accent colour and font of EllesmereUI when it is installed (see [Look of the windows](#look-of-the-windows)). The
+  templates of the default interface are no longer used for them.
+* Tests and tools: a model of the Loot Feed built after its source, tests for the kit, the windows, the notification
+  and the feed, and the mutations for all of it.
 
 ## Changes in 4.4.0
 
@@ -545,6 +642,8 @@ selbst (`EasyGear-Forever-main`), in dem auch Tests und Werkzeuge liegen.
 | Charakterfenster | ein Pfeil am Ausrüstungsplatz, für den in den Taschen etwas Besseres liegt |
 | Item-Tooltips | `EasyGear  Wertung: 81` - Platz und Wertung des ersetzten Items, das Urteil (`VERBESSERUNG +37 (+83.1%)`, `KEINE VERBESSERUNG`, `NICHT VERWENDBAR`, `VERBESSERUNG ab Stufe 45`) und die Attribut-Unterschiede |
 | Getragene Items, Vergleichs-Tooltips | nur die Wertung |
+| Wenn bessere Ausrüstung in die Taschen kommt | eine **Einblendung** in Form des Items für 15 Sekunden - siehe [Einblendung für bessere Items](#einblendung-für-bessere-items) |
+| [Loot Feed von EllesmereUI](#loot-feed-von-ellesmereui) (falls installiert) | die Zeile eines besseren Items ist getönt, trägt die Markierung am Symbol und den Zugewinn |
 | [Dialogue UI](#dialogue-ui-1) (falls installiert) | dasselbe Urteil in dessen eigenen Item-Tooltips, ein Haken an der besten Questbelohnung, sein eigener Aufwertungspfeil an dem, was EasyGear besser findet |
 
 Ein **gelber** Pfeil heißt: wäre eine Verbesserung, aber deine Stufe reicht noch nicht. Items, die der Client
@@ -569,7 +668,7 @@ Ausrüstung angewandt, die du gerade trägst.
 `/eg` oder `/easygear`; `/eggui` öffnet das Fenster, `/egprofile` das Profilfenster. Die Befehle sind oben in
 der englischen Tabelle aufgeführt und in jeder Sprache gleich; `/eg help` erklärt sie in deiner Sprache.
 Wichtig sind `/eg upgrades` (alle Verbesserungen in den Taschen), `/eg group` (die Gruppe: wer gelesen ist, was für wen besser wäre), `/eg profile ...` (Profil wählen),
-`/eg marker` (Form und Farbe der Markierungen), `/eg dui [on|off]` (die Anbindung an Dialogue UI), `/eg weight <Wert> <Gewicht>` (Gewicht im eigenen Profil), `/eg status` (Profil, erkannte Talentpunkte,
+`/eg marker` (Form und Farbe der Markierungen), `/eg dui [on|off]` (die Anbindung an Dialogue UI), `/eg toast [on|off|test|reset|<3-60>]` (die Einblendung für bessere Items), `/eg weight <Wert> <Gewicht>` (Gewicht im eigenen Profil), `/eg status` (Profil, erkannte Talentpunkte,
 Zustand jeder Oberflächen-Anbindung), `/eg parse <Itemlink>` (was aus einem Item gelesen wurde) und
 `/eg unknown` (Werte, die das Addon nicht kennt).
 
@@ -626,7 +725,7 @@ Einzigartige Items: das zweite Exemplar ersetzt das erste. Hemd und Wappenrock w
 
 ## Einstellungen
 
-*Optionen > AddOns > EasyGear*: Markierungsgruppen, Dialogue UI, Gruppenhinweise (Stern, Mitglieder untersuchen, Schlachtzug), Aussehen der Markierungen (Form und Farbe), Tooltip-Teile, Verzauberungen, Leveln-Profil, Stufengewicht
+*Optionen > AddOns > EasyGear*: Markierungsgruppen, Dialogue UI, Gruppenhinweise (Stern, Mitglieder untersuchen, Schlachtzug), Aussehen der Markierungen (Form und Farbe), die Einblendung für bessere Items (ein oder aus, Sekunden), Tooltip-Teile, Verzauberungen, Leveln-Profil, Stufengewicht
 und -skalierung, Mindestzugewinn, Profilwahl und ein Zurücksetzen-Knopf. Alles wirkt sofort - auch wenn du einen
 Wert per Chatbefehl änderst, während die Seite offen ist.
 Der Eintrag im Addon-Fach der Minimap: Linksklick Vergleichsfenster, Rechtsklick Einstellungen.
@@ -733,6 +832,73 @@ EasyGear gefunden hat.
   Schnittstellen gebaut; **getestet wurde hier mit Modellen dieser Schnittstellen, nicht im Spiel mit den echten Addons**
   (siehe [Bekannte Grenzen](#bekannte-grenzen)).
 
+## Einblendung für bessere Items
+
+Kommt Ausrüstung in deine Taschen, die **besser ist als das Angelegte** - geplündert, gewürfelt, gekauft, als Questbelohnung,
+aus der Post oder einem Handel -, erscheint für **15 Sekunden** eine Karte in Form des Items:
+
+```
+| [Symbol mit der Markierung]      BESSERES ITEM
+|                                  Sturmgepeitschte Brustplatte      (in der Farbe ihrer Qualität)
+|                                  +37  (+83.1%)   Brust: Alte Brustplatte
+ =====================--------     (eine Linie läuft mit der Zeit ab)
+```
+
+* Die Karte nimmt **Form und Farbe der Markierung „Verbesserung“**, die du unter
+  [Aussehen der Markierungen](#aussehen-der-markierungen) gewählt hast (Balken links, Überschrift, die ablaufende Linie, die
+  Markierung am Symbol).
+* **Unter der Maus** bleibt sie stehen (die Zeit hält an) und zeigt den Item-Tooltip mit dem vollen Vergleich. Ein **Klick**
+  öffnet das Vergleichsfenster mit dem Item, ein **Rechtsklick** schließt die Karte, **Ziehen** verschiebt den Platz, an dem
+  alle Einblendungen erscheinen (je Charakter gemerkt).
+* Höchstens drei stehen untereinander; weitere warten (von mehr als acht Wartenden fallen die ältesten weg).
+* *Optionen > AddOns > EasyGear > Einblendung* schaltet sie und stellt die Sekunden ein (3 bis 60). Per Chat: `/eg toast on|off`,
+  `/eg toast 20`, `/eg toast test` (zeigt ein Beispiel - die beste Verbesserung in den Taschen, sonst etwas Angelegtes - zum
+  Ansehen und Verschieben), `/eg toast reset` (zurück an den ursprünglichen Platz; `/eg reset` tut das auch).
+* **Was als neu gilt:** die Zahl der Taschenplätze, die ein Item halten, ist seit dem letzten Blick in die Taschen gestiegen.
+  Nicht neu ist, was beim Anmelden oder direkt nach einem Ladebildschirm (5 Sekunden) schon da war, was du gerade abgelegt hast,
+  ein Item, das nur seinen Link gewechselt hat (verzaubert), alles aus der offenen Bank und dasselbe Item noch einmal innerhalb
+  einer Minute. Eine Verbesserung, die erst mit höherer Stufe nutzbar ist (gelber Pfeil), wird nicht eingeblendet.
+* EasyGear legt nichts an: die Karte weist nur auf das Item hin.
+
+## Loot Feed von EllesmereUI
+
+Der **Loot Feed** von EllesmereUI (*Forever Essentials > Beute*) zeigt als kurzlebige Zeilen, was du gerade bekommen hast.
+EasyGear kennzeichnet die Zeilen der Items, auf die es ankommt:
+
+| Item | Markierung am Symbol | Zeile | Text unten rechts |
+|---|---|---|---|
+| besser als das Angelegte | Markierung „Verbesserung“ (grüner Pfeil) | in der Farbe der Markierung getönt | der Zugewinn, z. B. `+83.1%` |
+| Verbesserung, aber die Stufe reicht noch nicht | Markierung „Stufe“ (gelber Pfeil) | gelb getönt | `Stufe 45` |
+| für dich keine, aber für ein Gruppenmitglied | Markierung „Gruppe“ (violetter Stern) | violett getönt | `Gruppe` |
+
+* Form und Farbe folgen [Aussehen der Markierungen](#aussehen-der-markierungen); der Text benutzt Schrift und Größe des Feeds.
+* Im Stil *Icon Tray* des Feeds bekommen die Kacheln nur Markierung und Tönung (in ihrer Ecke steht die Anzahl).
+* Die Kennzeichnung gehört zur Markierungsgruppe *Händler, Beute, Würfeln, Handel, Post* (`/eg items`): dort abgeschaltet,
+  bleibt der Feed unberührt.
+* Fährst du über eine Zeile, zeigt der Feed seinen Item-Tooltip - mit dem Vergleich von EasyGear darin, wie in jedem Item-Tooltip.
+* Der Feed bietet anderen Addons keine Schnittstelle. EasyGear erreicht seine Zeilen über den Rahmen, den EllesmereUI für
+  seinen Entsperrmodus anmeldet, und folgt jeder Zeile mit einem Haken an ihrem Symbol; an EllesmereUI wird nichts geändert.
+  Gebaut gegen EllesmereUI 9.8.6 (aus dem Quelltext gelesen) und **hier an einem Modell des Feeds getestet, nicht im Spiel** -
+  `/eg status` hat eine Zeile `EllesmereUI Loot Feed: ...`, die sagt, ob der Feed gefunden wurde, in EllesmereUI abgeschaltet
+  ist oder nicht gefunden wurde (andere Fassung).
+
+## Aussehen der Fenster
+
+Das Vergleichsfenster (`/eg`) und das Profilfenster (`/egprofile`) zeichnet EasyGear selbst: flache dunkle Flächen mit dünnem
+Rand, eine Akzentfarbe, Abschnittstitel in Versalien, Reiter mit Unterstrich, flache Knöpfe.
+
+* **Mit EllesmereUI** ist die Akzentfarbe die deines EllesmereUI-Themas und die Schrift die von EllesmereUI, sodass die Fenster
+  zum Rest deiner Oberfläche passen - ein gewechseltes Thema gilt beim nächsten Öffnen eines Fensters. **Ohne** gilt das Blau
+  von EasyGear und die Schrift des Spiels.
+* **Vergleichsfenster:** zwei Karten (*neues Item*, *angelegt*) mit Symbol (im Ring der Qualitätsfarbe), Name, der Wertung als
+  großer Zahl und der Rechnung als Tabelle. Hinter jeder Zeile zeigt ein **Balken**, wie viel sie zur Wertung beiträgt - der
+  größte Beitrag füllt die Zeile. Die Plätze von Ringen, Schmuck und Einhandwaffen sind Reiter auf der Karte des Angelegten.
+  Das **Urteil** steht darunter auf einem Streifen mit einem Balken in seiner Farbe (grün Verbesserung, rot keine, gelb ab
+  einer späteren Stufe).
+* **Profilfenster:** Klasse und Profil wählst du über flache Auswahlknöpfe (sie öffnen das Menü des Spiels), die beiden Profile
+  stehen als Karten nebeneinander; Punkte, die höher sind als auf der anderen Seite, sind grün, niedrigere rot.
+* Die Einstellungsseite bleibt die des Spiels (*Optionen > AddOns*).
+
 ## Dialogue UI
 
 [Dialogue UI](https://www.curseforge.com/wow/addons/dialogueui) ersetzt die Quest- und Gesprächsfenster und zeichnet alles
@@ -803,7 +969,8 @@ Im Hauptordner dieses Repositories: `lua5.1 tests/run.lua` (Modultests auf einem
 (Mutationsprüfung: die Tests müssen künstliche Fehler bemerken; `MUT_SHARD=0/3` bis `2/3` teilt sie auf mehrere Prozesse auf), `tools/check.sh <Interface/AddOns des Forever-
 Quelltexts> [<Ordner von Dialogue UI>]` (luacheck gegen eine aus dem Quelltext gebaute Standardbibliothek; jede Methode, jedes
 Ereignis, jede Vorlage, Schrift, jeder Atlas und jede Funktion, die das Addon nennt, muss dort vorkommen; mit dem zweiten
-Argument auch jeder Name, den es von Dialogue UI benutzt).
+Argument auch jeder Name, den es von Dialogue UI benutzt), `tools/preview.sh <Ordner>` (Bilder der eigenen Fenster und der
+Einblendung, aus dem echten Code am Modell gezeichnet - Layout und Farben; Schriften und Symbole sind Platzhalter).
 
 Das belegt die Form der Aufrufe gegen den echten Quelltext und die Logik auf einem Modell - **es ersetzt keinen Lauf
 im Spiel**.
@@ -837,6 +1004,15 @@ im Spiel**.
   Overlay-Schnittstelle des Taschenmoduls) und gegen Modelle von ihnen getestet. Zeigt sich dort kein Pfeil, sagt
   `/eg status`, welcher Teil gefunden wurde. Die Offline-Ansichten fremder Charaktere von EllesmereUI werden nicht bemalt.
   Andere Taschen-Addons (Bagnon, ElvUI-Taschen, ...) werden nicht gezielt unterstützt.
+* Die Einblendung entscheidet nach dem Inhalt deiner Taschen, nicht nach den Beutemeldungen: ein Item, das gleich woanders
+  landet (von einer Quest angelegt, in die Bank geschickt), wird nicht eingeblendet, und ein Item, das du bei geschlossener
+  Bank dorthin gelegt hattest, gilt beim Zurückholen als neu. Fenster und Einblendung sind nach den Maßen des Baukastens
+  gesetzt und an einer gezeichneten Vorschau geprüft, nicht im Spiel: die Schriften des echten Clients können hier und da
+  ein Pixel verlangen.
+* Der Loot Feed von EllesmereUI wird über Namen erreicht, die EllesmereUI nicht für andere Addons gedacht hat (der Rahmen,
+  den es für seinen Entsperrmodus anmeldet, die Felder seiner Zeilen). Eine andere Fassung kann sie umbenennen; dann wird
+  nichts markiert, und `/eg status` sagt, dass der Feed nicht gefunden wurde. Zeilen in der Vorschau der Feed-Optionen
+  werden nicht markiert.
 * Dialogue UI ist über die Schnittstelle angebunden, die es anderen Addons anbietet (ein Verarbeiter für seinen Item-Tooltip, die
   Stelle, die es für Pawn vorhält, seine Belohnungsknöpfe), und gegen ein Modell davon getestet. Tooltips, die Dialogue UI für
   Links im Questtext öffnet, sind für diese Schnittstelle keine Item-Tooltips (kein Vergleich, kein Pawn, kein EasyGear). Die

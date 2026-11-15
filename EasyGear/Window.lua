@@ -230,8 +230,7 @@ function Window.Refresh()
         if state.link then
             hint = (why == "invalid" or resultWhy == "invalid") and L.INVALID_ITEM or L.ITEM_LOADING
         end
-        frame.cand.name:SetText(hint)
-        UI.Paint(frame.cand.name, "dim")
+        frame.cand.name:SetText(hint)             -- gedaempft, wie es ShowItem fuer ein leeres Feld setzt
         frame.cand.score:SetText("")
         FillRows(frame.cand, nil)
         ShowItem(frame.eq, nil)

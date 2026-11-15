@@ -173,9 +173,10 @@ function Feed.Scan()
     return seen
 end
 
+-- Gleich nachsehen: nach dem Feed, der dasselbe Ereignis im selben Bild verarbeitet. Eine Zeile, deren Gegenstand der
+-- Feed erst laden musste, erscheint spaeter - dann meldet sich REFRESH (die Daten sind auch fuer EasyGear eingetroffen).
 local function Soon()
     EG:Debounce("feedScan", 0.05, function() EG:Try("feed", Feed.Scan) end)
-    EG:Debounce("feedLate", 0.6, function() EG:Try("feed", Feed.Scan) end)     -- Gegenstaende, die der Feed erst laden musste
 end
 
 -- Zeile fuer /eg status (nur mit EllesmereUI)
@@ -188,6 +189,5 @@ function Feed.StatusLine()
 end
 
 EG:On("CHAT_MSG_LOOT", Soon)
-EG:Listen("ITEMS_LOADED", Soon)
-EG:Listen("INVALIDATED", Soon)
-EG:Listen("REFRESH", Soon)
+EG:Listen("INVALIDATED", Soon)      -- Einstellungen, Profil, Ausruestung
+EG:Listen("REFRESH", Soon)          -- Gegenstandsdaten sind eingetroffen (Score.lua meldet es nach ITEMS_LOADED), die Gruppe hat sich geaendert

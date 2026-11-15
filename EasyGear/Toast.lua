@@ -211,7 +211,6 @@ Display = function(data)
     Marks.Style(f.mark, "UPGRADE", 20)
     f.bar:SetColorTexture(r, g, b, 1)
     f.timer:SetColorTexture(r, g, b, 0.9)
-    f.timer:SetWidth(WIDTH - 2)
     f.caption:SetTextColor(r, g, b, 1)
     f.caption:SetText(data.caption or L.TOAST_TITLE)
 
@@ -297,7 +296,7 @@ end
 
 local counts            -- Link -> Zahl der Faecher beim letzten Blick (nil: noch nie geschaut)
 local ids = {}          -- Gegenstandsnummer -> Zahl der Faecher beim letzten Blick
-local wornSince = {}    -- Links, die seit dem letzten Blick angelegt waren
+local wornSince = {}    -- Links, die beim letzten Blick angelegt waren (was davon jetzt in den Taschen liegt, wurde abgelegt)
 local pending = {}      -- Link -> bis wann auf seine Daten gewartet wird
 local lastShown = {}    -- Link -> wann zuletzt eingeblendet
 local quietUntil = 0
@@ -348,7 +347,6 @@ local function OnBags()
 end
 
 EG:On("BAG_UPDATE_DELAYED", OnBags)
-EG:On("PLAYER_EQUIPMENT_CHANGED", NoteWorn)
 EG:On("PLAYER_ENTERING_WORLD", function() quietUntil = Now() + QUIET end)
 EG:On("BANKFRAME_OPENED", function() bankOpen = true end)
 EG:On("BANKFRAME_CLOSED", function() bankOpen = false end)

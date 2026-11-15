@@ -87,6 +87,28 @@ return function(T)
         T.eq(W.EG.lastError, nil)
     end)
 
+    T.test("feed: a row that was there before the group member was read gets its star when the reading arrives", function()
+        local W, LF = world({}, function(w)
+            local G = w.installGroup()
+            local gear = {}
+            for slot, loc in pairs({ [1] = "INVTYPE_HEAD", [3] = "INVTYPE_SHOULDER", [5] = "INVTYPE_CHEST", [6] = "INVTYPE_WAIST",
+                                     [7] = "INVTYPE_LEGS", [8] = "INVTYPE_FEET", [9] = "INVTYPE_WRIST", [10] = "INVTYPE_HAND" }) do
+                gear[slot] = F.gear(w, 9440 + slot, "Cloth" .. slot, loc, 30, { INT = 10, SP = 10 }, { subclassID = 1 })
+            end
+            w.G = G
+            w.gear = gear
+            w.I.robe = F.gear(w, 9460, "Robe", "INVTYPE_CHEST", 60, { INT = 30, SP = 80 }, { subclassID = 1 })
+        end)
+        local robe = loot(W, LF, W.I.robe)
+        T.eq(marked(robe), false, "nobody in the group yet")
+        W.G.add("party1", { name = "Bob", class = "PRIEST", gear = W.gear })
+        W.G.rosterChanged()
+        W.advance(30)                                    -- the member is inspected; the hints are worked out anew
+        T.eq(marked(robe), true, "the row on screen follows")
+        T.eq(robe.EasyGearMark:GetAtlas(), "tradeskills-star")
+        T.eq(W.EG.lastError, nil)
+    end)
+
     T.test("feed: tiles of the Icon Tray style get the marker only - their corner holds the count", function()
         local W, LF = world({ style = "TRAY" })
         local row = loot(W, LF, W.I.better)
