@@ -81,6 +81,56 @@ local KNOWN_TYPES = {
 local Region = {}
 Region.__index = Region
 
+--[[ Where a region lies: left, bottom, width, height in pixels of a 1280 x 800 screen, worked out from its points
+     as the client does it. An edge decides before a centre (a text hung in by TOPLEFT and RIGHT starts at that top
+     and ends at that right - EllesmereUI's Loot Feed relies on it); a font string without a width of its own is as
+     wide as its text and as high as its font. A region without a parent is the screen.                            ]]
+local HF = { LEFT = 0, CENTER = 0.5, RIGHT = 1, TOP = 0.5, BOTTOM = 0.5, TOPLEFT = 0, TOPRIGHT = 1, BOTTOMLEFT = 0, BOTTOMRIGHT = 1 }
+local VF = { LEFT = 0.5, CENTER = 0.5, RIGHT = 0.5, TOP = 1, BOTTOM = 0, TOPLEFT = 1, TOPRIGHT = 1, BOTTOMLEFT = 0, BOTTOMRIGHT = 0 }
+local function solve(cons, size)
+    local low, high, mid
+    for _, c in ipairs(cons) do
+        if c[1] == 0 then low = low or c[2] elseif c[1] == 1 then high = high or c[2] else mid = mid or c[2] end
+    end
+    if low and high then return low, high - low end
+    if low then return low, size end
+    if high then return high - size, size end
+    if mid then return mid - size / 2, size end
+    return 0, size
+end
+local function unbounded(r)
+    local plain = tostring(r.__text or ""):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""):gsub("|[TA].-|[ta]", "")
+    return #plain * (r.__fontSize or 12) * 0.5
+end
+local function rectOf(r, seen)
+    if not r.__parent then return 0, 0, 1280, 800 end
+    seen = seen or {}
+    assert(not seen[r], "rect: the points of a region depend on itself")
+    seen[r] = true
+    local parent = r.__parent
+    local l, b, w, h
+    if r.__allPoints then
+        l, b, w, h = rectOf(r.__allPoints == true and parent or r.__allPoints, seen)
+    else
+        w, h = r.__w or 0, r.__h or 0
+        if r.__kind == "FontString" then
+            if w == 0 then w = unbounded(r) end
+            if h == 0 then h = r.__fontSize or 12 end
+        end
+        local xs, ys = {}, {}
+        for _, p in ipairs(r.__points) do
+            local rl, rb, rw, rh = rectOf(p[2] or parent, seen)
+            local rp = p[3] or p[1]
+            xs[#xs + 1] = { HF[p[1]], rl + rw * HF[rp] + p[4] }
+            ys[#ys + 1] = { VF[p[1]], rb + rh * VF[rp] + p[5] }
+        end
+        l, w = solve(xs, w)
+        b, h = solve(ys, h)
+    end
+    seen[r] = nil
+    return l, b, w, h
+end
+
 local function newRegion(kind, name, parent)
     local r = setmetatable({}, Region)
     r.__kind, r.__name, r.__parent = kind, name, parent
@@ -119,7 +169,11 @@ end
 function Region:SetSize(w, h) self.__w, self.__h = w, h end
 function Region:SetWidth(w) self.__w = w end
 function Region:SetHeight(h) self.__h = h end
-function Region:GetWidth() return self.__w end
+-- a font string without a width of its own is as wide as its room (two anchors) or as its text
+function Region:GetWidth()
+    if self.__kind == "FontString" and (self.__w or 0) == 0 then return (select(3, rectOf(self))) end
+    return self.__w
+end
 function Region:GetHeight() return self.__h end
 function Region:SetPoint(point, rel, relPoint, x, y)
     if type(rel) == "number" then x, y, rel, relPoint = rel, relPoint, nil, nil end
@@ -165,10 +219,22 @@ function Region:SetFont(file, size, flags)
     return true
 end
 function Region:GetFont() return self.__fontFile, self.__fontSize, self.__fontFlags end
--- the width of the text as drawn: about half the font size per letter, color codes and textures not counted
+-- the width of the whole text: about half the font size per letter, color codes and textures not counted
+function Region:GetUnboundedStringWidth() return unbounded(self) end
+-- the width of the text as drawn: never more than the room the string has - a width of its own or its two anchors
+-- (the client cuts the text there; GetUnboundedStringWidth tells the width of all of it)
 function Region:GetStringWidth()
-    local plain = tostring(self.__text or ""):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""):gsub("|[TA].-|[ta]", "")
-    return #plain * (self.__fontSize or 12) * 0.5
+    local full = unbounded(self)
+    local room = (self.__w or 0) > 0 and self.__w or nil
+    if not room and self.__kind == "FontString" then
+        local low, high
+        for _, p in ipairs(self.__points) do
+            if HF[p[1]] == 0 then low = true elseif HF[p[1]] == 1 then high = true end
+        end
+        if low and high then room = (select(3, rectOf(self))) end
+    end
+    if room then return math.max(0, math.min(full, room)) end
+    return full
 end
 function Region:SetTextInsets() end
 function Region:SetMaxLetters() end
@@ -195,6 +261,19 @@ function Region:GetFrameLevel()
     local parent = self.__parent
     if parent then return parent:GetFrameLevel() + 1 end
     return 1
+end
+-- Raise: above every other frame of its strata (the client does this to a toplevel frame that is clicked)
+function Region:Raise()
+    local root = self
+    while root.__parent do root = root.__parent end
+    local strata, top = self:GetFrameStrata(), 0
+    local function walk(f, inside)
+        inside = inside or f == self
+        if not inside and f:GetFrameStrata() == strata then top = math.max(top, f:GetFrameLevel()) end
+        for _, child in ipairs(f.__frames or {}) do walk(child, inside) end
+    end
+    walk(root, false)
+    self.__level = top + 1
 end
 function Region:SetToplevel(on) self.__toplevel = on and true or false end
 function Region:IsToplevel() return self.__toplevel or false end
@@ -1736,51 +1815,8 @@ function Mock.new(opts)
            * the pinned tracker row is a row as well (r.pinned, data without a link); other children are not rows
          options: enabled = false, style = "BAR" | "BOX" | "TRAY" | "TOAST", maxRows, rowHeight, textSize, width, barWidth,
                   ilvl = false (Show Item Level off), borderTexture, borderBehind, tracker, noRegistry                  ]]
-    --[[ Where a region lies: left, bottom, width, height in pixels of a 1280 x 800 screen, worked out from its
-         points as the client does it. An edge decides before a centre (a text hung in by TOPLEFT and RIGHT starts at
-         that top and ends at that right - EllesmereUI's Loot Feed relies on it); a font string without a width of
-         its own is as wide as its text and as high as its font.                                                    ]]
-    local HF = { LEFT = 0, CENTER = 0.5, RIGHT = 1, TOP = 0.5, BOTTOM = 0.5, TOPLEFT = 0, TOPRIGHT = 1, BOTTOMLEFT = 0, BOTTOMRIGHT = 1 }
-    local VF = { LEFT = 0.5, CENTER = 0.5, RIGHT = 0.5, TOP = 1, BOTTOM = 0, TOPLEFT = 1, TOPRIGHT = 1, BOTTOMLEFT = 0, BOTTOMRIGHT = 0 }
-    local function solve(cons, size)
-        local low, high, mid
-        for _, c in ipairs(cons) do
-            if c[1] == 0 then low = low or c[2] elseif c[1] == 1 then high = high or c[2] else mid = mid or c[2] end
-        end
-        if low and high then return low, high - low end
-        if low then return low, size end
-        if high then return high - size, size end
-        if mid then return mid - size / 2, size end
-        return 0, size
-    end
-    function H.rect(r, seen)
-        if r == env.UIParent then return 0, 0, 1280, 800 end
-        seen = seen or {}
-        assert(not seen[r], "rect: the points of a region depend on itself")
-        seen[r] = true
-        local parent = r.__parent or env.UIParent
-        local l, b, w, h
-        if r.__allPoints then
-            l, b, w, h = H.rect(r.__allPoints == true and parent or r.__allPoints, seen)
-        else
-            w, h = r.__w or 0, r.__h or 0
-            if r.__kind == "FontString" then
-                if w == 0 then w = r:GetStringWidth() end
-                if h == 0 then h = r.__fontSize or 12 end
-            end
-            local xs, ys = {}, {}
-            for _, p in ipairs(r.__points) do
-                local rl, rb, rw, rh = H.rect(p[2] or parent, seen)
-                local rp = p[3] or p[1]
-                xs[#xs + 1] = { HF[p[1]], rl + rw * HF[rp] + p[4] }
-                ys[#ys + 1] = { VF[p[1]], rb + rh * VF[rp] + p[5] }
-            end
-            l, w = solve(xs, w)
-            b, h = solve(ys, h)
-        end
-        seen[r] = nil
-        return l, b, w, h
-    end
+    -- Where a region lies on the screen: left, bottom, width, height (see rectOf)
+    H.rect = rectOf
 
     function H.installLootFeed(options)
         options = options or {}

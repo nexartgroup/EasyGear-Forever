@@ -16,11 +16,15 @@
     ueber den Rahmen des Feeds - EllesmereUI fuehrt ihn im Entsperrmodus unter dem Schluessel "EUI_LootFeed"
     (EllesmereUI._unlockRegisteredElements) - und erkennt eine Zeile an ihrem Aufbau (icon, badge, name, sub, value).
     Jede Zeile wird einmal angenommen: von da an meldet ein Haken auf badge:SetText jede neue Belegung (der Feed
-    setzt beim Fuellen diesen Text als letzten; Name, zweite Zeile und Preis stehen dann schon). Der Text haengt an
-    den Texten des Feeds und endet wie sie vor dem Preis - er ueberdeckt ihn nie; reicht der Platz nicht, kuerzt
-    ihn das Spiel. Markierung und Text liegen auf einer eigenen Schicht ueber der Zeile (ueber deren Rand), die
-    Toenung in der Zeile selbst. Alles sind Kinder der Zeile und blendet mit ihr aus. Gesucht wird nur, wenn etwas
-    gepluendert wurde oder Daten eintreffen.
+    setzt beim Fuellen diesen Text als letzten; Name, zweite Zeile und Preis stehen dann schon). Der Text steht
+    hinter dem Text des Feeds, wenn er in dessen Platz passt - der reicht bis vor den Preis; passt er nicht, bleibt
+    er weg (Markierung und Toenung bleiben). Markierung und Text liegen auf einer eigenen Schicht ueber der Zeile
+    (ueber deren Rand), die Toenung in der Zeile selbst. Alles sind Kinder der Zeile und blendet mit ihr aus.
+
+    Nach Zeilen gesucht wird, wenn etwas gepluendert wurde, wenn Daten eintreffen, kurz nachdem der Feed eine
+    bekannte Zeile neu gefuellt hat (daneben kann eine neue entstanden sein) und, solange Umschalt gehalten wird,
+    viermal je Sekunde: mit Umschalt und Mausrad blaettert der Feed in seinem Verlauf und baut dafuer Zeilen,
+    ohne dass ein Ereignis davon erzaehlt.
 
     Gelesen aus EllesmereUIForeverEssentials_LootFeed.lua (9.8.6). Fehlt etwas davon, sagt /eg status es.
 -----------------------------------------------------------------------------]]
@@ -40,6 +44,7 @@ local ELEMENT = "EUI_LootFeed"      -- Schluessel des Loot Feeds im Entsperrmodu
 local TINT_ALPHA = 0.16             -- so stark toent die Farbe der Markierung die Zeile
 local MARK_MIN, MARK_MAX = 12, 20   -- Groesse der Markierung auf dem Symbol (60 % des Symbols, in diesen Grenzen)
 local GAP = 8                       -- Abstand des eigenen Textes zum Text des Feeds davor
+local WATCH = 0.25                  -- Sekunden zwischen zwei Blicken auf den Feed, solange Umschalt gehalten wird
 local LEVEL = 3                     -- so weit liegt die eigene Schicht ueber der Zeile (deren Rand liegt 1 darueber)
 
 local rows = setmetatable({}, { __mode = "k" })     -- Zeile -> true: Zeilen, an denen EasyGear haengt
@@ -118,15 +123,11 @@ local function Shown(region)
     return type(region.IsShown) ~= "function" or region:IsShown() and true or false
 end
 
--- Hoehe eines Rahmens oder Bildes (Symbol und Zeile haben feste Groessen)
-local function Size(region)
-    local h = type(region.GetHeight) == "function" and region:GetHeight() or 0
-    return type(h) == "number" and h or 0
-end
-
-local function TextWidth(fs)
-    local w = type(fs.GetStringWidth) == "function" and fs:GetStringWidth() or 0
-    return type(w) == "number" and w or 0
+-- Ein Mass erfragen: GetHeight (Symbol und Zeile haben feste Groessen), GetWidth (der Platz eines Textes),
+-- GetStringWidth (so breit steht er, hoechstens sein Platz), GetUnboundedStringWidth (so breit waere er ungekuerzt)
+local function Measure(region, method)
+    local v = type(region[method]) == "function" and region[method](region) or 0
+    return type(v) == "number" and v or 0
 end
 
 --[[ Die eigene Schicht einer Zeile: ein Rahmen ueber der Zeile fuer Markierung und Text. Der Rand der Zeile ist
@@ -142,17 +143,22 @@ local function Layer(row)
     return layer
 end
 
---[[ Den Text setzen: hinter die zweite Zeile des Feeds, ohne sie hinter den Namen - bis dorthin, wo deren Platz
-     endet (vor dem Preis). Der Feed haengt den Namen bei jedem Fuellen neu ein; der eigene Text folgt ihm.      ]]
+--[[ Den Text setzen: hinter den Text der zweiten Zeile des Feeds, ohne sie hinter den Namen. Deren Platz reicht
+     bis vor den Preis. Passt der eigene Text nicht mehr hinein (ein schmaler Feed, ein langer Name), bleibt er weg:
+     so liegt er nie auf dem Preis. Rueckgabe: steht er?                                                         ]]
 local function PlaceText(row, text)
+    local line = Shown(row.sub) and row.sub or row.name
+    local used = Measure(line, "GetStringWidth")
     text:ClearAllPoints()
-    if Shown(row.sub) then
-        text:SetPoint("TOPLEFT", row.sub, "TOPLEFT", TextWidth(row.sub) + GAP, 0)
-        text:SetPoint("TOPRIGHT", row.sub, "TOPRIGHT", 0, 0)
+    -- ohne Punkte ist der eigene Text so breit wie sein Inhalt
+    local need = Measure(text, text.GetUnboundedStringWidth and "GetUnboundedStringWidth" or "GetStringWidth")
+    if Measure(line, "GetWidth") - used - GAP < need then return false end
+    if line == row.sub then
+        text:SetPoint("TOPLEFT", line, "TOPLEFT", used + GAP, 0)
     else
-        text:SetPoint("LEFT", row.name, "LEFT", TextWidth(row.name) + GAP, 0)
-        text:SetPoint("RIGHT", row.name, "RIGHT", 0, 0)
+        text:SetPoint("LEFT", line, "LEFT", used + GAP, 0)
     end
+    return true
 end
 
 local function Paint(row)
@@ -176,9 +182,9 @@ local function Paint(row)
         row.EasyGearMark = mark
     end
     -- 60 % des Symbols, mindestens lesbar, nie hoeher als die Zeile
-    local side = Size(icon)
+    local side = Measure(icon, "GetHeight")
     local size = mmax(MARK_MIN, mmin(MARK_MAX, side * 0.6))
-    local height = Size(row)
+    local height = Measure(row, "GetHeight")
     if height > 0 then size = mmin(size, height) end
     Marks.Style(mark, state, size)
     mark:ClearAllPoints()
@@ -213,8 +219,7 @@ local function Paint(row)
         MatchFont(text, row.sub)
         text:SetText(Label(state, link))
         text:SetTextColor(r, g, b, 1)
-        PlaceText(row, text)
-        text:Show()
+        text:SetShown(PlaceText(row, text))
     else
         text:Hide()
     end
@@ -224,11 +229,17 @@ end
 -- 03  Zeilen annehmen und nachziehen
 ------------------------------------------------------------------------------
 
+local Soon
+
 local function Adopt(row)
     rows[row] = true
     adopted = adopted + 1
-    -- der Feed setzt beim Fuellen (Fill) diesen Text als letzten: Name, zweite Zeile und Preis stehen dann schon
-    pcall(hooksecurefunc, row.badge, "SetText", function() EG:Try("feed", Paint, row) end)
+    -- der Feed setzt beim Fuellen (Fill) diesen Text als letzten: Name, zweite Zeile und Preis stehen dann schon.
+    -- Gleich danach noch ein Blick auf alle Zeilen: neben dieser kann der Feed eine neue gebaut haben.
+    pcall(hooksecurefunc, row.badge, "SetText", function()
+        EG:Try("feed", Paint, row)
+        Soon()
+    end)
 end
 
 -- Die Zeilen des Feeds durchgehen: neue annehmen, alle sichtbaren neu kennzeichnen
@@ -248,8 +259,20 @@ end
 
 -- Gleich nachsehen: nach dem Feed, der dasselbe Ereignis im selben Bild verarbeitet. Eine Zeile, deren Gegenstand der
 -- Feed erst laden musste, erscheint spaeter - dann meldet sich REFRESH (die Daten sind auch fuer EasyGear eingetroffen).
-local function Soon()
+Soon = function()
     EG:Debounce("feedScan", 0.05, function() EG:Try("feed", Feed.Scan) end)
+end
+
+--[[ Solange Umschalt gehalten wird, blaettert das Mausrad im Verlauf des Feeds; die Zeilen dafuer baut er, ohne dass
+     ein Ereignis es meldet. In dieser Zeit regelmaessig nachsehen - nur mit einem Feed, und nur bis losgelassen wird. ]]
+local watching = false
+local function Watch()
+    if not (IsShiftKeyDown() and Feed.Enabled() and Anchor()) then
+        watching = false
+        return
+    end
+    EG:Try("feed", Feed.Scan)
+    EG:After(WATCH, Watch)
 end
 
 -- Zeile fuer /eg status (nur mit EllesmereUI)
@@ -262,5 +285,12 @@ function Feed.StatusLine()
 end
 
 EG:On("CHAT_MSG_LOOT", Soon)
+EG:On("MODIFIER_STATE_CHANGED", function(_, key)
+    if key ~= "LSHIFT" and key ~= "RSHIFT" then return end
+    Soon()                          -- losgelassen: der Feed zeigt wieder die laufenden Zeilen, vielleicht in neuen
+    if watching then return end
+    watching = true                 -- endet von selbst, sobald Umschalt nicht mehr gehalten wird
+    EG:After(WATCH, Watch)
+end)
 EG:Listen("INVALIDATED", Soon)      -- Einstellungen, Profil, Ausruestung
 EG:Listen("REFRESH", Soon)          -- Gegenstandsdaten sind eingetroffen (Score.lua meldet es nach ITEMS_LOADED), die Gruppe hat sich geaendert

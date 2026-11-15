@@ -81,6 +81,11 @@ return function(T)
         b.__scripts.OnEnter(b)
         b:SetEnabled(true)
         T.near(b.fill.__color[4], 0.04, 1e-9, "switching on does not light it")
+        -- the windows set the state of all their buttons with every refresh: a lit button that stays on stays lit
+        b.__scripts.OnLeave(b) b.__scripts.OnEnter(b)
+        T.near(b.fill.__color[4], 0.09, 1e-9)
+        b:SetEnabled(true)
+        T.near(b.fill.__color[4], 0.09, 1e-9, "still lit")
     end)
 
     T.test("ui: the font is the one chosen in EllesmereUI - asked only when its fonts are set up, never on clients with a script of their own", function()

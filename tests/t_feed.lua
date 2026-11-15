@@ -63,11 +63,12 @@ return function(T)
         T.near(words.l, sub.l + row.sub:GetStringWidth() + 8, 1e-9, "eight pixels behind 'ilvl: 40'")
         T.near(words.t, sub.t, 1e-9, "on the feed's second line")
         T.ok(value.w > 0, "this item has a price") T.ok(words.r <= value.l - 8 + 1e-9, "the words end before the price")
-        T.ok(words.r > words.l + text:GetStringWidth(), "and have room for all of '+83.1%'")
+        T.near(words.w, text:GetUnboundedStringWidth(), 1e-9, "all of '+83.1%' is there - nothing bounds the words")
+        T.eq(text:GetPoint(2), nil, "one point: behind the feed's text")
         T.eq(W.EG.lastError, nil)
     end)
 
-    T.test("feed: the words never lie on the price - any row height, style and text size; without room they shrink to nothing", function()
+    T.test("feed: the words never lie on the price - any row height, style and text size; without room they stay away", function()
         for _, style in ipairs({ "BAR", "BOX", "TOAST" }) do
             for _, height in ipairs({ 18, 20, 24, 28, 36, 48 }) do
                 for _, size in ipairs({ 10, 13, 18 }) do
@@ -77,7 +78,8 @@ return function(T)
                     T.eq(on(row.EasyGearText), true, where)
                     local words, value = box(W, row.EasyGearText), box(W, row.value)
                     T.ok(value.w > 0, where)
-                    T.ok(words.r <= value.l + 1e-9, where .. ": the words end left of the price")
+                    T.ok(words.w > 0, where .. ": the words are there")
+                    T.ok(words.r <= value.l - 8 + 1e-9, where .. ": the words end left of the price")
                 end
             end
         end
@@ -85,8 +87,19 @@ return function(T)
         local W, LF = world({ width = 150 })
         local row = loot(W, LF, W.I.better, 1, { won = "Need 87" })
         T.eq(row.sub:GetText(), "Won: Need 87  ilvl: 40")
-        local words, value = box(W, row.EasyGearText), box(W, row.value)
-        T.ok(words.w <= 0, "no room: the words have no width (the client draws nothing)") T.ok(words.r <= value.l)
+        T.ok(row.sub:GetStringWidth() < row.sub:GetUnboundedStringWidth(), "the feed's own line is cut already")
+        T.eq(on(row.EasyGearText), false, "no room: no words") T.eq(marked(row), true, "marker and tint say it") T.eq(on(row.EasyGearTint), true)
+        -- the room is measured, not guessed: the widest feed the words do not fit into, and the first one they do
+        local need = row.EasyGearText:GetUnboundedStringWidth()
+        for _, case in ipairs({ { -1, false }, { 0, true }, { 1, true } }) do
+            -- row: bar 3 + 5, icon 28, 6 to the text, "ilvl: 40" (8 letters of 5.5), 8 gap, the words, 8 to the price, the price, 6
+            local price = 3 * 6.5                        -- "12g" in the 13 pixel font
+            local width = 8 + 28 + 6 + 8 * 5.5 + 8 + need + 8 + price + 6 + case[1]
+            local V, VLF = world({ width = width }, function(w) w.state.items[9301].sellPrice = 12 end)
+            local vrow = loot(V, VLF, V.I.better)
+            T.eq(vrow.value:GetText(), "12g") T.eq(on(vrow.EasyGearText), case[2], "width " .. width)
+            if case[2] then T.ok(box(V, vrow.EasyGearText).r <= box(V, vrow.value).l - 8 + 1e-9, "width " .. width) end
+        end
     end)
 
     T.test("feed: without a second line the words follow the name", function()
@@ -107,10 +120,15 @@ return function(T)
         T.near(box(W, row.EasyGearText).t, box(W, row.sub).t, 1e-9)
         T.eq(W.EG.lastError, nil)
         -- a narrow feed: the name fills its line up to the price, the words get no room and do not run over it
-        local N, NLF = world({ ilvl = false, width = 150 })
+        local N, NLF = world({ ilvl = false, width = 170 })
         local narrow = loot(N, NLF, N.I.better)
-        local nwords, nvalue = box(N, narrow.EasyGearText), box(N, narrow.value)
-        T.ok(nwords.w <= 0, "no width") T.ok(nwords.r <= nvalue.l, "ending before the price all the same")
+        T.eq(on(narrow.EasyGearText), false, "no words") T.eq(marked(narrow), true)
+        -- the next thing in that row is short: the words are back
+        NLF.maxRows = 1
+        local short = loot(N, NLF, N.I.ring)
+        T.eq(short, narrow) T.eq(short.name:GetText(), "Good Ring")
+        T.eq(on(short.EasyGearText), true, "room again")
+        T.ok(box(N, short.EasyGearText).r <= box(N, short.value).l + 1e-9)
     end)
 
     T.test("feed: marker and words lie on a layer of their own above the row's border, the marker inside the row in every style", function()
@@ -244,6 +262,91 @@ return function(T)
         local _, LF2 = small, small.LF
         local tiny = loot(small, LF2, small.I.better)
         T.eq(tiny.EasyGearMark:GetWidth(), 12, "never smaller than 12 pixels")
+        -- the rule is the hidden name, not the width of a tile: a wide row whose name the feed hides gets no words either
+        T.eq(on(tiny.EasyGearText), true)
+        tiny.name:Hide()
+        small.fire("CHAT_MSG_LOOT", "x") small.flush()
+        T.eq(on(tiny.EasyGearText), false, "no name, no words") T.eq(marked(tiny), true)
+    end)
+
+    T.test("feed: rows the feed builds without a word - beside a known row, or for its history while Shift is held - are found", function()
+        -- beside a known row
+        local W, LF = world({})
+        local first = loot(W, LF, W.I.better)            -- found through the chat line
+        local second = LF.loot(W.I.ring)                 -- a row without a chat line
+        W.advance(1)
+        T.eq(marked(second), false, "nobody told EasyGear")
+        LF.loot(W.I.better)                              -- the feed fills the known row again
+        T.eq(marked(first), true) T.eq(marked(second), false, "not in the same moment")
+        W.advance(0.2)
+        T.eq(marked(second), true, "a look at all rows follows the filling of a known one")
+        T.eq(#W.state.timers, 0, "and that is the end of it - looking does not cause more looking")
+
+        -- the history right after login: no row was ever built, entries are kept from an earlier session
+        local V, VLF = world({})
+        V.fire("CHAT_MSG_LOOT", "x") V.flush()
+        for _, link in ipairs({ V.I.weak, V.I.better }) do
+            local it = V.state.itemFromAny(link)
+            table.insert(VLF.entries, 1, { icon = 1, text = it.name, sub = "ilvl: " .. it.ilvl, link = link, key = "item:" .. link })
+        end
+        V.state.shift = true
+        V.fire("MODIFIER_STATE_CHANGED", "LSHIFT", 1)
+        T.eq(#V.state.timers, 2, "a look soon, and the watch")
+        V.fire("MODIFIER_STATE_CHANGED", "RSHIFT", 1)
+        T.eq(#V.state.timers, 2, "the other Shift key: still one watch")
+        V.advance(3)                                     -- Shift is held for a while before the wheel turns
+        local rows = VLF.showHistory()
+        T.eq(#rows, 2) T.eq(rows[1].data.link, V.I.better)
+        T.eq(marked(rows[1]), false, "just built")
+        V.advance(0.25)
+        T.eq(marked(rows[1]), true, "seen within a quarter second") T.eq(marked(rows[2]), false, "the worse item stays plain")
+        V.state.shift = false
+        V.fire("MODIFIER_STATE_CHANGED", "LSHIFT", 0)
+        T.eq(#V.state.timers, 2, "the running watch and one last look - no second watch")
+        V.advance(1)
+        T.eq(#V.state.timers, 0, "Shift is up: no more watching")
+        V.fire("MODIFIER_STATE_CHANGED", "LCTRL", 1)
+        T.eq(#V.state.timers, 0, "other modifier keys do not matter")
+        T.eq(V.EG.lastError, nil)
+
+        -- the key is let go without the client saying so (the window lost the focus): the watch ends by itself
+        V.state.shift = true
+        V.fire("MODIFIER_STATE_CHANGED", "RSHIFT", 1)    -- the right Shift key this time
+        V.advance(1)
+        T.eq(#V.state.timers, 1, "watching")
+        V.state.shift = false
+        V.advance(1)
+        T.eq(#V.state.timers, 0)
+
+        -- a quick flick: rows built and Shift let go before the watch looked - the look at letting go finds them
+        local Q, QLF = world({})
+        Q.fire("CHAT_MSG_LOOT", "x") Q.flush()
+        local it = Q.state.itemFromAny(Q.I.better)
+        table.insert(QLF.entries, 1, { icon = 1, text = it.name, sub = "ilvl: 40", link = Q.I.better, key = "item:" .. Q.I.better })
+        Q.state.shift = true
+        Q.fire("MODIFIER_STATE_CHANGED", "LSHIFT", 1)
+        Q.advance(0.1)
+        local quick = QLF.showHistory()
+        Q.state.shift = false
+        Q.fire("MODIFIER_STATE_CHANGED", "LSHIFT", 0)
+        Q.advance(0.1)
+        T.eq(marked(quick[1]), true, "found by the look at letting go")
+        Q.advance(1)
+        T.eq(#Q.state.timers, 0)
+
+        -- no feed, or the marks switched off: nothing to watch
+        local none = world(nil)
+        none.state.shift = true
+        none.fire("MODIFIER_STATE_CHANGED", "LSHIFT", 1)
+        none.advance(1)
+        T.eq(#none.state.timers, 0, "no EllesmereUI: one look, then quiet") T.eq(none.EG.lastError, nil)
+        local off, OLF = world({})
+        loot(off, OLF, off.I.better)
+        off.slash("items off") off.flush()
+        off.state.shift = true
+        off.fire("MODIFIER_STATE_CHANGED", "LSHIFT", 1)
+        off.advance(1)
+        T.eq(#off.state.timers, 0, "marks off: quiet")
     end)
 
     ------------------------------------------------------------------ rows are reused

@@ -173,7 +173,8 @@ function UI.Button(parent, text, width, height, onClick)
         setEnabled(self, on and true or false)
         UI.Paint(self.label, on and "text" or "faint")
         -- ein Knopf, der sich unter der Maus abschaltet, bekommt kein OnLeave mehr: die Hervorhebung jetzt zuruecknehmen
-        self.fill:SetColorTexture(UI.Color("card"))
+        -- (nur dann - die Fenster setzen den Zustand aller Knoepfe bei jedem Auffrischen neu)
+        if not on then self.fill:SetColorTexture(UI.Color("card")) end
     end
     b:SetText(text or "")
     b:SetScript("OnEnter", function(self)

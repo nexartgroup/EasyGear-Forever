@@ -319,8 +319,9 @@ taken from mail or a trade - a card in the shape of the item appears for **15 se
   link (enchanted), anything taken from the open bank, and the same item again within a minute. An upgrade that needs a
   higher level (yellow arrow) is not announced. What you wear is known by the item, not by its link: the ring you take
   off is not new, a second one of the ring you wear is.
-* The cards lie above EasyGear's windows, but below the game's dialogs (confirmations and the like): a card never
-  covers a button of a dialog.
+* A card comes to the front when it appears - above EasyGear's windows and other windows of that level, even one you
+  just clicked - but stays below the game's dialogs (confirmations and the like): a card never covers a button of a
+  dialog. Clicking a window while a card stands brings that window in front of it, as with any two windows.
 * EasyGear equips nothing: the card only points at the item.
 
 ## EllesmereUI Loot Feed
@@ -336,10 +337,11 @@ marks the rows of items that matter:
 
 * Shape and colour follow [Marker look](#marker-look); the words use the feed's own font and size.
 * The marker sits in the top left corner of the icon. The words follow the feed's second line (`ilvl: 12   +83.1%`) -
-  or the name, when the feed shows no second line - and end where that line ends, before the price: they never lie on
-  it. In a feed too narrow for them the client shortens them.
+  or the name, when the feed shows no second line - if they fit into the room that line has before the price. When they
+  do not fit (a narrow feed, a long name) they are left out, so they never lie on the price; marker and tint remain.
 * Only what **you** received is marked - not the rows that tell what somebody else won on a roll. Looking back in the
-  feed's history (Shift and the mouse wheel) shows the marks again, judged by what you wear now.
+  feed's history (Shift and the mouse wheel) shows the marks again, judged by what you wear now. The feed builds those
+  rows without telling anyone, so EasyGear looks at the feed four times a second while Shift is held - and only then.
 * In the feed's *Icon Tray* style the tiles get the marker and the tint only (their corner holds the count).
 * The marking belongs to the marker group *Vendors, loot, rolls, trade, mail* (`/eg items`): switched off there, the feed
   stays untouched.
@@ -446,7 +448,7 @@ Run from the root of this repository:
 
 ```
 lua5.1 tests/run.lua                 # unit tests on a model of the client (Lua 5.1 only), ~500 checks
-python3 tests/mutate.py              # mutation check: breaks the addon in ~840 small ways, the tests must notice
+python3 tests/mutate.py              # mutation check: breaks the addon in ~850 small ways, the tests must notice
                                      # (MUT_SHARD=0/3 ... 2/3 splits it over several processes)
 tools/check.sh <Interface/AddOns of the Forever UI source> [<folder of the Dialogue UI addon>]
                                      # luacheck against a std built from the UI source + checks that every
@@ -537,9 +539,10 @@ This edition is a new codebase for the Forever client, not an update of that one
   templates of the default interface are no longer used for them.
 * Tests and tools: a model of the Loot Feed built after its source (fill order, anchors, border frames, roll rows,
   history), a layout calculation in the model of the client (where a region lies on the screen), tests for the kit,
-  the windows, the notification and the feed, and the mutations for all of it. An independent review of the new parts
-  against the sources of the client and of EllesmereUI found ten defects of placement and detection (words on the
-  price, layers, a missed and a false notification, fonts); all are fixed and covered by tests.
+  the windows, the notification and the feed, and the mutations for all of it. Two independent reviews of the new parts
+  against the sources of the client and of EllesmereUI found fourteen defects of placement and detection, none of them
+  a Lua error (words on the price, layers, a missed and a false notification, fonts, history rows left unmarked, cards
+  behind a clicked window); all are fixed and covered by tests.
 
 ## Changes in 4.4.0
 
@@ -877,8 +880,10 @@ aus der Post oder einem Handel -, erscheint für **15 Sekunden** eine Karte in F
   einer Minute. Eine Verbesserung, die erst mit höherer Stufe nutzbar ist (gelber Pfeil), wird nicht eingeblendet. Was du
   trägst, wird am Item erkannt, nicht an seinem Link: der Ring, den du ablegst, ist nicht neu - ein zweiter desselben Rings,
   den du trägst, schon.
-* Die Karten liegen über den Fenstern von EasyGear, aber unter den Rückfragen des Spiels (Bestätigungen und dergleichen):
-  eine Karte verdeckt nie einen Knopf einer Rückfrage.
+* Eine Karte kommt beim Erscheinen nach vorn - über die Fenster von EasyGear und andere Fenster dieser Ebene, auch über eines,
+  das du gerade angeklickt hast -, bleibt aber unter den Rückfragen des Spiels (Bestätigungen und dergleichen): eine Karte
+  verdeckt nie einen Knopf einer Rückfrage. Klickst du ein Fenster an, während eine Karte steht, legt es sich davor - wie bei
+  zwei Fenstern.
 * EasyGear legt nichts an: die Karte weist nur auf das Item hin.
 
 ## Loot Feed von EllesmereUI
@@ -894,10 +899,12 @@ EasyGear kennzeichnet die Zeilen der Items, auf die es ankommt:
 
 * Form und Farbe folgen [Aussehen der Markierungen](#aussehen-der-markierungen); der Text benutzt Schrift und Größe des Feeds.
 * Die Markierung sitzt in der linken oberen Ecke des Symbols. Der Text folgt der zweiten Zeile des Feeds (`ilvl: 12   +83.1%`) -
-  oder dem Namen, wenn der Feed keine zweite Zeile zeigt - und endet, wo diese Zeile endet, vor dem Preis: er liegt nie darauf.
-  Ist der Feed dafür zu schmal, kürzt ihn das Spiel.
+  oder dem Namen, wenn der Feed keine zweite Zeile zeigt -, wenn er in den Platz passt, den diese Zeile vor dem Preis hat. Passt
+  er nicht (ein schmaler Feed, ein langer Name), bleibt er weg und liegt so nie auf dem Preis; Markierung und Tönung bleiben.
 * Gekennzeichnet wird nur, was **du** bekommen hast - nicht die Zeilen, die sagen, was jemand anderes erwürfelt hat. Im Verlauf
-  des Feeds (Umschalt und Mausrad) erscheinen die Markierungen wieder, beurteilt nach dem, was du jetzt trägst.
+  des Feeds (Umschalt und Mausrad) erscheinen die Markierungen wieder, beurteilt nach dem, was du jetzt trägst. Der Feed baut
+  diese Zeilen, ohne es jemandem zu melden; darum sieht EasyGear viermal je Sekunde nach, solange Umschalt gehalten wird - und
+  nur dann.
 * Im Stil *Icon Tray* des Feeds bekommen die Kacheln nur Markierung und Tönung (in ihrer Ecke steht die Anzahl).
 * Die Kennzeichnung gehört zur Markierungsgruppe *Händler, Beute, Würfeln, Handel, Post* (`/eg items`): dort abgeschaltet,
   bleibt der Feed unberührt.

@@ -420,18 +420,28 @@ return function(T)
         T.eq(W.EG.lastError, nil)
     end)
 
-    T.test("toast: the cards lie above EasyGear's windows and below the game's dialogs", function()
+    T.test("toast: a card comes to the front when it appears - above EasyGear's windows, even a clicked one; never into the strata of the game's dialogs", function()
         local W = world()
+        W.EG.Window.SetItem(W.I.weak)
+        local win = W.env.EasyGearWindow
+        T.eq(win:GetFrameStrata(), "HIGH")
+        T.eq(win:IsToplevel(), true, "a click brings a window to the front - whole, not in parts")
+        local function top(f)
+            local level = f:GetFrameLevel()
+            for _, child in ipairs({ f:GetChildren() }) do level = math.max(level, top(child)) end
+            return level
+        end
+        win:Raise()                                      -- the user clicks the window: the client raises it above all in HIGH
         loot(W, 1, W.I.better)
         local f = shown(W)[1]
         T.eq(f:GetFrameStrata(), "HIGH", "never over a dialog of the game (those are DIALOG)")
-        T.eq(f:GetFrameLevel(), 200, "far up in its strata")
-        T.eq(f.icon:GetFrameLevel(), 201, "its parts with it")
-        W.EG.Window.SetItem(W.I.better)
-        local win = W.env.EasyGearWindow
-        T.eq(win:GetFrameStrata(), "HIGH")
-        T.ok(win:GetFrameLevel() < 200 - 20, "a window nobody clicked lies below the card with all its parts")
-        T.eq(win:IsToplevel(), true, "a click brings a window to the front - whole, not in parts")
+        T.ok(f:GetFrameLevel() > top(win), "the card is in front of the window and all its parts")
+        T.ok(f.icon:GetFrameLevel() > f:GetFrameLevel(), "its own parts with it")
+        win:Raise()                                      -- clicked again: the window covers the card ...
+        T.ok(win:GetFrameLevel() > top(f))
+        loot(W, 2, W.I.ring)
+        local g = shown(W)[2]
+        T.ok(g:GetFrameLevel() > top(win), "... and the next card is in front again")
         W.EG.ProfileWindow.Open()
         T.eq(W.env.EasyGearProfileWindow:IsToplevel(), true)
     end)

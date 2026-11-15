@@ -18,8 +18,9 @@
     wurde (es war angelegt), was nur seinen Link wechselt (verzaubert) und was aus der offenen Bank kommt.
     EasyGear legt nichts an: die Einblendung weist nur hin.
 
-    Die Karten liegen in der Ebene der eigenen Fenster (HIGH), dort weit oben: ueber den Fenstern, aber unter
-    den Rueckfragen des Spiels (DIALOG) - eine Einblendung verdeckt nie einen Knopf einer Rueckfrage.
+    Die Karten liegen in der Ebene der eigenen Fenster (HIGH) und werden beim Erscheinen nach vorn geholt: ueber
+    die Fenster, auch ueber eines, das gerade angeklickt wurde - aber unter die Rueckfragen des Spiels (DIALOG).
+    Eine Einblendung verdeckt nie einen Knopf einer Rueckfrage.
 -----------------------------------------------------------------------------]]
 
 local _, EG = ...
@@ -34,7 +35,6 @@ local tremove, tconcat = table.remove, table.concat
 local mmax, mmin = math.max, math.min
 
 local WIDTH, HEIGHT, GAP = 320, 64, 6
-local LEVEL = 200                   -- Rahmenebene der Karten in "HIGH": ueber Fenstern, die niemand nach vorn geholt hat
 local MAX_SHOWN = 3                 -- so viele stehen zugleich
 local MAX_QUEUE = 8                 -- so viele warten hoechstens; aeltere fallen weg
 local FADE_IN, FADE_OUT = 0.25, 0.5 -- Sekunden Ein- und Ausblenden (Teil der Standzeit)
@@ -172,7 +172,6 @@ local function NewFrame()
     local f = CreateFrame("Button", nil, UIParent)
     f:SetSize(WIDTH, HEIGHT)
     f:SetFrameStrata("HIGH")
-    f:SetFrameLevel(LEVEL)
     UI.Box(f, "bg", "border")
 
     f.bar = f:CreateTexture(nil, "ARTWORK")              -- links: ein Balken in der Farbe der Markierung
@@ -239,6 +238,7 @@ Display = function(data)
 
     f:SetAlpha(0)
     f:Show()
+    f:Raise()               -- vor alles in ihrer Ebene, auch vor ein Fenster, das ein Klick nach vorn geholt hat
     shown[#shown + 1] = f
     Layout()
     return f
