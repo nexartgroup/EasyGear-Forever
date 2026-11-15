@@ -38,12 +38,8 @@ EasyGearLocales["esES"] = {
     NOTE_EXTRAS = "El objeto equipado aporta %s puntos de encantamientos y gemas.",
 
     ---------- profile window
-    P_TITLE = "EasyGear - Perfiles",
-    P_CANDIDATE = "Perfil de comparación",
-    P_ACTIVEPROF = "Perfil activo",
     P_MYCLASS = "Mi clase",
     P_GEAR = "Tu equipo",
-    P_GEAR_SCORE = "Puntuación del equipo",
     P_ITEM_LINE = "Objeto de la ventana de comparación",
     P_SAVE_NEW = "Guardar como perfil nuevo",
     P_OVERWRITE = "Guardar",
@@ -155,7 +151,6 @@ EasyGearLocales["esES"] = {
     SPEC_DRUID_ALLROUND = "Versátil",
 
     ---------- scoring and display
-    TITLE = "EasyGear - Comparación de objetos",
     CANDIDATE = "Objeto a comparar",
     EQUIPPED = "Equipado actualmente",
     NOTHING_EQUIPPED = "Casilla vacía",

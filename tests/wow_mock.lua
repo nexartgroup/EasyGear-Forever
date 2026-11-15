@@ -130,8 +130,8 @@ function Region:GetPoint(i)
     if not p then return nil end
     return p[1], p[2], p[3], p[4], p[5]
 end
-function Region:ClearAllPoints() self.__points = {} end
-function Region:SetAllPoints() end
+function Region:ClearAllPoints() self.__points = {} self.__allPoints = nil end
+function Region:SetAllPoints(target) self.__allPoints = target or true end      -- true: the parent
 function Region:SetAlpha(a) self.__alpha = a end
 function Region:SetScale(s) self.__scale = s end
 function Region:GetScale() return self.__scale end
@@ -154,11 +154,22 @@ function Region:IsDesaturated() return self.__desaturated end
 function Region:SetText(t) self.__text = t == nil and "" or t end
 function Region:GetText() return self.__text end
 function Region:SetFormattedText(fmt, ...) self.__text = sformat(fmt, ...) end
-function Region:SetTextColor(r, g, b) self.__textColor = { r, g, b } end
-function Region:SetJustifyH() end
-function Region:SetJustifyV() end
+function Region:SetTextColor(r, g, b, a) self.__textColor = { r, g, b, a } end
+function Region:SetJustifyH(j) self.__justifyH = j end
+function Region:SetJustifyV(j) self.__justifyV = j end
 function Region:SetWordWrap(v) self.__wordWrap = v and true or false end
 function Region:SetFontObject(f) self.__font = f end
+function Region:SetFont(file, size, flags)
+    assert(type(file) == "string" and type(size) == "number", "SetFont: a font file and a size expected")
+    self.__fontFile, self.__fontSize, self.__fontFlags = file, size, flags
+    return true
+end
+function Region:GetFont() return self.__fontFile, self.__fontSize, self.__fontFlags end
+-- the width of the text as drawn: about half the font size per letter, color codes and textures not counted
+function Region:GetStringWidth()
+    local plain = tostring(self.__text or ""):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""):gsub("|[TA].-|[ta]", "")
+    return #plain * (self.__fontSize or 12) * 0.5
+end
 function Region:SetTextInsets() end
 function Region:SetMaxLetters() end
 function Region:SetAutoFocus() end
@@ -170,6 +181,10 @@ function Region:SetFrameLevel(l) self.__level = l end
 function Region:GetFrameLevel() return self.__level or 1 end
 function Region:SetParent(p) self.__parent = p end
 function Region:GetAlpha() return self.__alpha end
+-- the child frames (regions - textures and font strings - come from GetRegions)
+function Region:GetChildren()
+    return unpack(self.__frames or {})
+end
 function Region:GetRegions()
     local out = {}
     for _, c in ipairs(self.__children) do out[#out + 1] = c end
@@ -386,6 +401,8 @@ function Mock.new(opts)
     env.CanDualWield = function() return player.dualWield ~= false end
     env.IsShiftKeyDown = function() return self.shift end
     env.UISpecialFrames = {}
+    env.STANDARD_TEXT_FONT = "Fonts\\FRIZQT__.TTF"
+    env.GameFontNormal = { GetFont = function() return "Fonts\\FRIZQT__.TTF", 12, "" end }
     env.SlashCmdList = {}
     self.addons = {}
     env.C_AddOns = {
@@ -420,6 +437,11 @@ function Mock.new(opts)
         end
         local f = (kind == "GameTooltip") and makeTooltip(env, name) or newRegion(kind, name, parent or env.UIParent)
         f.__template = template
+        local owner = f.__parent
+        if owner then
+            owner.__frames = owner.__frames or {}
+            owner.__frames[#owner.__frames + 1] = f
+        end
         if kind == "ItemButton" then
             makeItemButton(f)
             for k, v in pairs(env.ItemButtonMixin) do f[k] = v end      -- the engine copies the mixin when the frame is created
@@ -828,7 +850,19 @@ function Mock.new(opts)
     if opts.noTooltipProcessor then env.TooltipDataProcessor = nil end
     if opts.noSettings then env.Settings = nil end
     if opts.noColorSwatch and env.Settings then env.Settings.CreateColorSwatch = nil end
+    -- Blizzard_Menu: MenuUtil.CreateContextMenu(owner, generator) opens a menu at the cursor; the generator fills a
+    -- description, which the model keeps on the owner (owner.__menu) for the tests to read and to choose from
+    env.MenuUtil = {
+        CreateContextMenu = function(owner, generator)
+            local d = setmetatable({ entries = {} }, MenuDescription)
+            generator(owner, d)
+            owner.__menu = d
+            owner.__menuBuilds = (owner.__menuBuilds or 0) + 1
+            return d
+        end,
+    }
     if opts.noDropdown then
+        env.MenuUtil = nil
         local create = env.CreateFrame
         env.CreateFrame = function(kind, name, parent, template)
             if kind == "DropdownButton" then error("unknown frame type DropdownButton", 2) end
@@ -854,6 +888,22 @@ function Mock.new(opts)
         self.now = target
     end
     function H.flush() H.advance(5) end
+    -- a stretch of time as the frames see it: OnUpdate of every visible frame in steps of at most `step` seconds, the
+    -- timers after each step (frames made by an OnUpdate run from the next step on)
+    function H.tick(seconds, step)
+        step = step or 0.1
+        local left = seconds
+        while left > 1e-9 do
+            local dt = math.min(step, left)
+            local list = {}
+            for _, f in ipairs(self.frames) do list[#list + 1] = f end
+            for _, f in ipairs(list) do
+                if f.__scripts.OnUpdate and f:IsVisible() then f.__scripts.OnUpdate(f, dt) end
+            end
+            H.advance(dt)
+            left = left - dt
+        end
+    end
 
     function H.fire(event, ...)
         for _, f in ipairs(self.frames) do
@@ -1636,6 +1686,168 @@ function Mock.new(opts)
             D.spec = { choices = {}, rewards = {}, required = {} }
         end
         return D
+    end
+
+    --[[ The Loot Feed of EllesmereUI (Forever Essentials), reduced to what EasyGear touches, after its source
+         (EllesmereUIForeverEssentials_LootFeed.lua 9.8.6, EllesmereUIForeverEssentials.lua: F.Start, EUI_UnlockMode.lua):
+           * no interface for other addons; the feed's frame ("anchor") is reachable through the unlock element
+             EllesmereUI._unlockRegisteredElements.EUI_LootFeed, whose getFrame() builds and returns the anchor while the
+             feature is on and returns nil while it is off
+           * rows are nameless child frames of the anchor, made by NewRow (bg, bar, icon, iconBg, badge, name, sub, value),
+             pooled: Release hides a row and clears r.key / r.data, Push takes one from the pool (or the oldest shown one
+             when Max Rows are in use), sets r.key / r.data and THEN fills it - Fill sets the icon first, the texts after
+           * a repeated gain of the same thing refills its row (the amount adds up); StyleRow hides name and value of the
+             tiles of the Icon Tray style and shows the badge; the font of the second line is the feed's own, two sizes
+             smaller than the name; an item the client does not have yet gets its row when it has loaded
+           * the pinned tracker row is a row as well (r.pinned, data without a link); other children are not rows
+         options: enabled = false, style = "BAR" | "BOX" | "TRAY" | "TOAST", maxRows, rowHeight, tracker, noRegistry    ]]
+    function H.installLootFeed(options)
+        options = options or {}
+        env.EllesmereUI = env.EllesmereUI or { IS_FOREVER = true }
+        self.addons.EllesmereUI = true
+        self.addons.EllesmereUIForeverEssentials = true
+        local FONT = "Interface\\AddOns\\EllesmereUI\\media\\fonts\\Expressway.ttf"
+        local LF = { active = {}, pool = {}, waiting = {}, built = 0, fills = 0,
+                     enabled = options.enabled ~= false, style = options.style or "BAR",
+                     maxRows = options.maxRows or 6, rowHeight = options.rowHeight or 36, textSize = 13 }
+        local active, pool = LF.active, LF.pool
+        local anchor
+
+        local function NewRow(parent)
+            local r = env.CreateFrame("Frame", nil, parent or anchor)
+            r.bg = r:CreateTexture(nil, "BACKGROUND")
+            r.bar = r:CreateTexture(nil, "ARTWORK")
+            r.icon = r:CreateTexture(nil, "ARTWORK")
+            r.iconBg = r:CreateTexture(nil, "ARTWORK")
+            r.badge = r:CreateFontString(nil, "OVERLAY")
+            r.name, r.sub, r.value = r:CreateFontString(nil, "OVERLAY"), r:CreateFontString(nil, "OVERLAY"), r:CreateFontString(nil, "OVERLAY")
+            LF.built = LF.built + 1
+            return r
+        end
+        local function StyleRow(r)
+            local h = LF.rowHeight
+            local tray, bar, toast = LF.style == "TRAY", LF.style == "BAR", LF.style == "TOAST"
+            r:SetSize(tray and h or 300, h)
+            if bar then r.icon:SetSize(h - 8, h - 8) elseif toast then r.icon:SetSize(h - 10, h - 10) else r.icon:SetSize(h, h) end
+            r.name:SetShown(not tray)
+            r.value:SetShown(not tray)
+            r.badge:SetShown(tray)
+            r.name:SetFont(FONT, LF.textSize, "")
+            r.value:SetFont(FONT, LF.textSize, "")
+            r.sub:SetFont(FONT, LF.textSize - 2, "")
+        end
+        local function Fill(r)
+            local d = r.data
+            LF.fills = LF.fills + 1
+            r.icon:SetTexture(d.icon)
+            r.name:SetText(d.text)
+            r.sub:SetText(d.sub or "")
+            r.sub:SetShown(d.sub ~= nil)
+            r.value:SetText(d.value or "")
+            r.badge:SetText(d.badge or "")
+        end
+        local function FindRow(key)
+            for _, r in ipairs(active) do if r.key == key then return r end end
+        end
+        local function Unlist(r)
+            for i = #active, 1, -1 do if active[i] == r then table.remove(active, i) end end
+        end
+        local function Release(r)
+            Unlist(r)
+            r:Hide()
+            r.key, r.data = nil, nil
+            pool[#pool + 1] = r
+        end
+        local function Push(key, data)
+            local r = FindRow(key)
+            if r then
+                Unlist(r)
+            else
+                while #active >= LF.maxRows do Release(active[#active]) end
+                r = table.remove(pool) or NewRow()
+                StyleRow(r)
+            end
+            table.insert(active, 1, r)
+            r.key, r.data = key, data
+            Fill(r)
+            r:Show()
+            return r
+        end
+        local function CreateAnchor()
+            if anchor then return end
+            anchor = env.CreateFrame("Frame", nil, env.UIParent)
+            LF.anchor = anchor
+            -- the callout of the Icon Tray style: a child of the feed with name, sub and value, but no icon
+            local callout = env.CreateFrame("Frame", nil, anchor)
+            callout.name, callout.sub, callout.value = callout:CreateFontString(), callout:CreateFontString(), callout:CreateFontString()
+            LF.callout = callout
+            if options.tracker then
+                LF.summary = NewRow(anchor)
+                LF.summary.pinned = true
+                LF.summary.data = { icon = "Interface\\Icons\\INV_Misc_Coin_02" }
+                StyleRow(LF.summary)
+                Fill(LF.summary)
+            end
+        end
+        if not options.noRegistry then
+            env.EllesmereUI._unlockRegisteredElements = env.EllesmereUI._unlockRegisteredElements or {}
+            env.EllesmereUI._unlockRegisteredElements.EUI_LootFeed = {
+                key = "EUI_LootFeed",
+                getFrame = function()
+                    if not LF.enabled then return nil end
+                    CreateAnchor()
+                    return anchor
+                end,
+            }
+        end
+
+        -- ShowItem: a row for a looted item; one the client does not know yet gets its row when it has loaded
+        function LF.loot(link, count)
+            if not LF.enabled then return nil end
+            CreateAnchor()
+            local it = self.itemFromAny(link)
+            local function show()
+                local key = "item:" .. link
+                local existing = FindRow(key)
+                local amount = (count or 1) + (existing and existing.data.amount or 0)
+                local text = it.name
+                if amount > 1 then text = amount .. "x " .. text end
+                local gear = it.equipLoc and it.equipLoc ~= ""
+                return Push(key, { icon = it.texture or (100000 + it.id), text = text, sub = gear and ("ilvl: " .. tostring(it.ilvl)) or nil,
+                                   value = (it.sellPrice or 0) > 0 and tostring(it.sellPrice * amount) or nil,
+                                   link = link, amount = amount, badge = amount > 1 and amount or nil })
+            end
+            if it.uncached then
+                LF.waiting[#LF.waiting + 1] = show
+                return nil
+            end
+            return show()
+        end
+        -- the client has loaded the items the feed waited for (Item:ContinueOnItemLoad)
+        function LF.loaded()
+            local list = LF.waiting
+            LF.waiting = {}
+            local last
+            for _, show in ipairs(list) do last = show() end
+            return last
+        end
+        function LF.money(copper)
+            if not LF.enabled then return nil end
+            CreateAnchor()
+            return Push("money", { icon = "Interface\\Icons\\INV_Misc_Coin_02", text = "Money", value = tostring(copper), amount = copper })
+        end
+        function LF.release(r) Release(r) end
+        -- ApplyStyle: every shown row is styled and filled again
+        function LF.setStyle(style)
+            LF.style = style
+            for _, r in ipairs(active) do StyleRow(r) Fill(r) end
+        end
+        -- Apply: switched off, the rows go (the anchor stays)
+        function LF.setEnabled(on)
+            LF.enabled = on and true or false
+            if not LF.enabled then while active[1] do Release(active[1]) end end
+        end
+        return LF
     end
 
     return H

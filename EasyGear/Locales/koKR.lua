@@ -38,12 +38,8 @@ EasyGearLocales["koKR"] = {
     NOTE_EXTRAS = "착용 중인 아이템은 마법 부여와 보석으로 %s점을 얻고 있습니다.",
 
     ---------- profile window
-    P_TITLE = "EasyGear - 프로필",
-    P_CANDIDATE = "비교 프로필",
-    P_ACTIVEPROF = "사용 중인 프로필",
     P_MYCLASS = "내 직업",
     P_GEAR = "착용 중인 장비",
-    P_GEAR_SCORE = "장비 점수",
     P_ITEM_LINE = "비교 창의 아이템",
     P_SAVE_NEW = "새 프로필로 저장",
     P_OVERWRITE = "저장",
@@ -155,7 +151,6 @@ EasyGearLocales["koKR"] = {
     SPEC_DRUID_ALLROUND = "만능",
 
     ---------- scoring and display
-    TITLE = "EasyGear - 아이템 비교",
     CANDIDATE = "비교할 아이템",
     EQUIPPED = "현재 착용 중",
     NOTHING_EQUIPPED = "빈 칸",

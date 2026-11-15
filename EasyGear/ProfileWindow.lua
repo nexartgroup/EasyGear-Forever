@@ -9,8 +9,9 @@
     Profil "Ueberschreiben"). Aktivieren stellt das Profil fuer diesen Charakter ein, "Automatisch"
     kehrt zur Talenterkennung zurueck.
 
-    Bausteine der Standard-Oberflaeche: ButtonFrameTemplate, WowStyle1DropdownTemplate (Menues),
-    UIPanelButtonTemplate und der allgemeine Eingabe- und Bestaetigungsdialog (StaticPopup).
+    Aufbau aus dem eigenen Baukasten (UI.lua): Kopf, zwei Karten mit Tabelle, Ergebniszeile, Knoepfe im Fuss.
+    Von der Standard-Oberflaeche kommen nur das Aufklappmenue (MenuUtil) fuer Klasse und Profil und der
+    allgemeine Eingabe- und Bestaetigungsdialog (StaticPopup).
 -----------------------------------------------------------------------------]]
 
 local _, EG = ...
@@ -18,16 +19,17 @@ local PW = {}
 EG.ProfileWindow = PW
 
 local L = EG.L
-local Stats, Score, Profiles, Specs, Items = EG.Stats, EG.Score, EG.Profiles, EG.Specs, EG.Items
+local Stats, Score, Profiles, Specs, Items, UI = EG.Stats, EG.Score, EG.Profiles, EG.Specs, EG.Items, EG.UI
 
 local ipairs, pairs, type, tonumber, pcall = ipairs, pairs, type, tonumber, pcall
 local sformat, sgsub = string.format, string.gsub
-local tinsert = table.insert
 
-local WIDTH, HEIGHT = 724, 570
-local PANEL_W = 346
+local WIDTH, HEIGHT = 748, 628
+local PANEL_W = 356
+local PANEL_H = 404
 local MAX_ROWS = 18
 local ROW_H = 15
+local ROWS_TOP = 98                 -- Karte: Abschnitt, Name, Beschreibung und Spaltentitel stehen darueber
 
 local frame
 local state = {
@@ -42,8 +44,8 @@ local state = {
 -- 01  Bausteine
 ------------------------------------------------------------------------------
 
-local function Text(parent, template, justify)
-    local fs = parent:CreateFontString(nil, "OVERLAY", template or "GameFontHighlightSmall")
+local function Text(parent, size, role, justify)
+    local fs = UI.Text(parent, size, role)
     fs:SetJustifyH(justify or "LEFT")
     return fs
 end
@@ -55,36 +57,14 @@ end
 
 local FmtWeight = EG.FmtWeight
 
--- Flache Flaeche mit Rand (ohne Backdrop-Vorlage, damit es mit jeder Oberflaeche geht)
-local function FlatBox(f, r, g, b, a, border)
-    local bg = f:CreateTexture(nil, "BACKGROUND")
-    bg:SetAllPoints()
-    bg:SetColorTexture(r, g, b, a)
-    if border then
-        local function Edge(p1, p2, w, h)
-            local t = f:CreateTexture(nil, "BORDER")
-            t:SetColorTexture(border[1], border[2], border[3], border[4] or 1)
-            t:SetPoint(p1, f, p1, 0, 0)
-            t:SetPoint(p2, f, p2, 0, 0)
-            if w then t:SetWidth(w) end
-            if h then t:SetHeight(h) end
-        end
-        Edge("TOPLEFT", "TOPRIGHT", nil, 1)
-        Edge("BOTTOMLEFT", "BOTTOMRIGHT", nil, 1)
-        Edge("TOPLEFT", "BOTTOMLEFT", 1, nil)
-        Edge("TOPRIGHT", "BOTTOMRIGHT", 1, nil)
-    end
-    return bg
-end
-
-local function SetTitle(f, text)
-    if f.SetTitle then
-        f:SetTitle(text)
-    else
-        f.titleText = f.titleText or Text(f, "GameFontNormal", "CENTER")
-        f.titleText:SetPoint("TOP", f, "TOP", 0, -6)
-        f.titleText:SetText(text)
-    end
+-- Eingabefeld: dunkle Mulde mit Rand in der Akzentfarbe
+local function InputBox(eb, size)
+    local fill = eb:CreateTexture(nil, "BACKGROUND")
+    fill:SetAllPoints(eb)
+    fill:SetColorTexture(0, 0, 0, 0.45)
+    eb.edge = UI.Border(eb, "accent")
+    UI.Font(eb, size)
+    eb:SetTextColor(UI.Color("text"))
 end
 
 -- Eingabe- und Bestaetigungsdialoge der Standard-Oberflaeche; ohne sie wird sofort gehandelt
@@ -208,75 +188,77 @@ local function BuildSide(parent, editable)
     local side = {}
 
     local p = CreateFrame("Frame", nil, parent)
-    p:SetSize(PANEL_W, 396)
-    FlatBox(p, 0, 0, 0, 0.35, { 0.4, 0.4, 0.4, 0.8 })
+    p:SetSize(PANEL_W, PANEL_H)
+    UI.Box(p, "card", "border")
     p:EnableMouseWheel(true)
     p:SetScript("OnMouseWheel", EG:Guard("profiles", function(_, delta) PW.Scroll(delta > 0 and -3 or 3) end))
     side.panel = p
 
-    side.caption = Text(p, "GameFontNormalSmall")
-    side.caption:SetPoint("TOPLEFT", p, "TOPLEFT", 10, -8)
+    side.caption = Text(p, 10, "faint")
+    side.caption:SetPoint("TOPLEFT", p, "TOPLEFT", 10, -9)
 
-    side.title = Text(p, "GameFontNormalLarge")
-    side.title:SetPoint("TOPLEFT", p, "TOPLEFT", 10, -22)
+    side.title = Text(p, 15, "text")
+    side.title:SetPoint("TOPLEFT", p, "TOPLEFT", 10, -24)
     side.title:SetSize(PANEL_W - 20, 18)
 
-    side.desc = Text(p, "GameFontDisableSmall")
-    side.desc:SetPoint("TOPLEFT", p, "TOPLEFT", 10, -44)
+    side.desc = Text(p, 11, "dim")
+    side.desc:SetPoint("TOPLEFT", p, "TOPLEFT", 10, -45)
     side.desc:SetSize(PANEL_W - 20, 26)
     side.desc:SetJustifyV("TOP")
 
-    local sep = p:CreateTexture(nil, "ARTWORK")
-    sep:SetColorTexture(0.4, 0.4, 0.4, 0.6)
-    sep:SetHeight(1)
-    sep:SetPoint("TOPLEFT", p, "TOPLEFT", 10, -74)
-    sep:SetPoint("TOPRIGHT", p, "TOPRIGHT", -10, -74)
-
-    local hy = -80
-    local h1 = Text(p, "GameFontNormalSmall", "LEFT")
-    h1:SetPoint("TOPLEFT", p, "TOPLEFT", 10, hy)
-    h1:SetText(L.STAT)
-    local h2 = Text(p, "GameFontNormalSmall", "RIGHT")
-    h2:SetPoint("TOPRIGHT", p, "TOPLEFT", 212, hy)
-    h2:SetText(L.VALUE)
-    local h3 = Text(p, "GameFontNormalSmall", "RIGHT")
-    h3:SetPoint("TOPRIGHT", p, "TOPLEFT", 278, hy)
-    h3:SetText(L.WEIGHT)
-    local h4 = Text(p, "GameFontNormalSmall", "RIGHT")
-    h4:SetPoint("TOPRIGHT", p, "TOPRIGHT", -10, hy)
-    h4:SetText(L.POINTS)
+    -- Spaltentitel
+    local hy = -(ROWS_TOP - 16)
+    local function Head(text, point, x, justify)
+        local fs = Text(p, 10, "faint", justify)
+        fs:SetPoint(point, p, (point == "TOPRIGHT" and x < 0) and "TOPRIGHT" or "TOPLEFT", x, hy)
+        fs:SetText(text)
+        return fs
+    end
+    Head(L.COL_STAT, "TOPLEFT", 10, "LEFT")
+    Head(L.COL_VALUE, "TOPRIGHT", 222, "RIGHT")
+    Head(L.COL_WEIGHT, "TOPRIGHT", 288, "RIGHT")
+    Head(L.COL_POINTS, "TOPRIGHT", -10, "RIGHT")
+    UI.Rule(p, "TOP", -(ROWS_TOP - 2))
 
     side.rows = {}
     for i = 1, MAX_ROWS do
-        local y = -96 - (i - 1) * ROW_H
+        local y = -ROWS_TOP - (i - 1) * ROW_H
         local row = {}
 
-        row.label = Text(p, "GameFontHighlightSmall", "LEFT")
-        row.label:SetPoint("TOPLEFT", p, "TOPLEFT", 10, y)
-        row.label:SetSize(140, ROW_H)
+        if i % 2 == 0 then
+            row.stripe = p:CreateTexture(nil, "BACKGROUND")
+            row.stripe:SetPoint("TOPLEFT", p, "TOPLEFT", 1, y)
+            row.stripe:SetSize(PANEL_W - 2, ROW_H)
+            row.stripe:SetColorTexture(UI.Color("stripe"))
+        end
 
-        row.value = Text(p, "GameFontHighlightSmall", "RIGHT")
-        row.value:SetPoint("TOPRIGHT", p, "TOPLEFT", 212, y)
+        row.label = Text(p, 12, "text")
+        row.label:SetPoint("TOPLEFT", p, "TOPLEFT", 10, y)
+        row.label:SetSize(150, ROW_H)
+        row.label:SetWordWrap(false)
+
+        row.value = Text(p, 12, "text", "RIGHT")
+        row.value:SetPoint("TOPRIGHT", p, "TOPLEFT", 222, y)
         row.value:SetHeight(ROW_H)
 
-        row.weight = Text(p, "GameFontDisableSmall", "RIGHT")
-        row.weight:SetPoint("TOPRIGHT", p, "TOPLEFT", 278, y)
+        row.weight = Text(p, 11, "faint", "RIGHT")
+        row.weight:SetPoint("TOPRIGHT", p, "TOPLEFT", 288, y)
         row.weight:SetHeight(ROW_H)
 
-        row.points = Text(p, "GameFontHighlightSmall", "RIGHT")
+        row.points = Text(p, 12, "text", "RIGHT")
         row.points:SetPoint("TOPRIGHT", p, "TOPRIGHT", -10, y)
         row.points:SetHeight(ROW_H)
 
         if editable then
             local eb = CreateFrame("EditBox", nil, p)
             eb:SetSize(54, ROW_H)
-            eb:SetPoint("TOPRIGHT", p, "TOPLEFT", 282, y)
+            eb:SetPoint("TOPRIGHT", p, "TOPLEFT", 292, y)
             eb:SetAutoFocus(false)
             eb:SetFontObject("GameFontHighlightSmall")
             eb:SetJustifyH("RIGHT")
             eb:SetMaxLetters(7)
             eb:SetTextInsets(3, 4, 0, 0)
-            FlatBox(eb, 0.1, 0.1, 0.1, 0.9, { 0.55, 0.5, 0.3, 0.9 })
+            InputBox(eb, 11)
             eb:SetScript("OnEscapePressed", EG:Guard("profiles", function(s) s:ClearFocus() end))
             eb:SetScript("OnEnterPressed", EG:Guard("profiles", function(s) s:ClearFocus() end))
             eb:SetScript("OnTabPressed", EG:Guard("profiles", function(s) s:ClearFocus() end))
@@ -287,18 +269,14 @@ local function BuildSide(parent, editable)
         side.rows[i] = row
     end
 
-    local ty = -96 - MAX_ROWS * ROW_H - 6
-    local sep2 = p:CreateTexture(nil, "ARTWORK")
-    sep2:SetColorTexture(0.4, 0.4, 0.4, 0.6)
-    sep2:SetHeight(1)
-    sep2:SetPoint("TOPLEFT", p, "TOPLEFT", 10, ty + 3)
-    sep2:SetPoint("TOPRIGHT", p, "TOPRIGHT", -10, ty + 3)
+    local ty = -ROWS_TOP - MAX_ROWS * ROW_H - 6
+    UI.Rule(p, "TOP", ty + 3)
 
-    side.totalLabel = Text(p, "GameFontNormal", "LEFT")
-    side.totalLabel:SetPoint("TOPLEFT", p, "TOPLEFT", 10, ty - 4)
+    side.totalLabel = Text(p, 10, "faint")
+    side.totalLabel:SetPoint("TOPLEFT", p, "TOPLEFT", 10, ty - 8)
     side.totalLabel:SetText(L.P_GEAR_SCORE)
 
-    side.totalValue = Text(p, "GameFontNormalLarge", "RIGHT")
+    side.totalValue = Text(p, 16, "accent", "RIGHT")
     side.totalValue:SetPoint("TOPRIGHT", p, "TOPRIGHT", -10, ty - 4)
     return side
 end
@@ -338,18 +316,15 @@ local function FillSide(side, rows, total, which, offset, editable)
             end
 
             r.points:SetText(EG.FmtScore(pt))
-            if pt > other + 0.001 then
-                r.points:SetTextColor(0.4, 1, 0.4)
-            elseif pt < other - 0.001 then
-                r.points:SetTextColor(1, 0.5, 0.4)
-            else
-                r.points:SetTextColor(0.85, 0.85, 0.85)
-            end
+            -- mehr Punkte als auf der anderen Seite: gruen; weniger: rot
+            local role = (pt > other + 0.001) and "good" or ((pt < other - 0.001) and "bad" or "dim")
+            UI.Paint(r.points, role)
+            r.points.role = role
         end
     end
 
     side.totalValue:SetText(EG.FmtScore(total))
-    side.totalValue:SetTextColor(1, 0.82, 0)
+    UI.Paint(side.totalValue, "accent")
 end
 
 ------------------------------------------------------------------------------
@@ -383,8 +358,6 @@ end
 -- Menues neu aufbauen (Profilliste kann sich geaendert haben) und neu zeichnen
 function PW.Rebuild()
     if not frame then return end
-    if frame.classDD and frame.classDD.GenerateMenu then frame.classDD:GenerateMenu() end
-    if frame.profDD and frame.profDD.GenerateMenu then frame.profDD:GenerateMenu() end
     PW.Refresh()
 end
 
@@ -409,21 +382,29 @@ local function ProfileMenu(_, root)
     end
 end
 
---[[ Ausklappmenue der Standard-Oberflaeche (DropdownButton). Fehlt die Vorlage, greift ein Knopf, der
-     bei jedem Klick zum naechsten Eintrag springt.                                                  ]]
+--[[ Auswahlknopf: flach wie die uebrigen, rechts ein kleines Dreieck. Ein Klick oeffnet das Aufklappmenue der
+     Standard-Oberflaeche (MenuUtil.CreateContextMenu) mit den Eintraegen aus generator; fehlt es, springt jeder
+     Klick zum naechsten Eintrag (Rechtsklick: zum vorigen). Den Text setzt PW.Refresh.                       ]]
 local function MakeSelector(parent, width, generator, cycle)
-    local ok, dd = pcall(CreateFrame, "DropdownButton", nil, parent, "WowStyle1DropdownTemplate")
-    if ok and dd and dd.SetupMenu then
-        dd:SetWidth(width)
-        dd:SetupMenu(generator)
-        return dd
+    local b = UI.Button(parent, "", width, 24)
+    b.label:ClearAllPoints()
+    b.label:SetPoint("LEFT", b, "LEFT", 10, 0)
+    b.label:SetWidth(width - 30)
+    for i = 0, 3 do                 -- das Dreieck: vier Linien, jede zwei Pixel kuerzer
+        local line = b:CreateTexture(nil, "ARTWORK")
+        line:SetSize(7 - 2 * i, 1)
+        line:SetPoint("TOP", b, "RIGHT", -13, 2 - i)
+        line:SetColorTexture(UI.Color("dim"))
     end
-
-    local b = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
-    b:SetSize(width, 22)
     b:RegisterForClicks("LeftButtonUp", "RightButtonUp")
-    b:SetScript("OnClick", EG:Guard("profiles", function(_, button) cycle(button == "RightButton" and -1 or 1) end))
-    b.GenerateMenu = function() end
+    b:SetScript("OnClick", EG:Guard("profiles", function(self, button)
+        local menu = _G.MenuUtil
+        if type(menu) == "table" and type(menu.CreateContextMenu) == "function" then
+            menu.CreateContextMenu(self, generator)
+        else
+            cycle(button == "RightButton" and -1 or 1)
+        end
+    end))
     return b
 end
 
@@ -629,12 +610,9 @@ function PW.Refresh()
     frame.btnSaveNew:SetEnabled(spec ~= nil)
     frame.btnDelete:SetEnabled(spec ~= nil and spec.custom == true and not edit)
 
-    if frame.profDD and frame.profDD.SetText and not frame.profDD.SetupMenu then
-        frame.profDD:SetText(spec and Profiles.Name(spec) or "-")
-    end
-    if frame.classDD and frame.classDD.SetText and not frame.classDD.SetupMenu then
-        frame.classDD:SetText(ClassName(state.class))
-    end
+    frame.profDD:SetText(spec and ((spec.custom and "* " or "") .. Profiles.Name(spec)) or "-")
+    frame.classDD:SetText(ClassName(state.class))
+    UI.Refresh(frame)
 end
 
 ------------------------------------------------------------------------------
@@ -651,97 +629,79 @@ end
 local function Build()
     if frame then return frame end
 
-    frame = CreateFrame("Frame", "EasyGearProfileWindow", UIParent, "ButtonFrameTemplate")
-    frame:SetSize(WIDTH, HEIGHT)
-    if ButtonFrameTemplate_HidePortrait then ButtonFrameTemplate_HidePortrait(frame) end
-    SetTitle(frame, L.P_TITLE)
-    frame:SetFrameStrata("HIGH")
-    frame:SetClampedToScreen(true)
-    frame:SetMovable(true)
-    frame:EnableMouse(true)
-    frame:RegisterForDrag("LeftButton")
+    frame = UI.Window("EasyGearProfileWindow", WIDTH, HEIGHT, "EasyGear")
+    frame.subtitle:SetText(L.P_SUB)
     frame:SetScript("OnDragStart", EG:Guard("profiles", function(self) self:StartMoving() end))
     frame:SetScript("OnDragStop", EG:Guard("profiles", function(self) self:StopMovingOrSizing() SavePosition() end))
-    frame:Hide()
 
     local g = EG.cdb and EG.cdb.profileGui or {}
     frame:ClearAllPoints()
     frame:SetPoint(g.point or "CENTER", UIParent, g.point or "CENTER", g.x or 0, g.y or 0)
     frame:SetScale((EG.cdb and EG.cdb.gui and EG.cdb.gui.scale) or 1)
-    if UISpecialFrames then tinsert(UISpecialFrames, "EasyGearProfileWindow") end
 
-    local holder = frame.Inset or frame
+    local body = frame.body
 
-    -- Auswahl in der Kopfzeile
+    -- Auswahl ueber den Karten: Klasse und Profil des Vergleichsprofils
     local classes = Specs.CLASS_ORDER
-    frame.classDD = MakeSelector(frame, 130, ClassMenu, function(step)
+    frame.classDD = MakeSelector(body, 150, ClassMenu, function(step)
         PW.SetClass(Cycle(classes, state.class, step))
     end)
-    frame.classDD:SetPoint("TOPLEFT", frame, "TOPLEFT", 18, -32)
+    frame.classDD:SetPoint("TOPLEFT", body, "TOPLEFT", 0, 0)
 
-    frame.profDD = MakeSelector(frame, 230, ProfileMenu, function(step)
+    frame.profDD = MakeSelector(body, 198, ProfileMenu, function(step)
         local ids = {}
         for _, s in ipairs(Profiles.List(state.class or Profiles.PlayerClass())) do ids[#ids + 1] = s.id end
         PW.SelectProfile(Cycle(ids, state.id, step))
     end)
-    frame.profDD:SetPoint("LEFT", frame.classDD, "RIGHT", 16, 0)
+    frame.profDD:SetPoint("LEFT", frame.classDD, "RIGHT", 8, 0)
 
     -- Seiten
-    frame.left = BuildSide(holder, true)
-    frame.left.panel:SetPoint("TOPLEFT", holder, "TOPLEFT", 6, -6)
+    frame.left = BuildSide(body, true)
+    frame.left.panel:SetPoint("TOPLEFT", body, "TOPLEFT", 0, -32)
     frame.left.caption:SetText(L.P_CANDIDATE)
 
-    frame.right = BuildSide(holder, false)
-    frame.right.panel:SetPoint("TOPRIGHT", holder, "TOPRIGHT", -6, -6)
+    frame.right = BuildSide(body, false)
+    frame.right.panel:SetPoint("TOPRIGHT", body, "TOPRIGHT", 0, -32)
     frame.right.caption:SetText(L.P_ACTIVEPROF)
 
     -- Name eines eigenen Profils (Bearbeiten)
     local nameBox = CreateFrame("EditBox", nil, frame.left.panel)
     nameBox:SetSize(220, 20)
-    nameBox:SetPoint("TOPLEFT", frame.left.panel, "TOPLEFT", 10, -20)
+    nameBox:SetPoint("TOPLEFT", frame.left.panel, "TOPLEFT", 10, -23)
     nameBox:SetAutoFocus(false)
     nameBox:SetFontObject("GameFontNormal")
     nameBox:SetMaxLetters(32)
     nameBox:SetTextInsets(4, 4, 0, 0)
-    FlatBox(nameBox, 0.1, 0.1, 0.1, 0.9, { 0.55, 0.5, 0.3, 0.9 })
+    InputBox(nameBox, 13)
     nameBox:SetScript("OnEscapePressed", EG:Guard("profiles", function(s) s:ClearFocus() end))
     nameBox:SetScript("OnEnterPressed", EG:Guard("profiles", function(s) s:ClearFocus() end))
     nameBox:Hide()
     frame.nameBox = nameBox
 
     -- Ergebnis unter den Seiten
-    frame.verdict = Text(holder, "GameFontNormalLarge", "CENTER")
-    frame.verdict:SetPoint("BOTTOM", holder, "BOTTOM", 0, 44)
+    frame.verdict = Text(body, 15, "text", "CENTER")
+    frame.verdict:SetPoint("BOTTOM", body, "BOTTOM", 0, 40)
     frame.verdict:SetWidth(WIDTH - 40)
-    frame.note = Text(holder, "GameFontHighlightSmall", "CENTER")
-    frame.note:SetPoint("BOTTOM", holder, "BOTTOM", 0, 26)
+    frame.note = Text(body, 12, "dim", "CENTER")
+    frame.note:SetPoint("BOTTOM", body, "BOTTOM", 0, 22)
     frame.note:SetWidth(WIDTH - 40)
-    frame.caveat = Text(holder, "GameFontDisableSmall", "CENTER")
-    frame.caveat:SetPoint("BOTTOM", holder, "BOTTOM", 0, 8)
+    frame.caveat = Text(body, 11, "faint", "CENTER")
+    frame.caveat:SetPoint("BOTTOM", body, "BOTTOM", 0, 4)
     frame.caveat:SetWidth(WIDTH - 40)
 
-    -- Schaltflaechen in der unteren Leiste
-    local function Btn(text, width, anchor, gap, onClick)
-        local b = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-        b:SetSize(width, 22)
-        if anchor then
-            b:SetPoint("LEFT", anchor, "RIGHT", gap, 0)
-        else
-            b:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 8, 4)
-        end
-        b:SetText(text)
-        b:SetScript("OnClick", EG:Guard("profiles", onClick))
-        return b
+    -- Schaltflaechen im Fuss
+    local function Btn(text, width, onClick)
+        return UI.FooterButton(frame, text, width, EG:Guard("profiles", onClick))
     end
-    frame.btnActivate = Btn(L.P_ACTIVATE, 104, nil, 0, PW.Activate)
-    frame.btnAuto = Btn(L.P_AUTO, 104, frame.btnActivate, 4, PW.UseAuto)
-    frame.btnEdit = Btn(L.P_EDIT, 100, frame.btnAuto, 4, PW.ToggleEdit)
-    frame.btnSave = Btn(L.P_OVERWRITE, 104, frame.btnEdit, 4, PW.SaveOver)
-    frame.btnSaveNew = Btn(L.P_SAVE_NEW, 170, frame.btnSave, 4, function()
+    frame.btnActivate = Btn(L.P_ACTIVATE, 104, PW.Activate)
+    frame.btnAuto = Btn(L.P_AUTO, 104, PW.UseAuto)
+    frame.btnEdit = Btn(L.P_EDIT, 100, PW.ToggleEdit)
+    frame.btnSave = Btn(L.P_OVERWRITE, 104, PW.SaveOver)
+    frame.btnSaveNew = Btn(L.P_SAVE_NEW, 170, function()
         local spec = Selected()
         AskName(spec and (Profiles.Name(spec) .. " 2") or "", function(name) PW.SaveAsNew(name) end)
     end)
-    frame.btnDelete = Btn(L.P_DELETE, 90, frame.btnSaveNew, 4, PW.Delete)
+    frame.btnDelete = Btn(L.P_DELETE, 90, PW.Delete)
 
     frame:SetScript("OnShow", EG:Guard("profiles", function()
         state.class = state.class or Profiles.PlayerClass()

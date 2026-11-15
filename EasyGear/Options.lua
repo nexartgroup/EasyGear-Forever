@@ -42,6 +42,9 @@ Options.CHECKS = {
     { key = "groupInspect",     name = "OPT_GROUP_INSPECT", tip = "OPT_GROUP_INSPECT_TIP" },
     { key = "groupRaid",        name = "OPT_GROUP_RAID",    tip = "OPT_GROUP_RAID_TIP" },
     { look = true },                -- Aussehen der Markierungen: Form und Farbe je Art (AddLook)
+    { section = "OPT_SEC_TOAST" },
+    { key = "showToast",        name = "OPT_TOAST",        tip = "OPT_TOAST_TIP" },
+    { slider = true, key = "toastSeconds", name = "OPT_TOAST_SECONDS", tip = "OPT_TOAST_SECONDS_TIP", step = 1, fmt = "%d s" },
     { section = "OPT_SEC_TOOLTIP" },
     { key = "showTooltip",      name = "OPT_TOOLTIP",      tip = "OPT_TOOLTIP_TIP" },
     { key = "showTooltipStats", name = "OPT_TOOLTIP_STATS", tip = "OPT_TOOLTIP_STATS_TIP" },
@@ -220,6 +223,8 @@ function Options.Build()
             Header(layout, def.section)
         elseif def.look then
             AddLook(cat, layout)
+        elseif def.slider then
+            AddSlider(cat, def)
         else
             AddCheck(cat, def)
         end

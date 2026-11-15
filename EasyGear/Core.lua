@@ -1,5 +1,5 @@
 --[[---------------------------------------------------------------------------
-    EasyGear 4.4.0 - Forever
+    EasyGear 4.5.0 - Forever
     Ausruestungsbewertung, Upgrade-Erkennung und Vergleich fuer WoW Forever
 
     Dieses Addon vergleicht und empfiehlt, mehr nicht: es verschickt keine
@@ -22,7 +22,10 @@
       Contexts.lua       Anbindung: Taschen, Bank, Haendler, Beute, Wuerfeln, Quests, ...
       Compat.lua         Anbindung an Baganator und EllesmereUI (optional)
       DialogueUI.lua     Anbindung an Dialogue UI (optional): Tooltip-Block und Markierungen an den Belohnungen
+      UI.lua             Baukasten der eigenen Fenster: flache Flaechen, Akzentfarbe, Schrift
       Window.lua         Vergleichsfenster
+      Toast.lua          Einblendung, wenn ein besseres Item in die Taschen kommt
+      Feed.lua           Anbindung an den Loot Feed von EllesmereUI (optional)
       ProfileWindow.lua  Profilfenster
       Options.lua        Einstellungsseite (Optionen > AddOns) und Addon-Fach
       Slash.lua          Chatbefehle
@@ -49,7 +52,7 @@ do
     if C_AddOns and C_AddOns.GetAddOnMetadata then
         meta = C_AddOns.GetAddOnMetadata(EG.name, "Version")
     end
-    EG.version = meta or "4.4.0"
+    EG.version = meta or "4.5.0"
 end
 
 -- WoW Forever meldet sich ueber WOW_PROJECT_ID == WOW_PROJECT_CAMELOT (Blizzard_ProjectConstants).
@@ -209,6 +212,8 @@ local DEFAULTS = {
     showQuestIcons    = true,   -- beste Questbelohnung
     showCharIcons     = true,   -- Hinweis am Charakterfenster: in den Taschen liegt etwas Besseres
     showDialogueUI    = true,   -- Dialogue UI (falls installiert): Zeilen im Tooltip, Haken und Pfeil an den Belohnungen
+    showToast         = true,   -- Einblendung, wenn ein besseres Item in die Taschen kommt (Toast.lua)
+    toastSeconds      = 15,     -- wie lange sie steht
     showGroupHints    = true,   -- violetter Stern und Tooltip-Zeilen: besser fuer ein Gruppenmitglied
     groupInspect      = true,   -- Gruppenmitglieder dafuer selbst untersuchen (sonst nur mitnehmen, was ohnehin gelesen wird)
     groupRaid         = false,  -- auch die Mitglieder eines Schlachtzugs (sonst nur die Gruppe)
@@ -243,6 +248,7 @@ EG.RANGES = {
     minDelta        = { 0, 1000 },
     socketValue     = { 0, 1000 },
     scale           = { 0.5, 2.0 },
+    toastSeconds    = { 3, 60 },
 }
 
 local CHAR_DEFAULTS = {

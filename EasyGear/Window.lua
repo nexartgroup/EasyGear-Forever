@@ -6,8 +6,9 @@
     Punkte), rechts die des angelegten Gegenstands; bei Ringen, Schmuck und Einhandwaffen schalten
     die Reiter zwischen beiden Plaetzen. Unten stehen Urteil und Hinweise.
 
-    Aufbau mit den Vorlagen der Standard-Oberflaeche (ButtonFrameTemplate, ItemButton,
-    UIPanelButtonTemplate), damit das Fenster aussieht wie die uebrigen.
+    Aufbau aus dem eigenen Baukasten (UI.lua): Kopf mit Titel und Profil, zwei Karten (neues Item,
+    angelegtes Item) mit Symbol, Wertung und Rechentabelle - hinter jeder Zeile ein Balken, der zeigt,
+    wie viel sie zur Wertung beitraegt -, darunter das Urteil auf einem Streifen in seiner Farbe.
 -----------------------------------------------------------------------------]]
 
 local _, EG = ...
@@ -15,16 +16,21 @@ local Window = {}
 EG.Window = Window
 
 local L = EG.L
-local Items, Score, Profiles = EG.Items, EG.Score, EG.Profiles
+local Items, Score, Profiles, UI = EG.Items, EG.Score, EG.Profiles, EG.UI
 
 local ipairs, type, pcall, tostring = ipairs, type, pcall, tostring
 local sformat = string.format
+local mmax, mabs = math.max, math.abs
 
-local WIDTH, HEIGHT = 570, 520
+local WIDTH, HEIGHT = 644, 610
 local ROWS = 15
-local ROW_H = 16
--- Breite der vier Spalten einer Rechenzeile (zusammen eine Spalte des Fensters: 256 Pixel)
-local LABEL_W, VALUE_W, WEIGHT_W, POINTS_W = 124, 46, 40, 42
+local ROW_H = 18
+local CARD_W, CARD_PAD = 304, 10
+local HEAD_H = 118                       -- Karte: Abschnitt, Symbol, Name, Wertung und die Spaltentitel
+-- Breite der vier Spalten einer Rechenzeile (zusammen die Innenbreite einer Karte: 284 Pixel)
+local LABEL_W, VALUE_W, WEIGHT_W, POINTS_W = 136, 48, 44, 50
+local GAP = 2
+Window.ROW_WIDTH = CARD_W - 2 * CARD_PAD
 
 local frame
 local state = { link = nil, pick = 1 }
@@ -33,52 +39,85 @@ local state = { link = nil, pick = 1 }
 -- 01  Bausteine
 ------------------------------------------------------------------------------
 
-local function Text(parent, template, ...)
-    local fs = parent:CreateFontString(nil, "OVERLAY", template or "GameFontHighlightSmall")
-    if ... then fs:SetPoint(...) end
-    return fs
-end
-
-local function SetTitle(f, text)
-    if f.SetTitle then
-        f:SetTitle(text)
-    else
-        f.titleText = f.titleText or Text(f, "GameFontNormal", "TOP", 0, -6)
-        f.titleText:SetText(text)
-    end
-end
-
--- Eine Spalte (Kandidat oder Angelegtes): Symbol, Name, Wertung und die Rechenzeilen
-local function BuildColumn(parent, x)
+-- Eine Karte (Kandidat oder Angelegtes): Abschnittstitel, Symbol, Name, Wertung und die Rechenzeilen
+local function BuildColumn(parent, x, caption)
     local col = { rows = {} }
 
-    local btn = CreateFrame("ItemButton", nil, parent)
-    btn:SetPoint("TOPLEFT", parent, "TOPLEFT", x, -8)
-    btn:SetSize(40, 40)
+    local card = CreateFrame("Frame", nil, parent)
+    card:SetPoint("TOPLEFT", parent, "TOPLEFT", x, 0)
+    card:SetSize(CARD_W, HEAD_H + ROWS * ROW_H + CARD_PAD)
+    UI.Box(card, "card", "border")
+    col.card = card
+
+    col.caption = UI.Text(card, 10, "faint")
+    col.caption:SetPoint("TOPLEFT", card, "TOPLEFT", CARD_PAD, -9)
+    col.caption:SetText(caption)
+
+    local btn = UI.Icon(card, 40)
+    btn:SetPoint("TOPLEFT", card, "TOPLEFT", CARD_PAD, -26)
     btn.EasyGearPlain = true            -- deren Tooltip bekommt keine EasyGear-Zeilen (Tooltip.lua)
     col.button = btn
 
-    col.name = Text(parent, "GameFontNormal", "TOPLEFT", x + 48, -10)
-    col.name:SetWidth(210)
-    col.name:SetJustifyH("LEFT")
-    col.info = Text(parent, "GameFontHighlightSmall", "TOPLEFT", x + 48, -28)
-    col.info:SetWidth(210)
-    col.info:SetJustifyH("LEFT")
+    col.name = UI.Text(card, 14, "text")
+    col.name:SetPoint("TOPLEFT", card, "TOPLEFT", CARD_PAD + 48, -27)
+    col.name:SetWidth(CARD_W - CARD_PAD * 2 - 48)
+    col.info = UI.Text(card, 11, "dim")
+    col.info:SetPoint("TOPLEFT", card, "TOPLEFT", CARD_PAD + 48, -47)
+    col.info:SetWidth(CARD_W - CARD_PAD * 2 - 48)
     col.info:SetWordWrap(false)         -- eine Zeile: lange Namen duerfen die Rechnung darunter nicht ueberdecken
-    col.score = Text(parent, "GameFontNormalLarge", "TOPLEFT", x, -54)
+    -- die Wertung: links die Beschriftung, rechts gross die Zahl
+    col.scoreCaption = UI.Text(card, 10, "faint")
+    col.scoreCaption:SetPoint("TOPLEFT", card, "TOPLEFT", CARD_PAD, -80)
+    col.scoreCaption:SetText(L.WIN_SCORE)
+    col.score = UI.Text(card, 18, "accent")
+    col.score:SetPoint("TOPRIGHT", card, "TOPRIGHT", -CARD_PAD, -73)
+    col.score:SetJustifyH("RIGHT")
 
-    local y = -80
+    -- Spaltentitel ueber der Tabelle
+    local headY = -(HEAD_H - 16)
+    local function Head(text, offset, width, justify)
+        local fs = UI.Text(card, 10, "faint")
+        fs:SetPoint("TOPLEFT", card, "TOPLEFT", CARD_PAD + offset, headY)
+        fs:SetWidth(width)
+        fs:SetJustifyH(justify)
+        fs:SetWordWrap(false)
+        fs:SetText(text)
+        return fs
+    end
+    col.heads = {
+        Head(L.COL_STAT, 0, LABEL_W, "LEFT"),
+        Head(L.COL_VALUE, LABEL_W + GAP, VALUE_W, "RIGHT"),
+        Head(L.COL_WEIGHT, LABEL_W + VALUE_W + 2 * GAP, WEIGHT_W, "RIGHT"),
+        Head(L.COL_POINTS, LABEL_W + VALUE_W + WEIGHT_W + 3 * GAP, POINTS_W, "RIGHT"),
+    }
+    UI.Rule(card, "TOP", -(HEAD_H - 2))
+
+    local y = -HEAD_H
     for i = 1, ROWS do
         local row = {}
-        row.label = Text(parent, "GameFontHighlightSmall", "TOPLEFT", x, y)
-        row.label:SetWidth(LABEL_W) row.label:SetJustifyH("LEFT")
-        row.label:SetWordWrap(false)    -- eine Zeile: ein langer Name wird gekuerzt und ueberdeckt nicht die naechste Zeile
-        row.value = Text(parent, "GameFontHighlightSmall", "TOPLEFT", x + LABEL_W, y)
-        row.value:SetWidth(VALUE_W) row.value:SetJustifyH("RIGHT")
-        row.weight = Text(parent, "GameFontDisableSmall", "TOPLEFT", x + LABEL_W + VALUE_W + 2, y)
-        row.weight:SetWidth(WEIGHT_W) row.weight:SetJustifyH("RIGHT")
-        row.points = Text(parent, "GameFontNormalSmall", "TOPLEFT", x + LABEL_W + VALUE_W + WEIGHT_W + 4, y)
-        row.points:SetWidth(POINTS_W) row.points:SetJustifyH("RIGHT")
+        -- jede zweite Zeile dunkler; dahinter der Balken ihres Anteils an der Wertung
+        if i % 2 == 0 then
+            row.stripe = card:CreateTexture(nil, "BACKGROUND")
+            row.stripe:SetPoint("TOPLEFT", card, "TOPLEFT", 1, y)
+            row.stripe:SetSize(CARD_W - 2, ROW_H)
+            row.stripe:SetColorTexture(UI.Color("stripe"))
+        end
+        row.bar = card:CreateTexture(nil, "BORDER")
+        row.bar:SetPoint("TOPLEFT", card, "TOPLEFT", 1, y - 1)
+        row.bar:SetSize(1, ROW_H - 2)
+        row.bar:Hide()
+        local function Cell(size, role, offset, width, justify)
+            local fs = UI.Text(card, size, role)
+            fs:SetPoint("TOPLEFT", card, "TOPLEFT", CARD_PAD + offset, y - 3)
+            fs:SetWidth(width)
+            fs:SetJustifyH(justify)
+            fs:SetWordWrap(false)       -- eine Zeile: ein langer Name wird gekuerzt und ueberdeckt nicht die naechste Zeile
+            return fs
+        end
+        row.label = Cell(12, "text", 0, LABEL_W, "LEFT")
+        row.value = Cell(12, "text", LABEL_W + GAP, VALUE_W, "RIGHT")
+        row.weight = Cell(11, "faint", LABEL_W + VALUE_W + 2 * GAP, WEIGHT_W, "RIGHT")
+        row.points = Cell(12, "accent", LABEL_W + VALUE_W + WEIGHT_W + 3 * GAP, POINTS_W, "RIGHT")
         col.rows[i] = row
         y = y - ROW_H
     end
@@ -99,21 +138,36 @@ end
 
 local function FillRows(col, breakdown)
     local n = breakdown and #breakdown or 0
+    -- der groesste Beitrag fuellt die ganze Zeile, die uebrigen im Verhaeltnis dazu
+    local top = 0
+    for i = 1, n do top = mmax(top, mabs(breakdown[i].points or 0)) end
     for i = 1, ROWS do
         local row, data = col.rows[i], breakdown and breakdown[i]
+        local share = 0
         if data and i <= ROWS then
             row.label:SetText(data.label or "?")
             row.value:SetText(ValueText(data))
             row.weight:SetText("x" .. EG.FmtWeight(data.weight))
             row.points:SetText(EG.FmtScore(data.points or 0))
+            if top > 0 then share = mabs(data.points or 0) / top end
         else
             row.label:SetText("") row.value:SetText("") row.weight:SetText("") row.points:SetText("")
+        end
+        row.share = share
+        if share > 0 then
+            row.bar:SetWidth(mmax(1, (CARD_W - 2) * share))
+            row.bar:SetColorTexture(UI.Color("accent", 0.16))
+            row.bar:Show()
+        else
+            row.bar:Hide()
         end
     end
     if n > ROWS then
         local row = col.rows[ROWS]
         row.label:SetText("...")
         row.value:SetText("") row.weight:SetText("") row.points:SetText("")
+        row.share = 0
+        row.bar:Hide()
     end
 end
 
@@ -125,19 +179,21 @@ local function QualityColor(quality)
     end
     return r, g, b
 end
+Window.QualityColor = QualityColor
 
 local function ShowItem(col, item, extraInfo)
     local btn = col.button
     col.name:SetWordWrap(item == nil)   -- ein Gegenstandsname bleibt einzeilig, die Hinweise darunter duerfen umbrechen
     if item then
-        if SetItemButtonTexture then SetItemButtonTexture(btn, item.texture) end
+        local r, g, b = QualityColor(item.quality)
+        btn:SetItem(item.texture, r, g, b)
         col.name:SetText(item.name or "?")
-        col.name:SetTextColor(QualityColor(item.quality))
+        col.name:SetTextColor(r, g, b)
         col.info:SetText(extraInfo or "")
     else
-        if SetItemButtonTexture then SetItemButtonTexture(btn, nil) end
+        btn:SetItem(nil)
         col.name:SetText(L.NOTHING_EQUIPPED)
-        col.name:SetTextColor(0.6, 0.6, 0.6)
+        UI.Paint(col.name, "dim")
         col.info:SetText(extraInfo or "")
     end
     btn.link = item and item.link or nil
@@ -159,6 +215,7 @@ end
 function Window.Refresh()
     if not frame or not frame:IsShown() then return end
 
+    UI.Refresh(frame)
     frame.profileText:SetText(L.PROFILE .. ": " .. Profiles.Resolve().name)
 
     local item, why
@@ -174,7 +231,7 @@ function Window.Refresh()
             hint = (why == "invalid" or resultWhy == "invalid") and L.INVALID_ITEM or L.ITEM_LOADING
         end
         frame.cand.name:SetText(hint)
-        frame.cand.name:SetTextColor(0.7, 0.7, 0.7)
+        UI.Paint(frame.cand.name, "dim")
         frame.cand.score:SetText("")
         FillRows(frame.cand, nil)
         ShowItem(frame.eq, nil)
@@ -183,12 +240,13 @@ function Window.Refresh()
         FillRows(frame.eq, nil)
         frame.verdict:SetText("")
         frame.notes:SetText("")
+        frame.verdictBar:SetColorTexture(UI.Color("line"))
         frame.tab1:Hide() frame.tab2:Hide()
         return
     end
 
     ShowItem(frame.cand, item, ItemInfo(item))
-    frame.cand.score:SetText(L.SCORE .. ": " .. EG.FmtScore(result.score or 0))
+    frame.cand.score:SetText(EG.FmtScore(result.score or 0))
     FillRows(frame.cand, result.breakdown)
 
     -- Rechte Seite: der angelegte Gegenstand des gewaehlten Platzes
@@ -198,6 +256,8 @@ function Window.Refresh()
         frame.tab1:SetText(Score.SlotName(entries[1].slotID))
         frame.tab2:SetText(Score.SlotName(entries[2].slotID))
         if state.pick > #entries then state.pick = 1 end
+        frame.tab1:SetSelected(state.pick == 1)
+        frame.tab2:SetSelected(state.pick == 2)
     else
         frame.tab1:Hide() frame.tab2:Hide()
         state.pick = 1
@@ -207,11 +267,11 @@ function Window.Refresh()
     if entry and entry.item then
         local slotName = Score.SlotName(entry.slotID)
         ShowItem(frame.eq, entry.item, slotName .. " - " .. ItemInfo(entry.item, slotName))
-        frame.eq.score:SetText(L.SCORE .. ": " .. EG.FmtScore(result.combined and result.targetScore or entry.score or 0))
+        frame.eq.score:SetText(EG.FmtScore(result.combined and result.targetScore or entry.score or 0))
         FillRows(frame.eq, entry.breakdown)
     elseif entry then
         ShowItem(frame.eq, nil, Score.SlotName(entry.slotID))
-        frame.eq.score:SetText(L.SCORE .. ": 0")
+        frame.eq.score:SetText("0")
         FillRows(frame.eq, nil)
     else
         ShowItem(frame.eq, nil)
@@ -219,25 +279,27 @@ function Window.Refresh()
         FillRows(frame.eq, nil)
     end
 
-    -- Urteil
-    local text, r, g, b
+    -- Urteil: der Text und der Streifen links davon tragen dieselbe Farbe
+    local text, role
     if result.noCompare then
-        text, r, g, b = L.R_NOCOMPARE, 0.7, 0.7, 0.7
+        text, role = L.R_NOCOMPARE, "dim"
     elseif not result.usable then
-        text, r, g, b = L.NOT_USABLE .. " - " .. (result.reason or ""), 1, 0.35, 0.35
+        text, role = L.NOT_USABLE .. " - " .. (result.reason or ""), "bad"
     elseif result.levelTooLow and result.wouldUpgrade then
-        text, r, g, b = sformat(L.UPGRADE_AT_LEVEL, item.reqLevel or 0), 1, 0.82, 0
+        text, role = sformat(L.UPGRADE_AT_LEVEL, item.reqLevel or 0), "warn"
     elseif result.isUpgrade then
-        text, r, g, b = L.UPGRADE, 0.25, 1, 0.25
+        text, role = L.UPGRADE, "good"
     else
-        text, r, g, b = L.NO_UPGRADE, 1, 0.35, 0.35
+        text, role = L.NO_UPGRADE, "bad"
     end
     if not result.noCompare and result.usable and result.delta then
         text = text .. "   " .. EG.FmtSigned(result.delta)
         if result.percent then text = text .. "  (" .. EG.FmtPct(result.percent) .. ")" end
     end
     frame.verdict:SetText(text)
-    frame.verdict:SetTextColor(r, g, b)
+    UI.Paint(frame.verdict, role)
+    frame.verdict.role = role
+    frame.verdictBar:SetColorTexture(UI.Color(role))
 
     local notes = {}
     if result.reason and result.usable and not result.noCompare then notes[#notes + 1] = result.reason end
@@ -289,32 +351,25 @@ end
 local function Build()
     if frame then return frame end
 
-    frame = CreateFrame("Frame", "EasyGearWindow", UIParent, "ButtonFrameTemplate")
-    frame:SetSize(WIDTH, HEIGHT)
-    if ButtonFrameTemplate_HidePortrait then ButtonFrameTemplate_HidePortrait(frame) end
-    SetTitle(frame, L.TITLE)
-    frame:SetFrameStrata("HIGH")
-    frame:SetClampedToScreen(true)
-    frame:SetMovable(true)
-    frame:EnableMouse(true)
-    frame:RegisterForDrag("LeftButton")
+    frame = UI.Window("EasyGearWindow", WIDTH, HEIGHT, "EasyGear")
+    frame.subtitle:SetText(L.WIN_SUB)
     frame:SetScript("OnDragStart", EG:Guard("window", function(self) self:StartMoving() end))
     frame:SetScript("OnDragStop", EG:Guard("window", function(self) self:StopMovingOrSizing() SavePosition() end))
-    frame:Hide()
 
     local gui = EG.cdb and EG.cdb.gui or {}
     frame:SetPoint(gui.point or "CENTER", UIParent, gui.point or "CENTER", gui.x or 0, gui.y or 0)
     frame:SetScale(gui.scale or 1)
 
-    if UISpecialFrames then table.insert(UISpecialFrames, "EasyGearWindow") end
+    local body = frame.body
+    frame.holder = body
 
-    local holder = frame.Inset or frame
-    frame.holder = holder
+    -- im Kopf rechts: das Profil, nach dem gerechnet wird
+    frame.profileText = UI.Text(frame, 12, "dim")
+    frame.profileText:SetPoint("RIGHT", frame.close, "LEFT", -12, 0)
+    frame.profileText:SetJustifyH("RIGHT")
 
-    frame.profileText = Text(frame, "GameFontHighlightSmall", "TOPLEFT", 12, -34)
-
-    frame.cand = BuildColumn(holder, 10)
-    frame.eq = BuildColumn(holder, 290)
+    frame.cand = BuildColumn(body, 0, L.WIN_NEW)
+    frame.eq = BuildColumn(body, CARD_W + UI.PAD, L.WIN_WORN)
     frame.cand.button:RegisterForClicks("LeftButtonUp", "RightButtonUp")
     frame.cand.button:SetScript("OnReceiveDrag", EG:Guard("window", ReceiveCursorItem))
     frame.cand.button:SetScript("OnClick", EG:Guard("window", function(_, button)
@@ -334,40 +389,46 @@ local function Build()
         b:SetScript("OnLeave", EG:Guard("window", function() GameTooltip:Hide() end))
     end
 
-    -- Reiter fuer die beiden Plaetze (Ringe, Schmuck, Einhandwaffen)
-    frame.tab1 = CreateFrame("Button", nil, holder, "UIPanelButtonTemplate")
-    frame.tab1:SetSize(66, 20)
-    frame.tab1:SetPoint("TOPLEFT", holder, "TOPLEFT", 410, -52)
-    frame.tab1:SetScript("OnClick", EG:Guard("window", function() state.pick = 1 Window.Refresh() end))
-    frame.tab2 = CreateFrame("Button", nil, holder, "UIPanelButtonTemplate")
-    frame.tab2:SetSize(66, 20)
-    frame.tab2:SetPoint("TOPLEFT", holder, "TOPLEFT", 480, -52)
-    frame.tab2:SetScript("OnClick", EG:Guard("window", function() state.pick = 2 Window.Refresh() end))
+    -- Reiter fuer die beiden Plaetze (Ringe, Schmuck, Einhandwaffen): oben rechts in der Karte des Angelegten
+    local eqCard = frame.eq.card
+    frame.tab2 = UI.Tab(eqCard, "", EG:Guard("window", function() state.pick = 2 Window.Refresh() end))
+    frame.tab2:SetPoint("TOPRIGHT", eqCard, "TOPRIGHT", -CARD_PAD, -2)
+    frame.tab1 = UI.Tab(eqCard, "", EG:Guard("window", function() state.pick = 1 Window.Refresh() end))
+    frame.tab1:SetPoint("TOPRIGHT", frame.tab2, "TOPLEFT", -4, 0)
+    frame.tab1:Hide() frame.tab2:Hide()
 
-    frame.verdict = Text(holder, "GameFontNormalLarge", "BOTTOMLEFT", 12, 84)
-    frame.verdict:SetWidth(WIDTH - 40)
-    frame.verdict:SetJustifyH("LEFT")
-    frame.notes = Text(holder, "GameFontHighlightSmall", "BOTTOMLEFT", 12, 8)
-    frame.notes:SetWidth(WIDTH - 40)
-    frame.notes:SetJustifyH("LEFT")
+    -- Urteil: ein Streifen unter den Karten, links ein Balken in der Farbe des Urteils
+    local box = CreateFrame("Frame", nil, body)
+    box:SetPoint("BOTTOMLEFT", body, "BOTTOMLEFT", 0, 0)
+    box:SetPoint("BOTTOMRIGHT", body, "BOTTOMRIGHT", 0, 0)
+    box:SetHeight(86)
+    UI.Box(box, "card", "border")
+    frame.verdictBox = box
+    frame.verdictBar = box:CreateTexture(nil, "ARTWORK")
+    frame.verdictBar:SetPoint("TOPLEFT", box, "TOPLEFT", 0, 0)
+    frame.verdictBar:SetPoint("BOTTOMLEFT", box, "BOTTOMLEFT", 0, 0)
+    frame.verdictBar:SetWidth(3)
+    frame.verdictBar:SetColorTexture(UI.Color("line"))
+    frame.verdictCaption = UI.Text(box, 10, "faint")
+    frame.verdictCaption:SetPoint("TOPLEFT", box, "TOPLEFT", 14, -9)
+    frame.verdictCaption:SetText(L.WIN_VERDICT)
+    frame.verdict = UI.Text(box, 16, "text")
+    frame.verdict:SetPoint("TOPLEFT", box, "TOPLEFT", 14, -24)
+    frame.verdict:SetWidth(WIDTH - 2 * UI.PAD - 28)
+    frame.verdict:SetWordWrap(false)
+    frame.notes = UI.Text(box, 11, "dim")
+    frame.notes:SetPoint("TOPLEFT", box, "TOPLEFT", 14, -46)
+    frame.notes:SetWidth(WIDTH - 2 * UI.PAD - 28)
     frame.notes:SetJustifyV("TOP")
 
-    -- Schaltflaechen unten
-    local function Button(text, x, onClick)
-        local b = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-        b:SetSize(130, 22)
-        b:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", x, 4)
-        b:SetText(text)
-        b:SetScript("OnClick", EG:Guard("window", onClick))
-        return b
-    end
-    frame.btnClear = Button(L.BTN_CLEAR, 8, function() Window.Clear() end)
-    frame.btnChat = Button(L.BTN_CHAT, 144, function()
+    -- Schaltflaechen im Fuss
+    frame.btnClear = UI.FooterButton(frame, L.BTN_CLEAR, 120, EG:Guard("window", function() Window.Clear() end))
+    frame.btnChat = UI.FooterButton(frame, L.BTN_CHAT, 150, EG:Guard("window", function()
         if state.link and EG.Slash then EG.Slash.PrintReport(state.link) end
-    end)
-    frame.btnProfiles = Button(L.BTN_PROFILES, 280, function()
+    end))
+    frame.btnProfiles = UI.FooterButton(frame, L.BTN_PROFILES, 120, EG:Guard("window", function()
         if EG.ProfileWindow then EG.ProfileWindow.Toggle() end
-    end)
+    end))
 
     frame:SetScript("OnShow", EG:Guard("window", function() Window.Refresh() end))
     return frame

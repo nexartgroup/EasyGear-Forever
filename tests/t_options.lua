@@ -17,14 +17,14 @@ return function(T)
         T.ok(cat, "category registered") T.eq(cat.name, "EasyGear") T.eq(cat.registered, true)
         local kinds = {}
         for _, c in ipairs(cat.controls) do kinds[c.kind] = (kinds[c.kind] or 0) + 1 end
-        T.eq(kinds.checkbox, 14, "with the one for Dialogue UI") T.eq(kinds.slider, 2) T.eq(kinds.dropdown, 6, "the profile and a shape list for each of the 5 kinds")
+        T.eq(kinds.checkbox, 15, "with the ones for Dialogue UI and the notification") T.eq(kinds.slider, 3) T.eq(kinds.dropdown, 6, "the profile and a shape list for each of the 5 kinds")
         T.eq(kinds.swatch, 5, "a color field for each kind")
         local headers, buttons = 0, 0
         for _, init in ipairs(cat.initializers) do
             if init.kind == "header" then headers = headers + 1 end
             if init.kind == "button" then buttons = buttons + 1 end
         end
-        T.eq(headers, 6) T.eq(buttons, 2, "reset the marker look, reset all settings")
+        T.eq(headers, 7) T.eq(buttons, 2, "reset the marker look, reset all settings")
         T.eq(W.EG.hookStatus.settings.ok, true)
     end)
 
@@ -34,7 +34,7 @@ return function(T)
             if c.kind ~= "dropdown" or c.tooltip then
                 T.ok(c.tooltip and c.tooltip ~= "", "tooltip of " .. tostring(c.setting.variable))
             end
-            T.ok(W.EG:LocaleHas((c.setting.name and "x") and "TITLE" or "TITLE"))
+            T.ok(W.EG:LocaleHas("SCORE"))
             T.ok(not c.setting.name:match("^OPT_"), "name resolved: " .. c.setting.name)
         end
     end)
@@ -62,10 +62,13 @@ return function(T)
     T.test("options: the slider ranges and labels", function()
         local W = world()
         local sliders = {}
-        for _, c in ipairs(category(W).controls) do if c.kind == "slider" then sliders[#sliders + 1] = c end end
-        T.eq(sliders[1].options.minValue, 0) T.eq(sliders[1].options.maxValue, 2) T.near(sliders[1].options.steps, 40)
-        T.eq(sliders[1].options.formatter(0.55), "0.55")
-        T.eq(sliders[2].options.formatter(1), "1.0 %")
+        for _, c in ipairs(category(W).controls) do if c.kind == "slider" then sliders[c.setting.variable] = c end end
+        local ilvl, pct, toast = sliders.EasyGear_ilvlWeight, sliders.EasyGear_minDeltaPercent, sliders.EasyGear_toastSeconds
+        T.eq(ilvl.options.minValue, 0) T.eq(ilvl.options.maxValue, 2) T.near(ilvl.options.steps, 40)
+        T.eq(ilvl.options.formatter(0.55), "0.55")
+        T.eq(pct.options.formatter(1), "1.0 %")
+        T.eq(toast.options.minValue, 3) T.eq(toast.options.maxValue, 60) T.near(toast.options.steps, 57, 1e-9, "whole seconds")
+        T.eq(toast.options.formatter(15), "15 s") T.eq(toast.setting:GetValue(), 15, "fifteen seconds unless changed")
     end)
 
     T.test("options: the profile dropdown lists automatic plus every profile and sets the character profile", function()
@@ -209,10 +212,12 @@ return function(T)
         local W = world()
         local ranges = W.EG.RANGES
         local sliders = {}
-        for _, c in ipairs(category(W).controls) do if c.kind == "slider" then sliders[#sliders + 1] = c end end
-        T.eq(sliders[1].options.minValue, ranges.ilvlWeight[1]) T.eq(sliders[1].options.maxValue, ranges.ilvlWeight[2])
-        T.eq(sliders[2].options.minValue, ranges.minDeltaPercent[1]) T.eq(sliders[2].options.maxValue, ranges.minDeltaPercent[2])
-        for _, cmd in ipairs({ { "ilvl", "ilvlWeight" }, { "mindeltapct", "minDeltaPercent" } }) do
+        for _, c in ipairs(category(W).controls) do if c.kind == "slider" then sliders[c.setting.variable] = c end end
+        for key, range in pairs({ ilvlWeight = ranges.ilvlWeight, minDeltaPercent = ranges.minDeltaPercent, toastSeconds = ranges.toastSeconds }) do
+            local s = sliders["EasyGear_" .. key]
+            T.eq(s.options.minValue, range[1], key) T.eq(s.options.maxValue, range[2], key)
+        end
+        for _, cmd in ipairs({ { "ilvl", "ilvlWeight" }, { "mindeltapct", "minDeltaPercent" }, { "toast", "toastSeconds" } }) do
             local hi = ranges[cmd[2]][2]
             W.slash(cmd[1] .. " " .. hi)
             T.eq(W.EG:Get(cmd[2]), hi, cmd[1] .. " accepts the slider maximum")
@@ -246,7 +251,7 @@ return function(T)
         end
         local names = {}
         for _, h in ipairs(headers) do names[#names + 1] = h.name end
-        T.eq(table.concat(names, "|"), "Markers|Group|Marker look|Tooltip|Scoring|Profile")
+        T.eq(table.concat(names, "|"), "Markers|Group|Marker look|Notification|Tooltip|Scoring|Profile")
 
         -- between the header of the look and the next one: shape, color, shape, color ... and the reset button
         local run = {}

@@ -306,6 +306,8 @@ function Slash.PrintStatus()
     if EG.Compat then
         for _, line in ipairs(EG.Compat.StatusLines()) do EG:Raw(line) end
     end
+    local feed = EG.Feed and EG.Feed.StatusLine()
+    if feed then EG:Raw(feed) end
     if EG.DialogueUI then EG:Raw(EG.DialogueUI.StatusLine()) end
     if EG.lastError then
         EG:Raw(C.bad .. L.ST_LASTERROR .. ": [" .. tostring(EG.lastError.label) .. "] " .. tostring(EG.lastError.err) .. C.reset)
@@ -427,6 +429,7 @@ local HELP = {
     { "/eg mindeltapct <" .. Range("minDeltaPercent") .. ">", "H_MINDELTAPCT" },
     { "/eg icons | items | quest | char | tooltip | diff", "H_TOGGLES" },
     { "/eg dui [on|off]",                     "H_DUI" },
+    { "/eg toast [on|off|test|reset|<" .. Range("toastSeconds") .. ">]", "H_TOAST" },
     { "/eg options",                          "H_OPTIONS" },
     { "/eg scale <" .. Range("scale") .. ">",               "H_SCALE" },
     { "/eg status",                           "H_STATUS" },
@@ -464,6 +467,30 @@ local function Toggle(cmd, rest)
     local value = ParseSwitch(rest, EG:Get(def[1]))
     EG:Set(def[1], value)
     EG:Print(L[def[2]] .. ": " .. OnOff(value))
+end
+
+--[[ /eg toast              Stand: an oder aus, Standzeit
+     /eg toast on|off       die Einblendung "besseres Item" ein- und ausschalten
+     /eg toast <Sekunden>   wie lange sie steht
+     /eg toast test         ein Beispiel zeigen (zum Ansehen und Verschieben)
+     /eg toast reset        an den urspruenglichen Platz zurueck                                                 ]]
+local function ToastCommand(rest)
+    local Toast = EG.Toast
+    local sub = slower(EG.Trim(rest or ""))
+    if sub == "test" then
+        if not Toast.Test() then EG:Print(L.TOAST_NOTHING) end
+        return
+    elseif sub == "reset" then
+        Toast.ResetPosition()
+        EG:Print(L.TOAST_RESET)
+        return
+    elseif sub == "on" or sub == "off" or sub == "an" or sub == "aus" then
+        EG:Set("showToast", ParseSwitch(sub, Toast.Enabled()))
+    elseif sub ~= "" then
+        local v = ReadSetting(sub, "toastSeconds")
+        if v then EG:Set("toastSeconds", v) end
+    end
+    EG:Print(L.OPT_TOAST .. ": " .. OnOff(Toast.Enabled()) .. "  (" .. sformat(L.TOAST_SECONDS, Toast.Seconds()) .. ")")
 end
 
 --[[ /eg group            Mitglieder und Stand
@@ -650,6 +677,8 @@ function Slash.Handle(msg)
         GroupCommand(rest)
     elseif cmd == "marker" or cmd == "marks" then
         MarkerCommand(rest)
+    elseif cmd == "toast" then
+        ToastCommand(rest)
     elseif cmd == "profile" or cmd == "profiles" then
         ProfileCommand(rest)
     elseif cmd == "weight" then

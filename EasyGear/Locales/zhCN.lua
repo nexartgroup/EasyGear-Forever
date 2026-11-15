@@ -38,12 +38,8 @@ EasyGearLocales["zhCN"] = {
     NOTE_EXTRAS = "已装备物品的附魔和宝石共提供 %s 分。",
 
     ---------- profile window
-    P_TITLE = "EasyGear - 方案",
-    P_CANDIDATE = "对比方案",
-    P_ACTIVEPROF = "当前方案",
     P_MYCLASS = "我的职业",
     P_GEAR = "你的装备",
-    P_GEAR_SCORE = "装备评分",
     P_ITEM_LINE = "对比窗口中的物品",
     P_SAVE_NEW = "另存为新方案",
     P_OVERWRITE = "保存",
@@ -155,7 +151,6 @@ EasyGearLocales["zhCN"] = {
     SPEC_DRUID_ALLROUND = "全能",
 
     ---------- scoring and display
-    TITLE = "EasyGear - 物品对比",
     CANDIDATE = "待对比物品",
     EQUIPPED = "当前装备",
     NOTHING_EQUIPPED = "栏位为空",

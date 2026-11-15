@@ -53,12 +53,11 @@ EasyGearLocales["enUS"] = {
     R_EMPTY_SHORT = "slot empty",
 
     ---------- profile window
-    P_TITLE = "EasyGear - Profiles",
-    P_CANDIDATE = "Comparison profile",
-    P_ACTIVEPROF = "Active profile",
+    P_CANDIDATE = "COMPARISON PROFILE",
+    P_ACTIVEPROF = "ACTIVE PROFILE",
     P_MYCLASS = "My class",
     P_GEAR = "Your equipped gear",
-    P_GEAR_SCORE = "Gear score",
+    P_GEAR_SCORE = "GEAR SCORE",
     P_ITEM_LINE = "Item from the comparison window",
     P_SAVE_NEW = "Save as new profile",
     P_OVERWRITE = "Save",
@@ -77,6 +76,7 @@ EasyGearLocales["enUS"] = {
     P_ITEMS = "%d items",
     P_AUTO = "Automatic",
     P_DELETE_PROMPT = "Delete the profile \"%s\"?",
+    P_SUB = "Profiles",
 
     ---------- settings page and addon compartment
     OPT_BAGS = "Upgrade arrow in bags and bank",
@@ -98,7 +98,7 @@ EasyGearLocales["enUS"] = {
     OPT_ILVL_TIP = "Points per item level at the maximum level. 0 ignores the item level completely.",
     OPT_ILVLSCALE = "Scale item level with character level",
     OPT_ILVLSCALE_TIP = "The item level part grows with your level and reaches its full weight at the maximum level.",
-    OPT_ITEMS_TIP = "Shows the marker at vendors, in loot windows, in group loot rolls, in trade and in mail.",
+    OPT_ITEMS_TIP = "Shows the marker at vendors, in loot windows, in group loot rolls, in trade and in mail - and in the Loot Feed of EllesmereUI, where the row of a better item is tinted and carries its gain.",
     OPT_MINDELTA = "Minimum gain for an upgrade",
     OPT_MINDELTA_TIP = "An item only counts as an upgrade if it beats the worn item by at least this percentage of its score.",
     OPT_PROFILE = "Weighting profile",
@@ -129,6 +129,11 @@ EasyGearLocales["enUS"] = {
     OPT_MARK_RESET_TIP = "Sets shape and color of all markers back to the original look: green arrow, yellow arrow, purple star, green check mark.",
     OPT_DUI = "Dialogue UI: EasyGear in its tooltips and reward buttons",
     OPT_DUI_TIP = "If the addon Dialogue UI is installed: shows EasyGear's score and verdict in its item tooltips and marks the best of several quest rewards on its reward buttons, in Dialogue UI's own style. Has no effect without Dialogue UI.",
+    OPT_SEC_TOAST = "Notification",
+    OPT_TOAST = "Announce a better item when you get it",
+    OPT_TOAST_TIP = "When gear that is better than what you wear arrives in your bags (looted, rolled, bought, a quest reward, from mail or trade), a card in the shape of the item shows up for a while. Hover holds it and shows the tooltip, a click opens the comparison, a right-click closes it, dragging moves the place. EasyGear equips nothing.",
+    OPT_TOAST_SECONDS = "Notification: seconds on screen",
+    OPT_TOAST_SECONDS_TIP = "How long the notification for a better item stays.",
 
     ---------- chat output
     SET_PROFILE = "Active profile: %s",
@@ -184,6 +189,7 @@ EasyGearLocales["enUS"] = {
     H_GROUP = "group members: what is read and who would gain; on/off, scan = read again, raid / inspect = switches",
     H_MARKER = "shape and color of the markers (kinds: upgrade, level, group, pick, sell); without arguments it lists them",
     H_DUI = "EasyGear in Dialogue UI (its tooltips and reward buttons) on or off",
+    H_TOAST = "the notification for a better item: on or off, seconds on screen, show an example, reset its place",
 
     ---------- group hints
     GROUP_BETTER = "Better for the group:",
@@ -330,7 +336,6 @@ EasyGearLocales["enUS"] = {
     SPEC_DRUID_ALLROUND_D = "Covers feral, balance and healing - for hybrid gear and a second spec.",
 
     ---------- scoring and display
-    TITLE = "EasyGear - Item comparison",
     CANDIDATE = "Item to compare",
     EQUIPPED = "Currently equipped",
     NOTHING_EQUIPPED = "Slot is empty",
@@ -375,4 +380,25 @@ EasyGearLocales["enUS"] = {
     DUI_OK = "found - score and verdict in its tooltips, the best reward marked on its reward buttons",
     DUI_PROBLEM = "found, but part of its interface is missing",
     DUI_OFF = "found, but switched off here (/eg dui on)",
+    WIN_SUB = "Item comparison",
+    WIN_NEW = "NEW ITEM",
+    WIN_WORN = "EQUIPPED",
+    WIN_VERDICT = "VERDICT",
+    WIN_SCORE = "SCORE",
+    COL_STAT = "ATTRIBUTE",
+    COL_VALUE = "VALUE",
+    COL_WEIGHT = "WEIGHT",
+    COL_POINTS = "POINTS",
+    TOAST_TITLE = "BETTER ITEM",
+    TOAST_HINT = "Click: compare - Right-click: close - Drag: move",
+    TOAST_SAMPLE = "EXAMPLE",
+    TOAST_SAMPLE_TEXT = "This is where better items are announced",
+    TOAST_NOTHING = "There is nothing to show an example with (no gear found).",
+    TOAST_RESET = "The notification is back at its original place.",
+    TOAST_SECONDS = "%d seconds",
+    FEED_OK = "found - better items are marked in it (%d rows taken so far)",
+    FEED_OFF = "switched off in EllesmereUI",
+    FEED_ABSENT = "not found (EllesmereUI Forever Essentials)",
+    FEED_GROUP = "group",
+    FEED_LEVEL = "level %d",
 }

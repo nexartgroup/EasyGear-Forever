@@ -38,12 +38,8 @@ EasyGearLocales["ruRU"] = {
     NOTE_EXTRAS = "Надетый предмет даёт %s очков от зачарований и самоцветов.",
 
     ---------- profile window
-    P_TITLE = "EasyGear - профили",
-    P_CANDIDATE = "Профиль для сравнения",
-    P_ACTIVEPROF = "Активный профиль",
     P_MYCLASS = "Мой класс",
     P_GEAR = "Ваша экипировка",
-    P_GEAR_SCORE = "Оценка экипировки",
     P_ITEM_LINE = "Предмет из окна сравнения",
     P_SAVE_NEW = "Сохранить как новый профиль",
     P_OVERWRITE = "Сохранить",
@@ -155,7 +151,6 @@ EasyGearLocales["ruRU"] = {
     SPEC_DRUID_ALLROUND = "Универсальный",
 
     ---------- scoring and display
-    TITLE = "EasyGear - сравнение предметов",
     CANDIDATE = "Сравниваемый предмет",
     EQUIPPED = "Сейчас надето",
     NOTHING_EQUIPPED = "Ячейка пуста",

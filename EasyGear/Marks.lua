@@ -142,6 +142,14 @@ function Marks.Look(kindId)
     return SHAPE_BY_ID[shapeId], true, r, g, b
 end
 
+-- Die gewaehlte Farbe einer Art als Rot, Gruen, Blau: fuer Flaechen und Text in der Farbe der Markierung (die
+-- Einblendung, die Zeilen im Loot Feed). Look liefert dagegen die Faerbung des Bildes - beim Original keine.
+function Marks.Tint(kindId)
+    local kind = KIND_BY_ID[kindId] or KINDS[1]
+    local _, color = Marks.Choice(kind.id)
+    return Marks.ColorRGB(color)
+end
+
 -- Form und/oder Farbe einer Art in die Einstellungen schreiben (nil = unveraendert). Ungueltiges wird abgewiesen
 -- (false), ohne etwas zu aendern. Schreibt nur: wer es aufruft, sorgt selbst fuer das Neuzeichnen (EG:InvalidateAll).
 function Marks.WriteChoice(kindId, shapeId, color)

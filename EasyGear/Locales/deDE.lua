@@ -43,12 +43,11 @@ EasyGearLocales["deDE"] = {
     R_EMPTY_SHORT = "Platz leer",
 
     ---------- profile window
-    P_TITLE = "EasyGear - Profile",
-    P_CANDIDATE = "Vergleichsprofil",
-    P_ACTIVEPROF = "Aktives Profil",
+    P_CANDIDATE = "VERGLEICHSPROFIL",
+    P_ACTIVEPROF = "AKTIVES PROFIL",
     P_MYCLASS = "Meine Klasse",
     P_GEAR = "Deine angelegte Ausrüstung",
-    P_GEAR_SCORE = "Ausrüstungswertung",
+    P_GEAR_SCORE = "AUSRÜSTUNGSWERTUNG",
     P_ITEM_LINE = "Item aus dem Vergleichsfenster",
     P_SAVE_NEW = "Als neues Profil speichern",
     P_OVERWRITE = "Speichern",
@@ -67,6 +66,7 @@ EasyGearLocales["deDE"] = {
     P_ITEMS = "%d Teile",
     P_AUTO = "Automatisch",
     P_DELETE_PROMPT = "Das Profil \"%s\" löschen?",
+    P_SUB = "Profile",
 
     ---------- settings page and addon compartment
     OPT_BAGS = "Upgrade-Pfeil in Taschen und Bank",
@@ -88,7 +88,7 @@ EasyGearLocales["deDE"] = {
     OPT_ILVL_TIP = "Punkte je Gegenstandsstufe auf der Höchststufe. 0 ignoriert die Gegenstandsstufe ganz.",
     OPT_ILVLSCALE = "Gegenstandsstufe mit der Charakterstufe skalieren",
     OPT_ILVLSCALE_TIP = "Der Anteil der Gegenstandsstufe wächst mit deiner Stufe und erreicht auf der Höchststufe sein volles Gewicht.",
-    OPT_ITEMS_TIP = "Zeigt die Markierung bei Händlern, in Beutefenstern, beim Gruppenwürfeln, im Handel und in der Post.",
+    OPT_ITEMS_TIP = "Zeigt die Markierung bei Händlern, in Beutefenstern, beim Gruppenwürfeln, im Handel und in der Post - und im Loot Feed von EllesmereUI, wo die Zeile eines besseren Items getönt ist und seinen Zugewinn trägt.",
     OPT_MINDELTA = "Mindestzugewinn für eine Verbesserung",
     OPT_MINDELTA_TIP = "Ein Item gilt nur als Verbesserung, wenn es das getragene um mindestens diesen Prozentsatz von dessen Wertung übertrifft.",
     OPT_PROFILE = "Gewichtungsprofil",
@@ -119,6 +119,11 @@ EasyGearLocales["deDE"] = {
     OPT_MARK_RESET_TIP = "Setzt Form und Farbe aller Markierungen auf das ursprüngliche Aussehen zurück: grüner Pfeil, gelber Pfeil, violetter Stern, grüner Haken.",
     OPT_DUI = "Dialogue UI: EasyGear in Tooltips und Belohnungsknöpfen",
     OPT_DUI_TIP = "Wenn das Addon Dialogue UI installiert ist: zeigt Wertung und Urteil von EasyGear in dessen Item-Tooltips und markiert die beste von mehreren Questbelohnungen auf dessen Belohnungsknöpfen, im Stil von Dialogue UI. Ohne Dialogue UI ohne Wirkung.",
+    OPT_SEC_TOAST = "Einblendung",
+    OPT_TOAST = "Besseres Item beim Erhalten einblenden",
+    OPT_TOAST_TIP = "Kommt Ausrüstung in deine Taschen, die besser ist als das Angelegte (geplündert, gewürfelt, gekauft, Questbelohnung, aus Post oder Handel), erscheint eine Weile eine Karte in Form des Items. Unter der Maus bleibt sie stehen und zeigt den Tooltip, ein Klick öffnet den Vergleich, ein Rechtsklick schließt sie, Ziehen verschiebt den Platz. EasyGear legt nichts an.",
+    OPT_TOAST_SECONDS = "Einblendung: Sekunden auf dem Bildschirm",
+    OPT_TOAST_SECONDS_TIP = "Wie lange die Einblendung für ein besseres Item stehen bleibt.",
 
     ---------- chat output
     SET_PROFILE = "Aktives Profil: %s",
@@ -174,6 +179,7 @@ EasyGearLocales["deDE"] = {
     H_GROUP = "Gruppenmitglieder: was gelesen ist und wer gewinnen würde; on/off, scan = neu lesen, raid / inspect = Schalter",
     H_MARKER = "Form und Farbe der Markierungen (Arten: upgrade, level, group, pick, sell); ohne Angabe eine Übersicht",
     H_DUI = "EasyGear in Dialogue UI (dessen Tooltips und Belohnungsknöpfe) ein- oder ausschalten",
+    H_TOAST = "die Einblendung für ein besseres Item: ein oder aus, Sekunden auf dem Bildschirm, Beispiel zeigen, Platz zurücksetzen",
 
     ---------- group hints
     GROUP_BETTER = "Besser für die Gruppe:",
@@ -320,7 +326,6 @@ EasyGearLocales["deDE"] = {
     SPEC_DRUID_ALLROUND_D = "Deckt Wildheit, Gleichgewicht und Heilen ab - für Hybrid-Ausrüstung und Zweitspezialisierung.",
 
     ---------- scoring and display
-    TITLE = "EasyGear - Item-Vergleich",
     CANDIDATE = "Zu vergleichendes Item",
     EQUIPPED = "Aktuell angelegt",
     NOTHING_EQUIPPED = "Slot ist leer",
@@ -365,4 +370,25 @@ EasyGearLocales["deDE"] = {
     DUI_OK = "gefunden - Wertung und Urteil in seinen Tooltips, die beste Belohnung an seinen Belohnungsknöpfen markiert",
     DUI_PROBLEM = "gefunden, aber ein Teil seiner Schnittstelle fehlt",
     DUI_OFF = "gefunden, aber hier abgeschaltet (/eg dui on)",
+    WIN_SUB = "Item-Vergleich",
+    WIN_NEW = "NEUES ITEM",
+    WIN_WORN = "ANGELEGT",
+    WIN_VERDICT = "URTEIL",
+    WIN_SCORE = "WERTUNG",
+    COL_STAT = "ATTRIBUT",
+    COL_VALUE = "WERT",
+    COL_WEIGHT = "GEWICHT",
+    COL_POINTS = "PUNKTE",
+    TOAST_TITLE = "BESSERES ITEM",
+    TOAST_HINT = "Klick: vergleichen - Rechtsklick: schließen - Ziehen: verschieben",
+    TOAST_SAMPLE = "BEISPIEL",
+    TOAST_SAMPLE_TEXT = "Hier werden bessere Items angezeigt",
+    TOAST_NOTHING = "Es gibt nichts, womit sich ein Beispiel zeigen ließe (keine Ausrüstung gefunden).",
+    TOAST_RESET = "Die Einblendung steht wieder an ihrem ursprünglichen Platz.",
+    TOAST_SECONDS = "%d Sekunden",
+    FEED_OK = "gefunden - bessere Items werden darin markiert (bisher %d Zeilen angenommen)",
+    FEED_OFF = "in EllesmereUI abgeschaltet",
+    FEED_ABSENT = "nicht gefunden (EllesmereUI Forever Essentials)",
+    FEED_GROUP = "Gruppe",
+    FEED_LEVEL = "Stufe %d",
 }

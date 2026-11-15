@@ -12,14 +12,20 @@ return function(T)
     end
 
     ------------------------------------------------------------------ comparison window
-    T.test("window: opening builds the frame from the Forever templates", function()
+    T.test("window: opening builds the frame from EasyGear's own kit - no template of the default interface", function()
         local W = world()
         W.EG.Window.Open()
         local f = W.env.EasyGearWindow
-        T.ok(f, "frame") T.eq(f:IsShown(), true) T.eq(f.__template, "ButtonFrameTemplate")
-        T.eq(f.__title, W.EG.L.TITLE)
-        T.eq(f.cand.button.__kind, "ItemButton", "item buttons are ItemButton frames")
+        T.ok(f, "frame") T.eq(f:IsShown(), true) T.eq(f.__template, nil, "its own flat chrome")
+        T.eq(f.title:GetText(), "EasyGear") T.eq(f.subtitle:GetText(), W.EG.L.WIN_SUB)
+        T.eq(f.cand.caption:GetText(), W.EG.L.WIN_NEW) T.eq(f.eq.caption:GetText(), W.EG.L.WIN_WORN)
+        T.eq(f.cand.button.__kind, "Button", "the item field is a plain button with an icon")
+        T.eq(f.cand.button.EasyGearPlain, true, "whose tooltip gets no EasyGear lines of its own")
         T.ok(W.env.UISpecialFrames[1] == "EasyGearWindow", "closes with Escape")
+        f.close.__scripts.OnClick(f.close)
+        T.eq(f:IsShown(), false, "the close button closes")
+        W.EG.Window.Toggle()
+        T.eq(f:IsShown(), true)
         W.EG.Window.Toggle()
         T.eq(f:IsShown(), false)
     end)
@@ -127,25 +133,43 @@ return function(T)
         W.EG.ProfileWindow.Open()
         return W.env.EasyGearProfileWindow
     end
+    -- a click on a selector opens the menu of the game; the model keeps what the generator put in
+    local function menu(dd)
+        dd.__scripts.OnClick(dd, "LeftButton")
+        return dd.__menu
+    end
     local function radios(dd)
         local out = {}
-        for _, e in ipairs(dd.__menu.entries) do if e.kind == "radio" then out[#out + 1] = e.text end end
+        for _, e in ipairs(menu(dd).entries) do if e.kind == "radio" then out[#out + 1] = e.text end end
         return out
+    end
+    local function selected(dd)
+        for _, e in ipairs(menu(dd).entries) do
+            if e.kind == "radio" and e.isSelected(e.data) then return e.text end
+        end
+    end
+    local function choose(dd, text)
+        for _, e in ipairs(menu(dd).entries) do
+            if e.kind == "radio" and e.text == text then e.setSelected(e.data) return true end
+        end
+        return false
     end
 
     T.test("profile window: builds with menus for class and profile", function()
         local W = world()
         local f = profileWindow(W)
-        T.eq(f.__template, "ButtonFrameTemplate")
-        T.eq(f.classDD.__kind, "DropdownButton")
+        T.eq(f.__template, nil, "its own flat chrome")
+        T.eq(f.title:GetText(), "EasyGear") T.eq(f.subtitle:GetText(), W.EG.L.P_SUB)
+        T.eq(f.classDD.__kind, "Button", "a flat selector") T.eq(f.classDD.__menu, nil, "no menu before the click")
+        T.eq(f.classDD:GetText(), "Warrior", "the selector shows what is chosen")
         local classes = radios(f.classDD)
         T.eq(#classes, 9) T.eq(classes[1], "My class (Warrior)")
-        T.eq(f.classDD:SelectedText(), "My class (Warrior)")
+        T.eq(selected(f.classDD), "My class (Warrior)")
         local profiles = radios(f.profDD)
         T.eq(#profiles, 5 + 2, "five warrior profiles plus the two general ones")
         T.eq(f.profDD.__menu.scroll, 320)
         -- the default comparison profile is one other than the active one
-        T.ok(f.profDD:SelectedText() ~= "Arms (two-hand)")
+        T.ok(selected(f.profDD) ~= "Arms (two-hand)") T.eq(f.profDD:GetText(), selected(f.profDD))
     end)
 
     T.test("profile window: both sides share their rows, totals and verdict", function()
@@ -177,13 +201,14 @@ return function(T)
     T.test("profile window: picking from the menus", function()
         local W = world()
         local f = profileWindow(W)
-        T.eq(f.classDD:ChooseRadio("Mage"), true)
-        T.eq(f.profDD:SelectedText() ~= nil, true)
+        T.eq(choose(f.classDD, "Mage"), true)
+        T.eq(f.classDD:GetText(), "Mage")
+        T.eq(selected(f.profDD) ~= nil, true)
         local list = radios(f.profDD)
         T.ok(list[1]:find("Arcane", 1, true), "mage profiles after the class change")
-        T.eq(f.profDD:ChooseRadio("Fire"), true)
+        T.eq(choose(f.profDD, "Fire"), true)
         T.eq(f.left.title:GetText(), "Fire")
-        T.eq(f.profDD:SelectedText(), "Fire")
+        T.eq(selected(f.profDD), "Fire") T.eq(f.profDD:GetText(), "Fire")
     end)
 
     T.test("profile window: activate and automatic", function()
@@ -510,7 +535,8 @@ return function(T)
                 T.ok(lx + row.label:GetWidth() <= vx, "value column starts after the label column")
                 T.ok(vx + row.value:GetWidth() <= wx, "weight column starts after the value column")
                 T.ok(wx + row.weight:GetWidth() <= px, "points column starts after the weight column")
-                T.ok(px + row.points:GetWidth() <= x0 + 256, "the row stays within its half of the window")
+                T.ok(px + row.points:GetWidth() <= x0 + W.EG.Window.ROW_WIDTH, "the row stays within its card")
+                T.ok(x0 + W.EG.Window.ROW_WIDTH <= col.card:GetWidth() - x0, "which leaves the same margin on the right")
             end
         end
     end)

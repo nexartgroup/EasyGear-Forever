@@ -59,6 +59,18 @@ local function LooksLikeGear(link)
     return Items.GEAR_LOC[equipLoc] == true
 end
 
+-- Ausruestung in den Taschen (ohne Bank): Link -> Zahl der Faecher, die ihn halten (Toast.lua erkennt daran, was neu ist)
+function Recommend.BagGear()
+    local counts = {}
+    for _, bag in ipairs(Recommend.ContainerIDs(false)) do
+        for slot = 1, NumSlots(bag) do
+            local link = ItemLink(bag, slot)
+            if link and LooksLikeGear(link) then counts[link] = (counts[link] or 0) + 1 end
+        end
+    end
+    return counts
+end
+
 --[[ Alle echten Upgrades in den Taschen, groesster Zugewinn zuerst.
      Rueckgabe: Liste von { link, bag, slot, result, delta, percent, slotID }, pending (gibt es noch ungeladene Daten?) ]]
 function Recommend.Upgrades(includeBank)
