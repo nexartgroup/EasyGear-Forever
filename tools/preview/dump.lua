@@ -23,7 +23,10 @@ W.I.weak = F.gear(W, 7004, "Rissige Lederweste", "INVTYPE_CHEST", 10, { STR = 1 
 W.I.late = F.gear(W, 7005, "Brustplatte des Feldherrn", "INVTYPE_CHEST", 90, { STR = 100 }, { minLevel = 65, quality = 4, sellPrice = 41 })
 local LF = scene == "feed" and W.installLootFeed({ rowHeight = tonumber(os.getenv("ROW")) or 36, style = os.getenv("STYLE") or "BAR" }) or nil
 W.bag(0, 16, {})
-if os.getenv("EUI") then W.env.EllesmereUI = { ELLESMERE_GREEN = { r = 0.88, g = 0.66, b = 0.51 } } end
+if os.getenv("EUI") then
+    W.env.EllesmereUI = W.env.EllesmereUI or {}          -- the feed scene has put its Loot Feed there already
+    W.env.EllesmereUI.ELLESMERE_GREEN = { r = 0.88, g = 0.66, b = 0.51 }
+end
 W.boot()
 W.fire("BAG_UPDATE_DELAYED")
 
