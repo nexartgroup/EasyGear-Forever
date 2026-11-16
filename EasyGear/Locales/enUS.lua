@@ -391,6 +391,7 @@ EasyGearLocales["enUS"] = {
     COL_POINTS = "POINTS",
     TOAST_TITLE = "BETTER ITEM",
     TOAST_HINT = "Click: compare - Right-click: equip - Shift + right-click: close - Drag: move",
+    TOAST_HINT_SAMPLE = "Example - Right-click: close - Drag: move",
     TOAST_EQUIP_COMBAT = "Not possible in combat - %s was not equipped.",
     TOAST_EQUIP_DEAD = "Not possible while dead - %s was not equipped.",
     TOAST_EQUIP_GONE = "%s is no longer in your bags.",

@@ -72,11 +72,15 @@ function Recommend.BagGear()
     return counts
 end
 
--- Wo ein Gegenstand in den Taschen liegt (genau dieser Link, ohne Bank): Tasche, Fach - oder nil
+--[[ Wo ein Gegenstand in den Taschen liegt (ohne Bank): Tasche, Fach und sein Link, wie er dort jetzt lautet - oder nil.
+     Gesucht wird genau dieses Stueck (Items.Key): gleiche Nummer, Verzauberung, Suffix ...; die Stufe des Charakters
+     im Link zaehlt nicht, sie aendert sich mit jedem Aufstieg.                                                     ]]
 function Recommend.Find(link)
+    local key = Items.Key(link)
     for _, bag in ipairs(Recommend.ContainerIDs(false)) do
         for slot = 1, NumSlots(bag) do
-            if ItemLink(bag, slot) == link then return bag, slot end
+            local here = ItemLink(bag, slot)
+            if here and Items.Key(here) == key then return bag, slot, here end
         end
     end
     return nil

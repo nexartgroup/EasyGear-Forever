@@ -446,50 +446,239 @@ return function(T)
         local W = world()
         loot(W, 1, W.I.better)
         local f = shown(W)[1]
+        local function click()
+            W.advance(2)                                 -- well apart: not a double click
+            W.clearChat()
+            f.__scripts.OnClick(f, "RightButton")
+        end
+        local tried = 0                                  -- how often the item was dropped on an equipment slot
+        local drop = W.env.PickupInventoryItem
+        W.env.PickupInventoryItem = function(...) tried = tried + 1 return drop(...) end
         W.state.bags[0].locked = { [1] = true }
-        W.clearChat()
-        f.__scripts.OnClick(f, "RightButton")
+        click()
         T.eq(#W.state.equipRequests, 0) T.has(W.chatText(), "cannot be equipped right now") T.eq(f:IsShown(), true)
         W.state.bags[0].locked = nil
 
-        -- a second right-click before the server answered the first: the item is on its way, no second request
-        f.__scripts.OnClick(f, "RightButton")
-        T.eq(#W.state.equipRequests, 1)
-        W.clearChat()
-        f.__scripts.OnClick(f, "RightButton")
-        T.eq(#W.state.equipRequests, 1, "still one") T.has(W.chatText(), "cannot be equipped right now")
-        -- the server says no (the game shows its own message): nothing changed, the card is still there
-        W.serverAnswers(false)
-        T.eq(W.state.equipped[5], W.I.chest) T.eq(W.state.bags[0].items[1], W.I.better)
-        T.eq(f:IsShown(), true, "not worn: still a better item waiting")
-
         -- the slot is busy (another swap is under way): the item goes back from the cursor
         W.state.lockedSlots[5] = true
-        W.clearChat()
-        f.__scripts.OnClick(f, "RightButton")
+        click()
         T.eq(#W.state.equipRequests, 0) T.eq(W.state.cursor, nil, "back in its bag slot")
         T.has(W.chatText(), "cannot be equipped right now") T.eq(f:IsShown(), true)
+        T.eq(tried, 0, "not even tried")
         W.state.lockedSlots[5] = nil
 
-        -- the game does not let it into that slot
+        -- the game does not let it into that slot: asked first, not tried (the game would complain aloud)
         local can = W.env.C_PaperDollInfo.CursorCanGoInSlot
         W.env.C_PaperDollInfo.CursorCanGoInSlot = function() return false end
-        W.clearChat()
-        f.__scripts.OnClick(f, "RightButton")
+        click()
         T.eq(#W.state.equipRequests, 0) T.eq(W.state.cursor, nil) T.has(W.chatText(), "cannot be equipped right now")
+        T.eq(tried, 0, "not even tried")
+
         -- nothing was picked up (locked) and the game would not even say no to the slot: still nothing is tried
         W.env.C_PaperDollInfo.CursorCanGoInSlot = function() return true end
         W.state.bags[0].locked = { [1] = true }
-        local tried = 0
-        local equip = W.env.EquipCursorItem
-        W.env.EquipCursorItem = function(...) tried = tried + 1 return equip(...) end
-        W.clearChat()
-        f.__scripts.OnClick(f, "RightButton")
-        T.eq(tried, 0, "no equipping with an empty cursor") T.has(W.chatText(), "cannot be equipped right now")
+        click()
+        T.eq(tried, 0, "no dropping on the slot with an empty cursor") T.has(W.chatText(), "cannot be equipped right now")
         W.state.bags[0].locked = nil
         W.env.C_PaperDollInfo.CursorCanGoInSlot = can
+
+        -- the game says the slot fits and then does not take the item: it is not left hanging on the cursor
+        W.state.clientRefuses = true
+        click()
+        T.eq(tried, 1) T.eq(#W.state.equipRequests, 0) T.eq(W.state.cursor, nil, "back in its bag slot")
+        T.has(W.chatText(), "cannot be equipped right now") T.eq(f:IsShown(), true)
+        W.state.clientRefuses = nil
+
+        -- the server says no (the game shows its own message): nothing changed, the card is still there
+        click()
+        T.eq(#W.state.equipRequests, 1, "and when the game lets it, it goes") T.eq(W.chatText(), "")
+        W.serverAnswers(false)
+        T.eq(W.state.equipped[5], W.I.chest) T.eq(W.state.bags[0].items[1], W.I.better)
+        T.eq(f:IsShown(), true, "not worn: still a better item waiting")
+        T.eq(W.EG.lastError, nil)
+    end)
+
+    T.test("toast: a spell that waits for its target or the repair cursor - the right-click does not hand the item to them", function()
+        local W = world()
+        loot(W, 1, W.I.better)
+        local f = shown(W)[1]
+        W.state.spellTargeting = true                    -- Disenchant is waiting for an item
+        W.clearChat()
         f.__scripts.OnClick(f, "RightButton")
-        T.eq(tried, 1) T.eq(#W.state.equipRequests, 1, "and when the game lets it, it goes")
+        T.eq(W.state.spellCastOn, nil, "the item was not touched") T.eq(#W.state.equipRequests, 0)
+        T.has(W.chatText(), "cannot be equipped right now") T.eq(f:IsShown(), true)
+        W.state.spellTargeting = false
+        W.state.repairMode = true                        -- the merchant's repair cursor
+        W.clearChat()
+        f.__scripts.OnClick(f, "RightButton")
+        T.eq(W.state.repaired, nil) T.eq(#W.state.equipRequests, 0) T.has(W.chatText(), "cannot be equipped right now")
+        W.state.repairMode = false
+        f.__scripts.OnClick(f, "RightButton")
+        T.eq(#W.state.equipRequests, 1)
+        T.eq(W.EG.lastError, nil)
+    end)
+
+    T.test("toast: an item that binds when equipped - the game asks, EasyGear leaves the cursor alone until the answer", function()
+        -- the game has three such questions (binds, binds and stays tradeable for a while, ends a refund)
+        for _, kind in ipairs({ true, "tradeable", "refundable" }) do
+            local W = world(function(w)
+                w.I.bound = F.gear(w, 9121, "Binding Chestplate", "INVTYPE_CHEST", 40, { STR = 30, STA = 40, CRIT = 20 }, { armor = 500, boe = kind })
+            end)
+            loot(W, 1, W.I.bound)
+            local f = shown(W)[1]
+            W.clearChat()
+            f.__scripts.OnClick(f, "RightButton")
+            T.ok(W.state.pendingBind, "the game asks whether it may bind the item (" .. tostring(kind) .. ")")
+            T.ok(W.state.cursor, "and holds it on the cursor meanwhile - letting go would take the question back")
+            T.eq(#W.state.equipRequests, 0) T.eq(W.chatText(), "", "nothing failed") T.eq(f:IsShown(), true)
+            W.bindAnswer(true)
+            T.eq(#W.state.equipRequests, 1)
+            W.serverAnswers(true)
+            T.eq(W.state.equipped[5], W.I.bound) T.eq(#shown(W), 0)
+            T.eq(W.EG.lastError, nil)
+        end
+
+        -- the player says no: nothing is equipped, the card is still there, and a later right-click asks again
+        local V = world(function(w)
+            w.I.bound = F.gear(w, 9121, "Binding Chestplate", "INVTYPE_CHEST", 40, { STR = 30, STA = 40, CRIT = 20 }, { armor = 500, boe = true })
+        end)
+        loot(V, 1, V.I.bound)
+        local g = shown(V)[1]
+        g.__scripts.OnClick(g, "RightButton")
+        V.bindAnswer(false)
+        T.eq(#V.state.equipRequests, 0) T.eq(V.state.equipped[5], V.I.chest) T.eq(g:IsShown(), true)
+        V.advance(2)
+        g.__scripts.OnClick(g, "RightButton")
+        T.ok(V.state.pendingBind, "asked again")
+        V.bindAnswer(false)
+        -- a question once asked says nothing about the next attempt: an item the game does not take goes back
+        V.state.clientRefuses = true
+        V.advance(2)
+        V.clearChat()
+        g.__scripts.OnClick(g, "RightButton")
+        T.eq(V.state.cursor, nil, "not left on the cursor because of the question before")
+        T.has(V.chatText(), "cannot be equipped right now")
+        T.eq(V.EG.lastError, nil)
+    end)
+
+    T.test("toast: a double click equips one item - the card that moves up under the mouse is not hit by the second click", function()
+        local W = world()
+        W.put(0, 1, W.I.better) W.put(0, 2, W.I.helm)
+        W.fire("BAG_UPDATE_DELAYED")
+        T.eq(#shown(W), 2)
+        local first = shown(W)[1]
+        local firstLink = first.data.link
+        first.__scripts.OnClick(first, "RightButton")
+        T.eq(#W.state.equipRequests, 1)
+        W.clearChat()
+        first.__scripts.OnClick(first, "RightButton")    -- the second click of a double click, before the server answered
+        T.eq(#W.state.equipRequests, 1, "nothing more") T.eq(W.chatText(), "", "and no complaint")
+        W.serverAnswers(true)
+        T.eq(#shown(W), 1, "the first card went, the other one took its place")
+        local second = shown(W)[1]
+        T.ok(second.data.link ~= firstLink)
+        second.__scripts.OnClick(second, "RightButton")  -- ... or right after it
+        T.eq(#W.state.equipRequests, 0, "the card that moved up is not equipped by accident")
+        T.eq(second:IsShown(), true)
+        W.advance(1.1)
+        second.__scripts.OnClick(second, "RightButton")
+        T.eq(#W.state.equipRequests, 1, "a second later a click means this card")
+        T.eq(W.state.equipRequests[1].link, second.data.link)
+        -- a refused attempt does not start the wait: the next click may try again at once
+        local V = world()
+        loot(V, 1, V.I.better)
+        local g = shown(V)[1]
+        V.state.lockdown = true
+        g.__scripts.OnClick(g, "RightButton")
+        V.state.lockdown = false
+        g.__scripts.OnClick(g, "RightButton")
+        T.eq(#V.state.equipRequests, 1)
+    end)
+
+    T.test("toast: the item is known by what it is, not by its link - a level-up rewrites the links in the bags and the card stays", function()
+        local W = world()
+        loot(W, 2, W.I.better)
+        local f = shown(W)[1]
+        local leveled = W.I.better:gsub("(item:%d+::::::::)60", "%161")
+        T.ok(leveled ~= W.I.better, "the link carries the level of the character")
+        T.eq(W.EG.Items.Key(leveled), W.EG.Items.Key(W.I.better), "the same piece")
+        local enchanted = W.I.better:gsub("item:(%d+):", "item:%1:1234")
+        T.ok(W.EG.Items.Key(enchanted) ~= W.EG.Items.Key(W.I.better), "an enchanted one is another piece")
+        T.eq(W.EG.Items.Key(nil), nil) T.eq(W.EG.Items.Key("no link"), "no link")
+        local respecced = W.I.better:gsub("(item:%d+::::::::60:)", "%171")
+        T.ok(respecced ~= W.I.better) T.eq(W.EG.Items.Key(respecced), W.EG.Items.Key(W.I.better), "nor does the specialization in the link matter")
+        T.eq(W.EG.Items.Key(W.I.better), "item:9101:::::::::::::", "the level is left out, the fields stay in their places")
+        T.eq(W.EG.Items.Key(enchanted), "item:9101:1234::::::::::::", "everything else of the item text is kept")
+        -- the character gains a level: the same piece in the same slot has another link now; no event of the bags yet
+        W.put(0, 2, leveled)
+        f.__scripts.OnClick(f, "RightButton")
+        T.eq(#W.state.equipRequests, 1, "found all the same")
+        T.eq(W.state.equipRequests[1].bagSlot, 2) T.eq(W.state.equipRequests[1].link, leveled)
+        W.serverAnswers(false)
+        -- the bags are looked at: the card is kept and follows the new link (its tooltip, the comparison)
+        W.fire("BAG_UPDATE_DELAYED")
+        T.eq(#shown(W), 1, "not thrown out for a link that changed") T.eq(f.data.link, leveled)
+        T.eq(W.EG.lastError, nil)
+    end)
+
+    T.test("toast: the card always names the slot a right-click leads to - also after something else was put on", function()
+        local W = world(function(w)
+            w.I.fine = F.gear(w, 9131, "Fine Ring", "INVTYPE_FINGER", 45, { STR = 25, HIT = 15 }, { typeText = "" })
+        end)
+        W.put(0, 1, W.I.ring) W.put(0, 2, W.I.fine)
+        W.fire("BAG_UPDATE_DELAYED")
+        T.eq(#shown(W), 2)
+        local card = {}
+        for _, f in ipairs(shown(W)) do card[f.data.link] = f end
+        T.has(card[W.I.ring].detail:GetText(), "Finger 2: Plain Ring") T.has(card[W.I.fine].detail:GetText(), "Finger 2: Plain Ring")
+        card[W.I.ring].__scripts.OnClick(card[W.I.ring], "RightButton")
+        T.eq(W.state.equipRequests[1].slot, 12)
+        W.serverAnswers(true)
+        T.eq(#shown(W), 1)
+        local left = shown(W)[1]
+        T.eq(left.data.link, W.I.fine)
+        T.has(left.detail:GetText(), "Finger 1: Copper Band", "the weaker ring is the other one now - the card says so")
+        T.hasnt(left.detail:GetText(), "Plain Ring")
+        W.advance(2)
+        left.__scripts.OnClick(left, "RightButton")
+        T.eq(W.state.equipRequests[1].slot, 11, "and that is where the click leads")
+        -- a card that waited its turn says the right thing when it comes up
+        local V = world(function(w)
+            w.I.fine = F.gear(w, 9131, "Fine Ring", "INVTYPE_FINGER", 45, { STR = 25, HIT = 15 }, { typeText = "" })
+        end)
+        V.put(0, 1, V.I.better) V.put(0, 2, V.I.helm) V.put(0, 3, V.I.legs)
+        V.fire("BAG_UPDATE_DELAYED")
+        V.put(0, 4, V.I.ring) V.put(0, 5, V.I.fine)                         -- two rings more: they have to wait
+        V.fire("BAG_UPDATE_DELAYED")
+        T.eq(#shown(V), 3) T.eq(#V.EG.Toast.queue, 2)
+        V.equip(12, V.I.ring) V.state.bags[0].items[4] = V.I.ring2          -- Good Ring is put on from the bags
+        V.fire("PLAYER_EQUIPMENT_CHANGED", 12, false) V.fire("BAG_UPDATE_DELAYED")
+        T.eq(#V.EG.Toast.queue, 1) T.eq(V.EG.Toast.queue[1].link, V.I.fine)
+        T.has(V.EG.Toast.queue[1].detail, "Finger 1: Copper Band", "the waiting card was brought up to date")
+        T.eq(V.EG.lastError, nil)
+    end)
+
+    T.test("toast: weapons go where they belong - a two-hander into the main hand, a bow into the ranged slot", function()
+        local W = world(function(w)
+            w.I.great = F.gear(w, 9141, "Greatsword", "INVTYPE_2HWEAPON", 40, {}, { dps = 45 })
+            w.I.bow = F.gear(w, 9142, "Bow", "INVTYPE_RANGED", 40, { STR = 10 }, { dps = 12 })
+        end)
+        loot(W, 1, W.I.great)
+        T.eq(#shown(W), 1)
+        local f = shown(W)[1]
+        f.__scripts.OnClick(f, "RightButton")
+        T.eq(W.state.equipRequests[1].slot, 16)
+        W.serverAnswers(true)
+        T.eq(W.state.equipped[16], W.I.great) T.eq(W.state.bags[0].items[1], W.I.sword, "the old sword lies in the bag")
+        T.eq(#shown(W), 0, "and is no news")
+        W.advance(120)
+        loot(W, 2, W.I.bow)
+        T.eq(#shown(W), 1, "a bow for the empty ranged slot")
+        local g = shown(W)[1]
+        g.__scripts.OnClick(g, "RightButton")
+        T.eq(#W.state.equipRequests, 1) T.eq(W.state.equipRequests[1].slot, 18)
+        W.serverAnswers(true)
+        T.eq(W.state.equipped[18], W.I.bow) T.eq(#shown(W), 0)
         T.eq(W.EG.lastError, nil)
     end)
 
@@ -578,6 +767,7 @@ return function(T)
         T.eq(sample.caption:GetText(), V.EG.L.TOAST_SAMPLE)
         V.equip(12, nil) V.fire("PLAYER_EQUIPMENT_CHANGED", 12, true) V.flush()
         T.eq(sample:IsShown(), true, "the example stays")
+        T.eq(sample.detail:GetText(), V.EG.L.TOAST_SAMPLE_TEXT, "with its own words")
         V.clearChat()
         sample.__scripts.OnClick(sample, "RightButton")
         T.eq(#V.state.equipRequests, 0, "nothing to equip") T.eq(#shown(V), 0, "a right-click just closes the example")
@@ -737,6 +927,14 @@ return function(T)
         W.slash("toast test")
         T.eq(#shown(W), 1) T.eq(shown(W)[1].name:GetText(), "Better Chestplate")
         T.eq(shown(W)[1].caption:GetText(), W.EG.L.TOAST_TITLE)
+        -- it looks like the real thing but is an example: a right-click closes it and equips nothing
+        local example = shown(W)[1]
+        example.__scripts.OnEnter(example)
+        T.eq(W.env.GameTooltip:HasLine(W.EG.L.TOAST_HINT_SAMPLE), true, "the tooltip says so")
+        T.eq(W.env.GameTooltip:HasLine(W.EG.L.TOAST_HINT), false)
+        example.__scripts.OnLeave(example)
+        example.__scripts.OnClick(example, "RightButton")
+        T.eq(#W.state.equipRequests, 0) T.eq(W.state.cursor, nil) T.eq(#shown(W), 0)
 
         local V = T.world(F.arms(), function(w) w.bag(0, 16, {}) end)     -- nothing worn, nothing in the bags
         V.clearChat() V.slash("toast test")

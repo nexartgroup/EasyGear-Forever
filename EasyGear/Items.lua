@@ -25,7 +25,7 @@ local Items = {}
 EG.Items = Items
 
 local pairs, type, tonumber, tostring, pcall = pairs, type, tonumber, tostring, pcall
-local smatch = string.match
+local smatch, sgmatch = string.match, string.gmatch
 
 local Stats = EG.Stats
 
@@ -60,6 +60,23 @@ function Items.IDFromLink(link)
     if type(link) == "number" then return link end
     if type(link) ~= "string" then return nil end
     return tonumber(smatch(link, "item:(%d+)"))
+end
+
+--[[ Der Gegenstand eines Links, ohne den Betrachter: der Gegenstandstext
+       item:Nummer:Verzauberung:Stein1:Stein2:Stein3:Stein4:Suffix:Unikat:STUFE:SPEZIALISIERUNG:...
+     traegt an neunter und zehnter Stelle Stufe und Spezialisierung des Charakters. Steigt er eine Stufe auf, liefert
+     das Spiel fuer dasselbe Stueck in der Tasche einen anderen Link. Der Schluessel laesst diese beiden Felder leer:
+     zwei Links mit demselben Schluessel meinen dasselbe Stueck.                                                    ]]
+function Items.Key(link)
+    if type(link) ~= "string" then return link end
+    local body = smatch(link, "item:([%-%d:]+)")
+    if not body then return link end
+    local key, n = "item", 0
+    for field in sgmatch(body .. ":", "([^:]*):") do
+        n = n + 1
+        key = key .. ":" .. ((n == 9 or n == 10) and "" or field)
+    end
+    return key
 end
 
 -- Schluessel fuer den Zwischenspeicher: der Link, bei einer Nummer "item:<id>"

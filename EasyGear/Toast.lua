@@ -13,9 +13,12 @@
     und zeigt den Tooltip; Klick oeffnet den Vergleich, Rechtsklick legt den Gegenstand an, Umschalt + Rechtsklick
     schliesst sie, Ziehen verschiebt den Platz aller Einblendungen. Hoechstens drei stehen zugleich, weitere warten.
 
-    Anlegen: nur auf diesen Rechtsklick hin, und nur wenn es gerade geht (nicht im Kampf, nicht tot, der Gegenstand
-    liegt noch in den Taschen und ist noch eine Verbesserung). Sonst sagt der Chat, warum nicht. Eine Karte, deren
-    Gegenstand keine Verbesserung mehr ist - er wurde angelegt, hier oder in den Taschen -, verschwindet.
+    Anlegen: nur auf diesen Rechtsklick hin, und nur wenn es gerade geht (nicht im Kampf, nicht tot, kein Zauber
+    wartet auf ein Ziel, der Gegenstand liegt noch in den Taschen und ist noch eine Verbesserung). Sonst sagt der
+    Chat, warum nicht. Eine Karte, deren Gegenstand keine Verbesserung in den Taschen mehr ist - er wurde angelegt,
+    hier oder in den Taschen, verkauft, oder etwas Besseres wird getragen -, verschwindet; die uebrigen zeigen
+    stets den Platz, in den ein Rechtsklick jetzt fuehrt. Ein Gegenstand wird an seinem Schluessel wiedererkannt
+    (Items.Key), nicht am Link: der aendert sich mit der Stufe des Charakters.
 
     Was als "neu" gilt: die Zahl der Faecher, die einen Gegenstand halten, ist seit dem letzten Blick in die
     Taschen gestiegen (BAG_UPDATE_DELAYED). Nicht neu ist, was beim Anmelden schon da war, was gerade abgelegt
@@ -45,6 +48,8 @@ local FADE_IN, FADE_OUT = 0.25, 0.5 -- Sekunden Ein- und Ausblenden (Teil der St
 local QUIET = 5                     -- Sekunden nach Anmelden / Ladebildschirm: die Taschen fuellen sich noch
 local REPEAT = 60                   -- derselbe Gegenstand nicht noch einmal innerhalb dieser Zeit
 local PENDING = 15                  -- so lange wird auf fehlende Gegenstandsdaten gewartet
+local EQUIP_GAP = 1                 -- Sekunden nach einem Anlegen, in denen Rechtsklicks nichts tun: ein Doppelklick
+                                    -- traefe sonst die Karte, die inzwischen an die Stelle der ersten gerueckt ist
 local DEFAULT_POS = { point = "TOP", x = 0, y = -170 }
 
 local function Now() return GetTime and GetTime() or 0 end
@@ -153,7 +158,7 @@ local function OnEnter(self)
     if link and GameTooltip then
         GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
         GameTooltip:SetHyperlink(link)
-        GameTooltip:AddLine(L.TOAST_HINT, 0.6, 0.6, 0.6, true)
+        GameTooltip:AddLine(self.data.sample and L.TOAST_HINT_SAMPLE or L.TOAST_HINT, 0.6, 0.6, 0.6, true)
         GameTooltip:Show()
     end
 end
@@ -165,16 +170,23 @@ end
 
 --[[ Den Gegenstand anlegen - nur auf den Rechtsklick auf seine Karte hin, und nur wenn es gerade geht. Der Weg ist
      der des Ausruestungsmanagers des Spiels (EquipmentManager_EquipContainerItem): Mauszeiger leeren, den Gegenstand
-     aus seinem Fach aufnehmen, pruefen, ob er in den Platz darf, anlegen. Was dort lag, legt das Spiel in das frei
-     gewordene Fach; bindet der Gegenstand beim Anlegen, fragt das Spiel selbst nach; lehnt der Server ab, sagt es
-     das Spiel. Rueckgabe: true - oder false, der Grund als Text, und ob die Karte damit hinfaellig ist.          ]]
+     aus seinem Fach aufnehmen, pruefen, ob er in den Platz darf, auf den Platz legen. Was dort lag, legt das Spiel
+     in das frei gewordene Fach; lehnt der Server ab, sagt es das Spiel.
+     Bindet der Gegenstand beim Anlegen, fragt das Spiel nach und haelt ihn so lange am Mauszeiger (den zu leeren,
+     braeche die Rueckfrage ab): seine Ereignisse EQUIP_BIND_*_CONFIRM kommen noch waehrend des Aufrufs.
+     Rueckgabe: true - oder false, der Grund als Text, und ob die Karte damit hinfaellig ist.                     ]]
+local bindAsked = false
+
 function Toast.Equip(link)
     if InCombatLockdown() then return false, sformat(L.TOAST_EQUIP_COMBAT, link), false end
     if UnitIsDeadOrGhost("player") then return false, sformat(L.TOAST_EQUIP_DEAD, link), false end
-    local bag, slot = Recommend.Find(link)
+    -- ein Zauber wartet auf sein Ziel (verzaubern, entzaubern), oder der Reparaturhammer ist gewaehlt: der Griff
+    -- nach dem Gegenstand gaelte ihm
+    if SpellIsTargeting() or InRepairMode() then return false, sformat(L.TOAST_EQUIP_FAILED, link), false end
+    local bag, slot, current = Recommend.Find(link)
     if not bag then return false, sformat(L.TOAST_EQUIP_GONE, link), true end
-    -- der Platz, in den er kaeme - nach dem Stand von jetzt, nicht dem der Einblendung
-    local result = Score.Compare(link)
+    -- der Platz, in den er kaeme - nach dem Stand von jetzt
+    local result = Score.Compare(current)
     if not (result and result.isUpgrade and result.candSlot) then return false, sformat(L.TOAST_EQUIP_STALE, link), true end
     local target = result.candSlot
     ClearCursor()
@@ -184,11 +196,22 @@ function Toast.Equip(link)
         ClearCursor()                   -- zurueck in sein Fach
         return false, sformat(L.TOAST_EQUIP_FAILED, link), false
     end
-    -- Danach nichts mehr anfassen (wie der Ausruestungsmanager): bindet der Gegenstand beim Anlegen, wartet das Spiel
-    -- jetzt mit seiner Rueckfrage - den Mauszeiger zu leeren koennte sie abbrechen.
-    EquipCursorItem(target)
+    bindAsked = false
+    PickupInventoryItem(target)
+    -- Noch in der Hand, ohne dass das Spiel nach dem Binden fragt: es hat ihn nicht genommen - zurueck in sein Fach
+    if CursorHasItem() and not bindAsked then
+        ClearCursor()
+        return false, sformat(L.TOAST_EQUIP_FAILED, link), false
+    end
     return true
 end
+
+local function BindAsked() bindAsked = true end
+EG:On("EQUIP_BIND_CONFIRM", BindAsked)
+EG:On("EQUIP_BIND_TRADEABLE_CONFIRM", BindAsked)
+EG:On("EQUIP_BIND_REFUNDABLE_CONFIRM", BindAsked)
+
+local lastEquip = -EQUIP_GAP
 
 local function OnClick(self, button)
     local data = self.data
@@ -197,14 +220,15 @@ local function OnClick(self, button)
         if link and EG.Window then EG.Window.SetItem(link) end
         return
     end
-    -- Umschalt + Rechtsklick schliesst; das Beispiel (etwas Angelegtes) laesst sich nur schliessen
+    -- Umschalt + Rechtsklick schliesst; ein Beispiel (/eg toast test) laesst sich nur schliessen
     if IsShiftKeyDown() or not link or data.sample then
         Release(self)
         return
     end
+    if Now() - lastEquip < EQUIP_GAP then return end     -- der Klick davor ist noch unterwegs
     local ok, why, pointless = Toast.Equip(link)
-    if not ok then EG:Print(why) end
-    -- angelegt verschwindet die Karte von selbst (Recheck): ihr Gegenstand ist dann keine Verbesserung mehr
+    if ok then lastEquip = Now() else EG:Print(why) end
+    -- angelegt verschwindet die Karte von selbst (Recheck): ihr Gegenstand liegt dann nicht mehr in den Taschen
     if pointless then Release(self) end
 end
 
@@ -316,22 +340,24 @@ local function Detail(result)
     return C.good .. gain .. C.reset .. "   " .. slot .. ": " .. what
 end
 
--- Die Einblendung fuer diesen Gegenstand zeigen (oder einreihen). Rueckgabe: wurde sie angenommen?
-function Toast.Show(link)
+-- Die Einblendung fuer diesen Gegenstand zeigen (oder einreihen); sample: nur als Beispiel (/eg toast test).
+-- Rueckgabe: wurde sie angenommen?
+function Toast.Show(link, sample)
     local item = Items.Get(link)
     if not item then return false end
     local result = item.isGear and Score.Compare(item) or nil
     if not result then return false end
-    -- der Link, wie er in den Taschen liegt (nicht der bereinigte der Gegenstandsdaten): an ihm wird er wiedergefunden
-    Push({ link = link, name = item.name, texture = item.texture, quality = item.quality,
-           detail = Detail(result) })
+    -- der Link, wie er in den Taschen liegt (nicht der bereinigte der Gegenstandsdaten), und sein Schluessel: daran
+    -- wird das Stueck wiedergefunden, auch wenn sein Link sich mit der Stufe des Charakters aendert
+    Push({ link = link, key = Items.Key(link), name = item.name, texture = item.texture, quality = item.quality,
+           detail = Detail(result), sample = sample })
     return true
 end
 
 -- Ein Beispiel zum Ansehen und Verschieben (/eg toast test): die beste Verbesserung in den Taschen, sonst etwas Angelegtes
 function Toast.Test()
     local list = Recommend.Upgrades(false)
-    if list[1] and Toast.Show(list[1].link) then return true end
+    if list[1] and Toast.Show(list[1].link, true) then return true end
     for slot = 1, 19 do
         local item = Items.Equipped(slot)
         if item then
@@ -353,6 +379,7 @@ end
 ------------------------------------------------------------------------------
 
 local counts            -- Link -> Zahl der Faecher beim letzten Blick (nil: noch nie geschaut)
+local byKey = {}        -- Schluessel (Items.Key) -> Link, wie er beim letzten Blick in den Taschen lag
 local ids = {}          -- Gegenstandsnummer -> Zahl der Faecher beim letzten Blick
 local wornSeen = {}     -- Gegenstandsnummer -> wie oft seit dem letzten Blick hoechstens angelegt
 local pending = {}      -- Link -> bis wann auf seine Daten gewartet wird
@@ -410,21 +437,36 @@ end
 
 --[[ Was steht und wartet, noch einmal pruefen: eine Karte, deren Gegenstand nicht mehr in den Taschen liegt (angelegt,
      verkauft, in die Bank gelegt) oder keine Verbesserung mehr ist (etwas Besseres wird getragen), verschwindet.
-     Das Beispiel bleibt; was noch laedt, auch.                                                                    ]]
+     Ein Beispiel bleibt; was noch laedt, auch. Der Link der Karte folgt dem in den Taschen.                       ]]
 local function Stale(data)
     if data.sample then return false end
-    if counts and not counts[data.link] then return true end
+    local current = byKey[data.key]
+    if not current then return true end
+    data.link = current
     local state, loading = Score.UpgradeState(data.link)
     return not loading and state ~= "UPGRADE"
 end
 
+-- Was die Karte sagt, nach dem Stand von jetzt: der Platz, in den ein Rechtsklick fuehrt, und was dort ersetzt wird
+local function Refresh(data)
+    local result = not data.sample and Score.Compare(data.link) or nil
+    if result then data.detail = Detail(result) end
+end
+
 local function Recheck()
     for i = #queue, 1, -1 do
-        if Stale(queue[i]) then tremove(queue, i) end
+        if Stale(queue[i]) then tremove(queue, i) else Refresh(queue[i]) end
     end
     for i = #shown, 1, -1 do
         local f = shown[i]
-        if f and f.data and Stale(f.data) then Release(f) end
+        if f and f.data then
+            if Stale(f.data) then
+                Release(f)
+            else
+                Refresh(f.data)
+                f.detail:SetText(f.data.detail or "")
+            end
+        end
     end
 end
 
@@ -433,6 +475,8 @@ local function OnBags()
     local before, idsBefore, seen = counts, ids, wornSeen
     local worn = NoteWorn()             -- hebt seen auf den Stand von jetzt: seen[id] >= worn[id]
     counts, ids, wornSeen = now, ByID(now), worn
+    byKey = {}
+    for link in pairs(now) do byKey[Items.Key(link)] = link end
     if before and Toast.Enabled() and not bankOpen and Now() >= quietUntil then
         for link, n in pairs(now) do
             local id = Items.IDFromLink(link) or link

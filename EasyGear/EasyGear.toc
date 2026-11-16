@@ -1,7 +1,7 @@
 ## Interface: 16001
 ## Title: EasyGear
-## Notes: Gear scoring, upgrade detection and item comparison for WoW Forever - in bags, bank, vendors, loot, rolls, quest rewards and every item tooltip. It only compares and recommends.
-## Notes-deDE: Ausruestungsbewertung, Upgrade-Erkennung und Vergleich fuer WoW Forever - in Taschen, Bank, bei Haendlern, in Beute, Wuerfeln, Questbelohnungen und jedem Gegenstands-Tooltip. Es vergleicht und empfiehlt nur.
+## Notes: Gear scoring, upgrade detection and item comparison for WoW Forever - in bags, bank, vendors, loot, rolls, quest rewards and every item tooltip. It compares and recommends; it equips only when you right-click a notification.
+## Notes-deDE: Ausruestungsbewertung, Upgrade-Erkennung und Vergleich fuer WoW Forever - in Taschen, Bank, bei Haendlern, in Beute, Wuerfeln, Questbelohnungen und jedem Gegenstands-Tooltip. Es vergleicht und empfiehlt; angelegt wird nur auf Rechtsklick auf eine Einblendung.
 ## Author: nexartgroup
 ## Version: 4.6.0
 ## Category: Inventory

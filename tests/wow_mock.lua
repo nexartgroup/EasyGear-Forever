@@ -586,6 +586,9 @@ function Mock.new(opts)
     env.CursorHasItem = function() return self.cursor ~= nil end
     env.InCombatLockdown = function() return self.lockdown or false end
     env.UnitIsDeadOrGhost = function() return self.dead or false end
+    -- a spell that waits for an item to be cast on (enchant, disenchant), the repair cursor of a merchant
+    env.SpellIsTargeting = function() return self.spellTargeting or false end
+    env.InRepairMode = function() return self.repairMode or false end
 
     ------------------------------------------------------------ item data
     local function itemFromAny(linkOrId)
@@ -760,25 +763,36 @@ function Mock.new(opts)
         end,
         -- takes the item of a bag slot onto the cursor; a locked one (it is being moved) stays where it is. With
         -- something on the cursor already the two change places: what was held is dropped into that slot
-        -- (self.dropped lists such drops).
+        -- (self.dropped lists such drops). While a spell waits for its target or the repair cursor is up, the "pickup"
+        -- is that action on the item (self.spellCastOn, self.repaired) - as a click on the item would be.
         PickupContainerItem = function(bag, slot)
             local b = self.bags[bag]
             local link = b and b.items[slot]
             if not link or (b.locked and b.locked[slot]) then return end
+            if self.spellTargeting then self.spellCastOn = link return end
+            if self.repairMode then self.repaired = link return end
             if self.cursor then self.dropped[#self.dropped + 1] = { link = self.cursor.link, bag = bag, slot = slot } end
             local _, id = itemFromAny(link)
             self.cursor = { id = id, link = link, bag = bag, slot = slot }
         end,
     }
-    --[[ Equipping the item on the cursor. The slots an item may go to follow its kind; the client only asks the
-         server - until the answer comes (H.serverAnswers) the item and the slot are locked and nothing has changed.
-         self.equipRequests lists what was asked: { link, slot, bag, bagSlot }.                                      ]]
+    --[[ Equipping: the item on the cursor is dropped on an inventory slot (PickupInventoryItem, what a click on the
+         slot of the character window does and the game's equipment manager uses). The slots an item may go to follow
+         its kind. The client only asks the server - until the answer comes (H.serverAnswers) the item and the slot
+         are locked and nothing has changed. self.equipRequests lists what was asked: { link, slot, bag, bagSlot }.
+           * an item that binds when equipped (def.boe) is held on the cursor while the game asks: the event
+             EQUIP_BIND_CONFIRM comes during the call (it is a synchronous event; def.boe = "tradeable" or "refundable":
+             EQUIP_BIND_TRADEABLE_CONFIRM, EQUIP_BIND_REFUNDABLE_CONFIRM), self.pendingBind holds the question until
+             H.bindAnswer; letting go of the cursor meanwhile takes the question back (the game hides its dialog when
+             the cursor loses the item)
+           * self.clientRefuses: the client does not take the item, it stays on the cursor, nothing is asked        ]]
     local SLOTS_OF = {
         INVTYPE_HEAD = { 1 }, INVTYPE_NECK = { 2 }, INVTYPE_SHOULDER = { 3 }, INVTYPE_BODY = { 4 }, INVTYPE_CHEST = { 5 },
         INVTYPE_ROBE = { 5 }, INVTYPE_WAIST = { 6 }, INVTYPE_LEGS = { 7 }, INVTYPE_FEET = { 8 }, INVTYPE_WRIST = { 9 },
         INVTYPE_HAND = { 10 }, INVTYPE_FINGER = { 11, 12 }, INVTYPE_TRINKET = { 13, 14 }, INVTYPE_CLOAK = { 15 },
         INVTYPE_WEAPON = { 16, 17 }, INVTYPE_2HWEAPON = { 16 }, INVTYPE_WEAPONMAINHAND = { 16 }, INVTYPE_WEAPONOFFHAND = { 17 },
-        INVTYPE_SHIELD = { 17 }, INVTYPE_HOLDABLE = { 17 }, INVTYPE_RANGED = { 16 }, INVTYPE_RANGEDRIGHT = { 16 },
+        INVTYPE_SHIELD = { 17 }, INVTYPE_HOLDABLE = { 17 }, INVTYPE_RANGED = { 18 }, INVTYPE_RANGEDRIGHT = { 18 },
+        INVTYPE_THROWN = { 18 }, INVTYPE_RELIC = { 18 },
     }
     self.equipRequests, self.lockedSlots, self.dropped = {}, {}, {}
     env.C_PaperDollInfo = {
@@ -791,17 +805,38 @@ function Mock.new(opts)
         end,
     }
     env.IsInventoryItemLocked = function(slot) return self.lockedSlots[slot] or false end
-    env.EquipCursorItem = function(slot)
-        local c = self.cursor
-        if not (c and c.bag) then return end
-        if not env.C_PaperDollInfo.CursorCanGoInSlot(slot) then return end      -- the item stays on the cursor
-        self.cursor = nil
+    local function request(c, slot)
         local b = self.bags[c.bag]
         b.locked = b.locked or {}
         b.locked[c.slot] = true
         self.lockedSlots[slot] = true
         self.equipRequests[#self.equipRequests + 1] = { link = c.link, slot = slot, bag = c.bag, bagSlot = c.slot }
     end
+    env.PickupInventoryItem = function(slot)
+        local c = self.cursor
+        if not (c and c.bag) then return end
+        if self.clientRefuses or not env.C_PaperDollInfo.CursorCanGoInSlot(slot) then return end
+        local it = itemFromAny(c.link)
+        if it and it.boe then
+            self.pendingBind = { cursor = c, slot = slot }
+            local event = (it.boe == "tradeable" and "EQUIP_BIND_TRADEABLE_CONFIRM")
+                or (it.boe == "refundable" and "EQUIP_BIND_REFUNDABLE_CONFIRM") or "EQUIP_BIND_CONFIRM"
+            for _, f in ipairs(self.frames) do          -- during the call: a synchronous event
+                if f.__events[event] and f.__scripts.OnEvent then
+                    f.__scripts.OnEvent(f, event, slot, { bagID = c.bag, slotIndex = c.slot })
+                end
+            end
+            return
+        end
+        self.cursor = nil
+        request(c, slot)
+    end
+    local clear = env.ClearCursor
+    env.ClearCursor = function()
+        if self.pendingBind and self.cursor == self.pendingBind.cursor then self.pendingBind = nil end
+        clear()
+    end
+    self.request = request
     env.GetInventoryItemLink = function(unit, slot)
         if unit ~= "player" then return nil end
         return self.equipped[slot]
@@ -1110,19 +1145,37 @@ function Mock.new(opts)
         local old = self.equipped[r.slot]
         self.equipped[r.slot] = r.link
         b.items[r.bagSlot] = old
+        -- a two-hand weapon and an off hand do not go together: the other one goes to the first free bag slot
         local it = self.itemFromAny(r.link)
+        local other
         if it and it.equipLoc == "INVTYPE_2HWEAPON" and self.equipped[17] then
+            other = 17
+        elseif r.slot == 17 and self.equipped[16] then
+            local main = self.itemFromAny(self.equipped[16])
+            if main and main.equipLoc == "INVTYPE_2HWEAPON" then other = 16 end
+        end
+        if other then
             for slot = 1, b.size do
                 if not b.items[slot] then
-                    b.items[slot] = self.equipped[17]
+                    b.items[slot] = self.equipped[other]
                     break
                 end
             end
-            self.equipped[17] = nil
-            H.fire("PLAYER_EQUIPMENT_CHANGED", 17, true)
+            self.equipped[other] = nil
+            H.fire("PLAYER_EQUIPMENT_CHANGED", other, true)
         end
         H.fire("PLAYER_EQUIPMENT_CHANGED", r.slot, false)
         H.fire("BAG_UPDATE_DELAYED")
+        return true
+    end
+    -- The player answers the game's question whether an item may be bound: yes - it is sent to the server
+    -- (EquipPendingItem); no - nothing happens (CancelPendingEquip). Either way the cursor is free again.
+    function H.bindAnswer(yes)
+        local p = self.pendingBind
+        if not p then return false end
+        self.pendingBind = nil
+        self.cursor = nil
+        if yes then self.request(p.cursor, p.slot) end
         return true
     end
     function H.bag(bag, size, items)

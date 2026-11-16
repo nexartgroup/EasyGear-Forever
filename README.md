@@ -312,13 +312,19 @@ taken from mail or a trade - a card in the shape of the item appears for **15 se
 * **Under the mouse** it holds (the time stops) and shows the item tooltip with the full comparison. A **click** opens
   the comparison window with the item, a **right-click equips the item**, **Shift + right-click** closes the card,
   **dragging** moves the place where all notifications appear (remembered per character).
-* **Equipping by right-click** happens only when it is possible right now: not in combat, not while dead, the item
-  still lies in your bags and still is an upgrade. Otherwise the chat says why and nothing is touched. The item goes
-  into the slot the card names (for rings and trinkets the weaker of the two); what you wore lands in the bag slot the
-  new item came from. If the item binds when equipped, the game asks as it always does; if the game refuses, it says
-  so itself and the card stays. The way is the one the game's own equipment manager takes.
+* **Equipping by right-click** happens only when it is possible right now: not in combat, not while dead, not while
+  a spell waits for its target (enchanting, disenchanting) or the repair cursor is up, the item still lies in your
+  bags and still is an upgrade. Otherwise the chat says why and nothing is touched. The item goes into the slot the
+  card names (for rings and trinkets the weaker of the two; the card is kept up to date when you put on something
+  else meanwhile); what you wore lands in the bag slot the new item came from. If the item binds when equipped, the
+  game asks as it always does; if the game refuses, it says so itself and the card stays. The way is the one the
+  game's own equipment manager takes (pick the item up from its bag slot, drop it on the equipment slot).
+* For one second after an item was sent to be equipped, right-clicks on the cards do nothing: the second click of a
+  double click would otherwise hit the card that moves up into the place of the first.
 * A card disappears as soon as its item is no upgrade in your bags any more - you equipped it (by the card or in the
-  bags), sold it, banked it, or put on something better.
+  bags), sold it, banked it, or put on something better. The item is recognised by what it is, not by its link: a
+  level-up rewrites the links of everything in your bags, the cards stay.
+* The cards of `/eg toast test` are examples: a right-click only closes them.
 * At most three stand below each other; more wait their turn (the oldest of more than eight waiting are dropped).
 * *Options > AddOns > EasyGear > Notification* switches it and sets the seconds (3 to 60). By chat: `/eg toast on|off`,
   `/eg toast 20`, `/eg toast test` (shows an example - the best upgrade in your bags, or something you wear - to look
@@ -457,7 +463,7 @@ Run from the root of this repository:
 
 ```
 lua5.1 tests/run.lua                 # unit tests on a model of the client (Lua 5.1 only), ~510 checks
-python3 tests/mutate.py              # mutation check: breaks the addon in ~890 small ways, the tests must notice
+python3 tests/mutate.py              # mutation check: breaks the addon in ~920 small ways, the tests must notice
                                      # (MUT_SHARD=0/3 ... 2/3 splits it over several processes)
 tools/check.sh <Interface/AddOns of the Forever UI source> [<folder of the Dialogue UI addon>]
                                      # luacheck against a std built from the UI source + checks that every
@@ -536,11 +542,16 @@ This edition is a new codebase for the Forever client, not an update of that one
 
 ## Changes in 4.6.0
 
-* **Right-click on the notification equips the item** - when that is possible right now (not in combat, not dead, the
-  item still in the bags and still an upgrade); otherwise the chat says why. **Shift + right-click** closes the card
-  (that was the plain right-click before). See [Notification for better items](#notification-for-better-items).
+* **Right-click on the notification equips the item** - when that is possible right now (not in combat, not dead, no
+  spell waiting for a target, the item still in the bags and still an upgrade); otherwise the chat says why.
+  **Shift + right-click** closes the card (that was the plain right-click before). A double click equips one item
+  only. See [Notification for better items](#notification-for-better-items).
 * Cards follow what you wear and carry: a card whose item was equipped, sold, banked or outclassed disappears; waiting
-  cards for such items never come.
+  cards for such items never come; a standing card always names the slot a right-click leads to. Items are recognised
+  across level-ups (the level in their link is ignored).
+* An independent review of the equipping against the game's own code found seven points (links changing with the
+  level, the cursor after a refused attempt, spell targeting, a stale slot on the card, double clicks, gaps of the
+  test model); all are worked in and covered by tests.
 * The scope statement changes with it: EasyGear still equips nothing on its own - only on that click.
 
 ## Changes in 4.5.0
@@ -889,13 +900,19 @@ aus der Post oder einem Handel -, erscheint für **15 Sekunden** eine Karte in F
 * **Unter der Maus** bleibt sie stehen (die Zeit hält an) und zeigt den Item-Tooltip mit dem vollen Vergleich. Ein **Klick**
   öffnet das Vergleichsfenster mit dem Item, ein **Rechtsklick legt das Item an**, **Umschalt + Rechtsklick** schließt die
   Karte, **Ziehen** verschiebt den Platz, an dem alle Einblendungen erscheinen (je Charakter gemerkt).
-* **Anlegen per Rechtsklick** geschieht nur, wenn es gerade möglich ist: nicht im Kampf, nicht als Toter, das Item liegt noch
-  in den Taschen und ist noch eine Verbesserung. Sonst sagt der Chat, warum nicht, und nichts wird angefasst. Das Item kommt in
-  den Platz, den die Karte nennt (bei Ringen und Schmuck der schwächere der beiden); das bisher Getragene landet im Taschenplatz
-  des neuen Items. Bindet das Item beim Anlegen, fragt das Spiel wie immer nach; lehnt das Spiel ab, sagt es das selbst, und
-  die Karte bleibt stehen. Der Weg ist der des Ausrüstungsmanagers des Spiels.
+* **Anlegen per Rechtsklick** geschieht nur, wenn es gerade möglich ist: nicht im Kampf, nicht als Toter, nicht solange ein
+  Zauber auf sein Ziel wartet (Verzaubern, Entzaubern) oder der Reparaturhammer gewählt ist, das Item liegt noch in den Taschen
+  und ist noch eine Verbesserung. Sonst sagt der Chat, warum nicht, und nichts wird angefasst. Das Item kommt in den Platz, den
+  die Karte nennt (bei Ringen und Schmuck der schwächere der beiden; die Karte wird nachgeführt, wenn du inzwischen etwas
+  anderes anlegst); das bisher Getragene landet im Taschenplatz des neuen Items. Bindet das Item beim Anlegen, fragt das Spiel
+  wie immer nach; lehnt das Spiel ab, sagt es das selbst, und die Karte bleibt stehen. Der Weg ist der des Ausrüstungsmanagers
+  des Spiels (das Item aus seinem Taschenplatz aufnehmen, auf den Ausrüstungsplatz legen).
+* Eine Sekunde lang, nachdem ein Item zum Anlegen geschickt wurde, tun Rechtsklicks auf die Karten nichts: der zweite Klick
+  eines Doppelklicks träfe sonst die Karte, die an die Stelle der ersten nachrückt.
 * Eine Karte verschwindet, sobald ihr Item keine Verbesserung in deinen Taschen mehr ist - du hast es angelegt (über die Karte
-  oder in den Taschen), verkauft, in die Bank gelegt oder etwas Besseres angezogen.
+  oder in den Taschen), verkauft, in die Bank gelegt oder etwas Besseres angezogen. Das Item wird an dem erkannt, was es ist,
+  nicht an seinem Link: ein Stufenaufstieg schreibt die Links von allem in deinen Taschen neu, die Karten bleiben.
+* Die Karten von `/eg toast test` sind Beispiele: ein Rechtsklick schließt sie nur.
 * Höchstens drei stehen untereinander; weitere warten (von mehr als acht Wartenden fallen die ältesten weg).
 * *Optionen > AddOns > EasyGear > Einblendung* schaltet sie und stellt die Sekunden ein (3 bis 60). Per Chat: `/eg toast on|off`,
   `/eg toast 20`, `/eg toast test` (zeigt ein Beispiel - die beste Verbesserung in den Taschen, sonst etwas Angelegtes - zum

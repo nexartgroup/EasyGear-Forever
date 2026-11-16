@@ -381,6 +381,7 @@ EasyGearLocales["deDE"] = {
     COL_POINTS = "PUNKTE",
     TOAST_TITLE = "BESSERES ITEM",
     TOAST_HINT = "Klick: vergleichen - Rechtsklick: anlegen - Umschalt + Rechtsklick: schließen - Ziehen: verschieben",
+    TOAST_HINT_SAMPLE = "Beispiel - Rechtsklick: schließen - Ziehen: verschieben",
     TOAST_EQUIP_COMBAT = "Im Kampf nicht möglich - %s wurde nicht angelegt.",
     TOAST_EQUIP_DEAD = "Als Toter nicht möglich - %s wurde nicht angelegt.",
     TOAST_EQUIP_GONE = "%s liegt nicht mehr in deinen Taschen.",
