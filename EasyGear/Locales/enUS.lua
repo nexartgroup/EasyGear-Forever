@@ -51,6 +51,7 @@ EasyGearLocales["enUS"] = {
     NOTE_UNIQUE = "Unique item - the second copy replaces the first.",
     NOTE_EXTRAS = "The equipped item carries %s points from enchants and gems.",
     R_EMPTY_SHORT = "slot empty",
+    R_ILVLONLY = "Only its item level is higher - no attribute your profile counts is better, at least one is lower.",
 
     ---------- profile window
     P_CANDIDATE = "COMPARISON PROFILE",

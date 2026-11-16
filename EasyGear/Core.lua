@@ -1,5 +1,5 @@
 --[[---------------------------------------------------------------------------
-    EasyGear 4.6.0 - Forever
+    EasyGear 4.6.1 - Forever
     Ausruestungsbewertung, Upgrade-Erkennung und Vergleich fuer WoW Forever
 
     Dieses Addon vergleicht und empfiehlt: es verschickt keine Befehle,
@@ -53,7 +53,7 @@ do
     if C_AddOns and C_AddOns.GetAddOnMetadata then
         meta = C_AddOns.GetAddOnMetadata(EG.name, "Version")
     end
-    EG.version = meta or "4.6.0"
+    EG.version = meta or "4.6.1"
 end
 
 -- WoW Forever meldet sich ueber WOW_PROJECT_ID == WOW_PROJECT_CAMELOT (Blizzard_ProjectConstants).
@@ -172,6 +172,8 @@ end
 function EG.FmtScore(v)
     v = tonumber(v) or 0
     if math.abs(v) >= 100 or v == math.floor(v) then return sformat("%d", EG.Round(v)) end
+    -- ganz kleine Werte (niedrige Stufen) mit zwei Stellen: "0.0" stuende sonst fuer etwas, das nicht null ist
+    if math.abs(v) < 0.05 then return sformat("%.2f", v) end
     return sformat("%.1f", v)
 end
 

@@ -122,12 +122,17 @@ function Tooltip.BuildLines(item, result, mode, extra)
         local d = EG.FmtSigned(result.delta)
         if result.percent then d = d .. "  (" .. EG.FmtPct(result.percent) .. ")" end
         verdict.right = d
-        verdict.rightColor = (result.delta > 0) and GREEN or ((result.delta < 0) and RED or GREY)
-        verdict.rightRole = (result.delta > 0) and "good" or ((result.delta < 0) and "bad" or "muted")
+        -- ein Vorsprung, der nicht als Verbesserung zaehlt (nur die Gegenstandsstufe, oder im Rauschen), steht grau
+        local counts = result.isUpgrade or (result.levelTooLow and result.wouldUpgrade)
+        local gain = result.delta > 0 and counts
+        verdict.rightColor = gain and GREEN or ((result.delta < 0) and RED or GREY)
+        verdict.rightRole = gain and "good" or ((result.delta < 0) and "bad" or "muted")
     end
     lines[#lines + 1] = verdict
 
-    if not result.usable and result.reason then
+    -- warum nicht: nicht verwendbar - oder die Wertung ist hoeher und es ist trotzdem keine Verbesserung
+    local unexplained = result.usable and not result.levelTooLow and not result.isUpgrade and (result.delta or 0) > 0
+    if result.reason and (not result.usable or unexplained) then
         lines[#lines + 1] = { left = result.reason, color = GREY, wrap = true, role = "muted" }
     end
 

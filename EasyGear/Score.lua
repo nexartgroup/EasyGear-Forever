@@ -243,6 +243,57 @@ function Score.StatDiff(item, targets, candSlot)
     return out
 end
 
+--[[ Spricht nur die Gegenstandsstufe fuer den Kandidaten? Wahr, wenn er in keinem Wert, den die Gewichte zaehlen
+     (Attribute, Waffen-DPS, freie Sockel), mehr Punkte bringt als das, was er ersetzt, und in mindestens einem
+     weniger. Die Stufe steht fuer das, was sich an einem Gegenstand nicht lesen laesst - gegen das, was sich lesen
+     laesst, soll sie nicht entscheiden: eine Lederhose mit weniger Ruestung ist keine Verbesserung der Kettenhose,
+     nur weil ihre Stufe hoeher ist.
+     targets = Liste von { item, slotID } (leer: der Platz ist frei); weights, level: Standard das eigene Profil und
+     die eigene Stufe (Group.lua fragt fuer andere).                                                              ]]
+function Score.OnlyItemLevel(item, targets, candSlot, weights, level)
+    if not item then return false end
+    weights = weights or Profiles.Resolve().weights
+    local better, worse = false, false
+    local function Judge(points)
+        if points > 1e-9 then better = true elseif points < -1e-9 then worse = true end
+    end
+
+    local have, keys, seen = {}, {}, {}
+    local function Collect(tbl, into)
+        for k, v in pairs(tbl or {}) do
+            if into then into[k] = (into[k] or 0) + v end
+            if not seen[k] then seen[k] = true keys[#keys + 1] = k end
+        end
+    end
+    local weapons, sockets = 0, 0
+    for _, t in ipairs(targets or {}) do
+        local ti = t.item
+        if ti then
+            Collect(ti.stats, have) Collect(ti.unknown, have)
+            if ti.handKind and ti.dps then
+                weapons = weapons + ti.dps * Score.HandWeight(weights, ti.handKind) * (IsOffhandWeapon(ti, t.slotID) and OFFHAND_FACTOR or 1)
+            end
+            sockets = sockets + (ti.sockets or 0)
+        end
+    end
+    Collect(item.stats) Collect(item.unknown)
+
+    for _, k in ipairs(keys) do
+        local w = weights[k]
+        if w and w ~= 0 then
+            local mine = ((item.stats and item.stats[k]) or 0) + ((item.unknown and item.unknown[k]) or 0)
+            Judge((mine - (have[k] or 0)) * w)
+        end
+    end
+    local mine = 0
+    if item.handKind and item.dps then
+        mine = item.dps * Score.HandWeight(weights, item.handKind) * (IsOffhandWeapon(item, candSlot) and OFFHAND_FACTOR or 1)
+    end
+    Judge(mine - weapons)
+    Judge(((item.sockets or 0) - sockets) * Score.SocketPoints(weights, level))
+    return worse and not better
+end
+
 ------------------------------------------------------------------------------
 -- 02  Ausruestungsplaetze
 ------------------------------------------------------------------------------
@@ -483,7 +534,6 @@ function Score.Compare(linkOrItem, detail)
     local relative = (result.targetScore > 0) and (result.targetScore * pct / 100) or 0
     result.threshold = mmax(minDelta, relative)
     result.wouldUpgrade = (result.delta > 0 and result.delta >= result.threshold)
-    result.isUpgrade = result.usable and (not result.levelTooLow) and result.wouldUpgrade
     result.percent = (result.targetScore > 0) and (result.delta / result.targetScore * 100) or nil
 
     -- Wer wird ersetzt? (fuer die Attribut-Unterschiede)
@@ -497,10 +547,18 @@ function Score.Compare(linkOrItem, detail)
     end
     result.replaced = replaced
 
+    -- Hebt nur die hoehere Gegenstandsstufe die Wertung ueber die des Angelegten, ist es keine Verbesserung
+    if result.wouldUpgrade and Score.OnlyItemLevel(item, replaced, best.slot) then
+        result.wouldUpgrade, result.ilvlOnly = false, true
+    end
+    result.isUpgrade = result.usable and (not result.levelTooLow) and result.wouldUpgrade
+
     -- Begruendung
     if result.usable and not result.levelTooLow then
         if result.wouldUpgrade then
             if best.entry.empty then result.reason = L.R_EMPTY end
+        elseif result.ilvlOnly then
+            result.reason = L.R_ILVLONLY
         elseif result.delta > 0 then
             result.reason = sformat(L.R_MINDELTA, EG.FmtScore(result.threshold))
         elseif result.delta == 0 then

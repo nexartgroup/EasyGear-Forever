@@ -574,6 +574,9 @@ function Group.Compare(m, item)
     local pct = mmax(tonumber(EG:Get("minDeltaPercent")) or 0, MIN_PERCENT)
     local threshold = mmax(minDelta, (best.es > 0) and (best.es * pct / 100) or 0)
     if not (best.d > 0 and best.d >= threshold) then return nil, "lower" end
+    -- wie beim eigenen Vergleich: nur eine hoehere Gegenstandsstufe, aber kein besserer Wert, ist keine Verbesserung
+    local replaced = best.target and { { item = best.target, slotID = best.slot } } or {}
+    if Score.OnlyItemLevel(item, replaced, best.slot, profile.weights, m.level) then return nil, "lower" end
 
     return {
         member = m, delta = best.d, slot = best.slot, target = best.target, empty = best.target == nil,

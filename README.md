@@ -46,6 +46,7 @@ need any other addon: it is built on the default Forever interface and nothing e
 - [Verification](#verification)
 - [Known limits](#known-limits)
 - [The 3.3.5a edition](#the-335a-edition)
+- [Changes in 4.6.1](#changes-in-461)
 - [Changes in 4.6.0](#changes-in-460)
 - [Changes in 4.5.0](#changes-in-450)
 - [Changes in 4.4.0](#changes-in-440)
@@ -66,7 +67,7 @@ Restart the game or `/reload`. Saved settings are `EasyGearDB` (account) and `Ea
 From GitHub: *Code > Download ZIP*, unpack it, and copy the inner folder `EasyGear` - not the folder of the
 ZIP itself (`EasyGear-Forever-main`), which also holds the tests and tools.
 
-At login the chat shows `EasyGear 4.6.0 loaded.`
+At login the chat shows `EasyGear 4.6.1 loaded.`
 
 ## What you see
 
@@ -151,6 +152,11 @@ score =  item level x item level weight x (character level / maximum level)
 * **Empty sockets** are worth a typical gem of your level for the main attribute of the profile, minus 10 %.
 * **Upgrade** means: the gain is positive *and* at least `max(minimum, percent of the worn item's score)` -
   defaults 0 points and 1 %. Small differences are noise, not upgrades.
+* **The item level alone makes no upgrade.** It stands for what cannot be read off an item; it does not decide against
+  what can. An item that is better in *no* value your profile counts (attributes, weapon damage, free sockets) and worse
+  in at least one is no upgrade, even when its higher item level lifts its score above the worn item's - leather pants
+  with less armor do not beat the chain pants you wear. The tooltip then says *NO UPGRADE*, shows the gain in grey and
+  the reason below; the same holds for group hints. Where the readable values are equal, the item level still decides.
 
 Every item is compared per slot: the candidate is "put into" each slot it fits and compared with what
 is worn there; the slot with the largest gain wins.
@@ -462,8 +468,8 @@ and the exact text of any Lua error (`/console scriptErrors 1` shows them). For 
 Run from the root of this repository:
 
 ```
-lua5.1 tests/run.lua                 # unit tests on a model of the client (Lua 5.1 only), ~510 checks
-python3 tests/mutate.py              # mutation check: breaks the addon in ~920 small ways, the tests must notice
+lua5.1 tests/run.lua                 # unit tests on a model of the client (Lua 5.1 only), ~520 checks
+python3 tests/mutate.py              # mutation check: breaks the addon in ~940 small ways, the tests must notice
                                      # (MUT_SHARD=0/3 ... 2/3 splits it over several processes)
 tools/check.sh <Interface/AddOns of the Forever UI source> [<folder of the Dialogue UI addon>]
                                      # luacheck against a std built from the UI source + checks that every
@@ -539,6 +545,16 @@ What this proves and what it does not:
 The addon for the old Wrath client (interface 30300, with ElvUI/Bagnon/Immersion support and the GM
 heirloom tools) lives in its own repository, [nexartgroup/EasyGear](https://github.com/nexartgroup/EasyGear).
 This edition is a new codebase for the Forever client, not an update of that one.
+
+## Changes in 4.6.1
+
+* **Fix: an item with worse values was called an upgrade because of its item level** (reported with a screenshot: a
+  healer of level 4, leather pants with 29 armor against worn chain pants with 37 - "UPGRADE +0.0 (+4.6%)"). The share
+  of the item level outweighed the lost armor. Now an item that is better in nothing the profile counts and worse in
+  something is no upgrade, for you and in the group hints; the tooltip explains it (see *Scoring*).
+* Very small numbers are written with two decimals (`+0.02`, not `+0.0`).
+* A gain in score that does not count as an upgrade (item level only, or within the noise threshold) is shown in grey
+  with its reason in the tooltip.
 
 ## Changes in 4.6.0
 
@@ -744,6 +760,12 @@ Wertung =  Gegenstandsstufe x Stufengewicht x (Charakterstufe / Höchststufe)
 * **Leere Sockel** zählen wie ein typischer Stein deiner Stufe für das Hauptattribut, minus 10 %.
 * **Verbesserung** heißt: der Zugewinn ist positiv *und* mindestens `max(Minimum, Prozent der Wertung des Getragenen)`
   - Standard 0 Punkte und 1 %.
+* **Die Gegenstandsstufe allein macht keine Verbesserung.** Sie steht für das, was sich an einem Item nicht ablesen lässt;
+  gegen das, was sich ablesen lässt, entscheidet sie nicht. Ein Item, das in *keinem* Wert, den dein Profil zählt (Attribute,
+  Waffenschaden, freie Sockel), besser und in mindestens einem schlechter ist, ist keine Verbesserung - auch wenn seine höhere
+  Gegenstandsstufe die Wertung über die des Getragenen hebt: eine Lederhose mit weniger Rüstung schlägt die getragene
+  Kettenhose nicht. Der Tooltip sagt dann *KEINE VERBESSERUNG*, zeigt den Zugewinn grau und darunter den Grund; dasselbe gilt
+  für die Gruppenhinweise. Sind die ablesbaren Werte gleich, entscheidet weiterhin die Gegenstandsstufe.
 
 Verglichen wird je Platz: der Kandidat wird in jeden passenden Platz "eingesetzt"; der Platz mit dem größten
 Zugewinn gewinnt.

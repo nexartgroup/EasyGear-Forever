@@ -41,6 +41,7 @@ EasyGearLocales["deDE"] = {
     NOTE_UNIQUE = "Einzigartiges Item - das zweite Exemplar ersetzt das erste.",
     NOTE_EXTRAS = "Das angelegte Item trägt %s Punkte aus Verzauberung und Sockelsteinen.",
     R_EMPTY_SHORT = "Platz leer",
+    R_ILVLONLY = "Nur die Gegenstandsstufe ist höher - kein Wert, den dein Profil zählt, ist besser, mindestens einer ist niedriger.",
 
     ---------- profile window
     P_CANDIDATE = "VERGLEICHSPROFIL",

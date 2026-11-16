@@ -360,6 +360,121 @@ return function(T)
         T.eq(W.EG.Score.UpgradeState(nil), nil)
     end)
 
+    ------------------------------------------------------------------ the item level alone is no upgrade
+    -- the case of a screenshot: a holy paladin of level 4 (armor counts 0.01, an item level 0.5 * 4 / 60) wears
+    -- chain pants of item level 2 with 37 armor and finds leather pants of item level 5 with 29 armor
+    local function holy(setup)
+        return T.world({ class = "PALADIN", level = 4, talents = { mode = "specinfo", points = { 5, 0, 0 } } }, function(W)
+            W.I = {}
+            W.I.chain = F.gear(W, 2654, "Flimsy Chain Pants", "INVTYPE_LEGS", 2, {}, { armor = 37, subclassID = 3 })
+            W.I.leather = F.gear(W, 61, "Dwarven Leather Pants", "INVTYPE_LEGS", 5, {}, { armor = 29, subclassID = 2 })
+            W.equip(7, W.I.chain)
+            if setup then setup(W) end
+        end)
+    end
+
+    T.test("score: an item that is better in nothing it shows and worse in something is no upgrade - a higher item level does not decide against what can be read", function()
+        local W = holy()
+        T.eq(W.EG.Profiles.Resolve().spec.id, "PALADIN_HOLY")
+        local r = compare(W, W.I.leather)
+        T.near(r.targetScore, 37 * 0.01 + 2 * 0.5 * 4 / 60) T.near(r.score, 29 * 0.01 + 5 * 0.5 * 4 / 60)
+        T.near(r.delta, 0.02, 1e-9, "the three item levels outweigh the eight points of armor") T.near(r.percent, 4.58, 0.01)
+        T.ok(r.delta >= r.threshold, "and that is more than the noise threshold")
+        T.eq(r.isUpgrade, false, "all the same: less armor and nothing else - no upgrade")
+        T.eq(r.wouldUpgrade, false) T.eq(r.ilvlOnly, true)
+        T.eq(r.reason, W.EG.L.R_ILVLONLY)
+        T.eq(W.EG.Score.UpgradeState(W.I.leather), nil, "no arrow in the bags")
+        T.eq(W.EG.lastError, nil)
+    end)
+
+    T.test("score: the item level still decides where nothing readable speaks against it", function()
+        local W = holy(function(w)
+            w.I.same = F.gear(w, 9801, "Other Chain Pants", "INVTYPE_LEGS", 5, {}, { armor = 37, subclassID = 3 })
+            w.I.wise = F.gear(w, 9802, "Wise Leather Pants", "INVTYPE_LEGS", 5, { INT = 1 }, { armor = 29, subclassID = 2 })
+            w.I.spirit = F.gear(w, 9803, "Odd Leather Pants", "INVTYPE_LEGS", 5, { AGI = 9 }, { armor = 29, subclassID = 2 })
+            w.I.more = F.gear(w, 9804, "Sturdy Pants", "INVTYPE_LEGS", 2, {}, { armor = 40, subclassID = 3 })
+            w.I.hat = F.gear(w, 9805, "Plain Hat", "INVTYPE_HEAD", 3, {}, {})
+            w.I.gem = F.gear(w, 9806, "Socketed Leather Pants", "INVTYPE_LEGS", 5, {}, { armor = 29, subclassID = 2, sockets = 1 })
+        end)
+        local S = W.EG.Score
+        -- the same readable values and a higher item level: the level is all there is to go by
+        local same = compare(W, W.I.same)
+        T.eq(same.isUpgrade, true) T.eq(same.ilvlOnly, nil)
+        -- less armor but a point of intellect (the profile counts it 0.9): better in something - the sum decides
+        local wise = compare(W, W.I.wise)
+        T.eq(wise.isUpgrade, true) T.eq(wise.ilvlOnly, nil)
+        -- a value the profile does not count (agility for a healer) is no "better"
+        local odd = compare(W, W.I.spirit)
+        T.eq(W.EG.Profiles.Resolve().weights.AGI, nil)
+        T.eq(odd.isUpgrade, false) T.eq(odd.ilvlOnly, true)
+        -- more armor at the same level: plainly better
+        T.eq(compare(W, W.I.more).isUpgrade, true)
+        -- an empty slot: an item without any counted value is still more than nothing
+        local hat = compare(W, W.I.hat)
+        T.eq(hat.isUpgrade, true) T.eq(hat.ilvlOnly, nil)
+        -- a free socket is a readable advantage
+        local gem = compare(W, W.I.gem)
+        T.ok(S.SocketPoints() > 0) T.eq(gem.ilvlOnly, nil) T.eq(gem.isUpgrade, true)
+        -- asked directly
+        local chain, leather = W.EG.Items.Get(W.I.chain), W.EG.Items.Get(W.I.leather)
+        T.eq(S.OnlyItemLevel(leather, { { item = chain, slotID = 7 } }, 7), true)
+        T.eq(S.OnlyItemLevel(chain, { { item = leather, slotID = 7 } }, 7), false, "the other way round the item is better in armor")
+        T.eq(S.OnlyItemLevel(leather, {}, 7), false, "against an empty slot") T.eq(S.OnlyItemLevel(nil, {}, 7), false)
+        T.eq(S.OnlyItemLevel(leather, { { item = leather, slotID = 7 } }, 7), false, "against itself: not worse in anything")
+        -- with other weights (as the group hints ask): for someone who does not count armor nothing is worse
+        T.eq(S.OnlyItemLevel(leather, { { item = chain, slotID = 7 } }, 7, { INT = 1 }, 4), false)
+        T.eq(S.OnlyItemLevel(leather, { { item = chain, slotID = 7 } }, 7, { ARMOR = 0.5 }, 4), true)
+        T.eq(W.EG.lastError, nil)
+
+        -- the worn piece has a free socket as well: the socket of the new one is no advantage then
+        local V = holy(function(w)
+            w.I.worn = F.gear(w, 9807, "Socketed Chain Pants", "INVTYPE_LEGS", 2, {}, { armor = 37, subclassID = 3, sockets = 1 })
+            w.I.gem = F.gear(w, 9806, "Socketed Leather Pants", "INVTYPE_LEGS", 5, {}, { armor = 29, subclassID = 2, sockets = 1 })
+            w.equip(7, w.I.worn)
+        end)
+        local r = compare(V, V.I.gem)
+        T.ok(r.delta > 0) T.eq(r.ilvlOnly, true) T.eq(r.isUpgrade, false)
+    end)
+
+    T.test("score: weapons and what a two-hander replaces count as readable values too", function()
+        local W = arms(nil, function(w)
+            w.I.dull = F.gear(w, 9811, "Dull Blade", "INVTYPE_WEAPONMAINHAND", 100, {}, { dps = 5 })
+            w.I.great = F.gear(w, 9812, "Light Greatsword", "INVTYPE_2HWEAPON", 200, {}, { dps = 18 })
+            w.I.off = F.gear(w, 9813, "Off Blade", "INVTYPE_WEAPONOFFHAND", 30, { STR = 5 }, { dps = 10 })
+        end)
+        -- a main hand sword of item level 100 with a quarter of the damage of the worn one (item level 30): with the
+        -- item level counted four times as much as usual its score is the higher one - an upgrade it is not
+        W.EG:Set("ilvlWeight", 2)
+        local dull = compare(W, W.I.dull)
+        T.ok(dull.delta > 0, "the level share alone lifts the score: " .. dull.delta)
+        T.eq(dull.isUpgrade, false) T.eq(dull.ilvlOnly, true) T.eq(dull.reason, W.EG.L.R_ILVLONLY)
+        -- a two-hander against main hand and off hand together: less damage than the sword, less strength than the off hand
+        W.equip(17, W.I.off) W.fire("PLAYER_EQUIPMENT_CHANGED", 17) W.flush()
+        local great = compare(W, W.I.great)
+        T.eq(great.combined, true) T.eq(#great.replaced, 2)
+        T.ok(great.delta > 0) T.eq(great.isUpgrade, false) T.eq(great.ilvlOnly, true)
+        T.eq(W.EG.lastError, nil)
+    end)
+
+    T.test("score: an upgrade for a later level is none either when only the item level speaks for it", function()
+        local W = holy(function(w)
+            w.I.later = F.gear(w, 9821, "Later Leather Pants", "INVTYPE_LEGS", 9, {}, { armor = 29, subclassID = 2, minLevel = 8 })
+            w.I.laterGood = F.gear(w, 9822, "Later Chain Pants", "INVTYPE_LEGS", 9, {}, { armor = 50, subclassID = 3, minLevel = 8 })
+        end)
+        local r = compare(W, W.I.later)
+        T.eq(r.levelTooLow, true) T.eq(r.wouldUpgrade, false) T.eq(r.ilvlOnly, true)
+        T.eq(W.EG.Score.UpgradeState(W.I.later), nil, "no yellow arrow")
+        T.eq(W.EG.Score.UpgradeState(W.I.laterGood), "LEVEL", "the one with more armor gets it")
+    end)
+
+    T.test("score: very small numbers are written with two decimals - not as 0.0", function()
+        local W = arms()
+        local E = W.EG
+        T.eq(E.FmtScore(0.02), "0.02") T.eq(E.FmtSigned(0.02), "+0.02") T.eq(E.FmtSigned(-0.02), "-0.02")
+        T.eq(E.FmtScore(0.04), "0.04") T.eq(E.FmtScore(0.06), "0.1") T.eq(E.FmtScore(0.44), "0.4")
+        T.eq(E.FmtScore(0), "0") T.eq(E.FmtSigned(0), "+0") T.eq(E.FmtScore(3.15), "3.1") T.eq(E.FmtScore(120.4), "120")
+    end)
+
     T.test("score: a worn item that is not loaded yet makes the comparison wait", function()
         local W = arms()
         W.state.items[2001].uncached = true

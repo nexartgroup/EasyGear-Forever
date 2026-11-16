@@ -170,6 +170,59 @@ return function(T)
         T.eq(#B(potion, nil, "FULL", { pick = "UPGRADE" }), 1)
     end)
 
+    T.test("tooltip: a higher score that is no upgrade is explained - the gain stands in grey, the reason below", function()
+        -- a holy paladin of level 4: leather pants with less armor and a higher item level (see the score tests)
+        local W = T.world({ class = "PALADIN", level = 4, talents = { mode = "specinfo", points = { 5, 0, 0 } } }, function(w)
+            w.I = {}
+            w.I.chain = F.gear(w, 2654, "Flimsy Chain Pants", "INVTYPE_LEGS", 2, {}, { armor = 37, subclassID = 3 })
+            w.I.leather = F.gear(w, 61, "Dwarven Leather Pants", "INVTYPE_LEGS", 5, {}, { armor = 29, subclassID = 2 })
+            w.I.more = F.gear(w, 9831, "Sturdy Pants", "INVTYPE_LEGS", 2, {}, { armor = 40, subclassID = 3 })
+            w.I.later = F.gear(w, 9832, "Later Chain Pants", "INVTYPE_LEGS", 9, {}, { armor = 50, subclassID = 3, minLevel = 8 })
+            w.I.hat = F.gear(w, 9833, "Plain Hat", "INVTYPE_HEAD", 3, {}, { armor = 5 })
+            w.I.rags = F.gear(w, 9834, "Rags", "INVTYPE_LEGS", 1, {}, { armor = 3, subclassID = 1 })
+            w.equip(7, w.I.chain)
+        end)
+        local function lines(link)
+            local item = W.EG.Items.Get(link)
+            return W.EG.Tooltip.BuildLines(item, W.EG.Score.Compare(item), "FULL")
+        end
+        local function find(list, text)
+            for i, l in ipairs(list) do if l.left:find(text, 1, true) then return l, i end end
+        end
+        local out = lines(W.I.leather)
+        local verdict, at = find(out, "NO UPGRADE")
+        T.ok(verdict, "not called an upgrade") T.eq(find(out, "UPGRADE") == verdict, true, "no line says UPGRADE without the NO")
+        T.eq(verdict.role, "bad")
+        T.eq(verdict.right, "+0.02  (+4.6%)", "the small gain in score is written out, not as +0.0")
+        T.eq(verdict.rightRole, "muted", "in grey: it does not count")
+        local reason = out[at + 1]
+        T.eq(reason.left, W.EG.L.R_ILVLONLY) T.eq(reason.role, "muted") T.eq(reason.wrap, true)
+        T.ok(find(out, "Armor"), "and the loss of armor is listed as before")
+        -- a real upgrade keeps its green gain and has no such line
+        local good = lines(W.I.more)
+        local up = find(good, "UPGRADE")
+        T.eq(up.role, "good") T.eq(up.rightRole, "good")
+        T.eq(find(good, W.EG.L.R_ILVLONLY), nil)
+        -- no reason line where the verdict says it all: an upgrade for a later level (its gain stays green), an
+        -- empty slot, a plainly worse item
+        local function reasons(list)
+            local n = 0
+            for _, l in ipairs(list) do if l.wrap and l.role == "muted" then n = n + 1 end end
+            return n
+        end
+        local later = lines(W.I.later)
+        T.eq(find(later, "UPGRADE from level 8").rightRole, "good") T.eq(reasons(later), 0)
+        T.ok(find(lines(W.I.hat), "UPGRADE (slot empty)")) T.eq(reasons(lines(W.I.hat)), 0)
+        T.eq(find(lines(W.I.rags), "NO UPGRADE").rightRole, "bad") T.eq(reasons(lines(W.I.rags)), 0)
+        T.eq(reasons(good), 0) T.eq(reasons(out), 1)
+        -- a gain within the noise threshold is explained the same way
+        W.EG:Set("minDeltaPercent", 10)
+        local noise = lines(W.I.more)
+        local nv, ni = find(noise, "NO UPGRADE")
+        T.eq(nv.rightRole, "muted") T.has(noise[ni + 1].left, "within noise")
+        T.eq(W.EG.lastError, nil)
+    end)
+
     T.test("tooltip: every line says what its color means (role) and whether a short tooltip may drop it (detail)", function()
         local W = world()
         local B = W.EG.Tooltip.BuildLines

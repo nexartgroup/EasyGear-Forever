@@ -623,6 +623,22 @@ return function(T)
         T.ok(robe)
     end)
 
+    T.test("group: a higher item level alone does not make an item better for a member - as for the player", function()
+        -- Bob wears a robe of item level 30 with 10 intellect and 40 spell power
+        local W = bobAndRobe(function(w)
+            w.I.hollow = piece(w, "INVTYPE_CHEST", 90, { INT = 10, SP = 39 }, { subclassID = 1 })    -- a point less, sixty levels more
+            w.I.level = piece(w, "INVTYPE_CHEST", 90, { INT = 10, SP = 40 }, { subclassID = 1 })     -- the same values, sixty levels more
+            w.I.trade = piece(w, "INVTYPE_CHEST", 90, { INT = 11, SP = 39 }, { subclassID = 1 })     -- one worse, one better
+        end)
+        T.eq(#W.EG.Group.Beneficiaries(W.I.hollow), 0, "worse in what Bob counts, better in nothing: no hint")
+        T.eq(#W.EG.Group.Beneficiaries(W.I.level), 1, "nothing readable speaks against it: the level decides")
+        T.eq(#W.EG.Group.Beneficiaries(W.I.trade), 1, "better in something: the sum decides")
+        local b = W.bagButton(0, 2)
+        W.env.SetItemButtonQuality(b, 3, W.I.hollow)
+        T.eq(star(b), false)
+        T.eq(W.EG.lastError, nil)
+    end)
+
     T.test("score: the level of the rated character decides the weight of the item level and of sockets", function()
         local W = world(function(w) w.I.socketed = piece(w, "INVTYPE_CHEST", 60, { STR = 10 }, { sockets = 1 }) end)
         local S = W.EG.Score
