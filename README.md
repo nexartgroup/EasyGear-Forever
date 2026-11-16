@@ -7,7 +7,8 @@ weights for **your talents, your level and the rest of your equipment**, not ite
 and puts the answer where you look at items: bags, bank, vendors, loot, rolls, quest rewards,
 trade, mail, the character window and every item tooltip.
 
-It **only compares and recommends**. It does not equip anything, send commands, create items or
+It **compares and recommends**. It equips an item only when you right-click its notification, and never on its own;
+it does not send commands, create items or
 need any other addon: it is built on the default Forever interface and nothing else.
 
 * Interface `16001`, Lua 5.1, no XML files
@@ -45,6 +46,7 @@ need any other addon: it is built on the default Forever interface and nothing e
 - [Verification](#verification)
 - [Known limits](#known-limits)
 - [The 3.3.5a edition](#the-335a-edition)
+- [Changes in 4.6.0](#changes-in-460)
 - [Changes in 4.5.0](#changes-in-450)
 - [Changes in 4.4.0](#changes-in-440)
 - [Changes in 4.3.1](#changes-in-431)
@@ -64,7 +66,7 @@ Restart the game or `/reload`. Saved settings are `EasyGearDB` (account) and `Ea
 From GitHub: *Code > Download ZIP*, unpack it, and copy the inner folder `EasyGear` - not the folder of the
 ZIP itself (`EasyGear-Forever-main`), which also holds the tests and tools.
 
-At login the chat shows `EasyGear 4.5.0 loaded.`
+At login the chat shows `EasyGear 4.6.0 loaded.`
 
 ## What you see
 
@@ -308,8 +310,15 @@ taken from mail or a trade - a card in the shape of the item appears for **15 se
 * The card takes **shape and colour of the upgrade marker** you chose under [Marker look](#marker-look) (the bar on
   the left, the heading, the running line, the marker on the icon).
 * **Under the mouse** it holds (the time stops) and shows the item tooltip with the full comparison. A **click** opens
-  the comparison window with the item, a **right-click** closes the card, **dragging** moves the place where all
-  notifications appear (remembered per character).
+  the comparison window with the item, a **right-click equips the item**, **Shift + right-click** closes the card,
+  **dragging** moves the place where all notifications appear (remembered per character).
+* **Equipping by right-click** happens only when it is possible right now: not in combat, not while dead, the item
+  still lies in your bags and still is an upgrade. Otherwise the chat says why and nothing is touched. The item goes
+  into the slot the card names (for rings and trinkets the weaker of the two); what you wore lands in the bag slot the
+  new item came from. If the item binds when equipped, the game asks as it always does; if the game refuses, it says
+  so itself and the card stays. The way is the one the game's own equipment manager takes.
+* A card disappears as soon as its item is no upgrade in your bags any more - you equipped it (by the card or in the
+  bags), sold it, banked it, or put on something better.
 * At most three stand below each other; more wait their turn (the oldest of more than eight waiting are dropped).
 * *Options > AddOns > EasyGear > Notification* switches it and sets the seconds (3 to 60). By chat: `/eg toast on|off`,
   `/eg toast 20`, `/eg toast test` (shows an example - the best upgrade in your bags, or something you wear - to look
@@ -322,7 +331,7 @@ taken from mail or a trade - a card in the shape of the item appears for **15 se
 * A card comes to the front when it appears - above EasyGear's windows and other windows of that level, even one you
   just clicked - but stays below the game's dialogs (confirmations and the like): a card never covers a button of a
   dialog. Clicking a window while a card stands brings that window in front of it, as with any two windows.
-* EasyGear equips nothing: the card only points at the item.
+* EasyGear equips nothing on its own: only your right-click on a card does.
 
 ## EllesmereUI Loot Feed
 
@@ -447,8 +456,8 @@ and the exact text of any Lua error (`/console scriptErrors 1` shows them). For 
 Run from the root of this repository:
 
 ```
-lua5.1 tests/run.lua                 # unit tests on a model of the client (Lua 5.1 only), ~500 checks
-python3 tests/mutate.py              # mutation check: breaks the addon in ~850 small ways, the tests must notice
+lua5.1 tests/run.lua                 # unit tests on a model of the client (Lua 5.1 only), ~510 checks
+python3 tests/mutate.py              # mutation check: breaks the addon in ~890 small ways, the tests must notice
                                      # (MUT_SHARD=0/3 ... 2/3 splits it over several processes)
 tools/check.sh <Interface/AddOns of the Forever UI source> [<folder of the Dialogue UI addon>]
                                      # luacheck against a std built from the UI source + checks that every
@@ -524,6 +533,15 @@ What this proves and what it does not:
 The addon for the old Wrath client (interface 30300, with ElvUI/Bagnon/Immersion support and the GM
 heirloom tools) lives in its own repository, [nexartgroup/EasyGear](https://github.com/nexartgroup/EasyGear).
 This edition is a new codebase for the Forever client, not an update of that one.
+
+## Changes in 4.6.0
+
+* **Right-click on the notification equips the item** - when that is possible right now (not in combat, not dead, the
+  item still in the bags and still an upgrade); otherwise the chat says why. **Shift + right-click** closes the card
+  (that was the plain right-click before). See [Notification for better items](#notification-for-better-items).
+* Cards follow what you wear and carry: a card whose item was equipped, sold, banked or outclassed disappears; waiting
+  cards for such items never come.
+* The scope statement changes with it: EasyGear still equips nothing on its own - only on that click.
 
 ## Changes in 4.5.0
 
@@ -633,7 +651,8 @@ Talente, deine Stufe und den Rest deiner Ausrüstung**, nicht nur nach Gegenstan
 Antwort dort, wo du Items ansiehst: Taschen, Bank, Händler, Beute, Würfeln, Questbelohnungen, Handel,
 Post, Charakterfenster und in jedem Item-Tooltip.
 
-Es **vergleicht und empfiehlt nur**. Es legt nichts an, schickt keine Befehle, erzeugt keine Items und
+Es **vergleicht und empfiehlt**. Es legt ein Item nur an, wenn du seine Einblendung rechts anklickst, nie von selbst;
+es schickt keine Befehle, erzeugt keine Items und
 braucht kein weiteres Addon: es baut allein auf der Standard-Oberfläche von Forever auf.
 
 > **Stand.** Diese Ausgabe wurde gegen den Quelltext der Forever-Oberfläche (1.60.1) geschrieben und
@@ -868,8 +887,15 @@ aus der Post oder einem Handel -, erscheint für **15 Sekunden** eine Karte in F
   [Aussehen der Markierungen](#aussehen-der-markierungen) gewählt hast (Balken links, Überschrift, die ablaufende Linie, die
   Markierung am Symbol).
 * **Unter der Maus** bleibt sie stehen (die Zeit hält an) und zeigt den Item-Tooltip mit dem vollen Vergleich. Ein **Klick**
-  öffnet das Vergleichsfenster mit dem Item, ein **Rechtsklick** schließt die Karte, **Ziehen** verschiebt den Platz, an dem
-  alle Einblendungen erscheinen (je Charakter gemerkt).
+  öffnet das Vergleichsfenster mit dem Item, ein **Rechtsklick legt das Item an**, **Umschalt + Rechtsklick** schließt die
+  Karte, **Ziehen** verschiebt den Platz, an dem alle Einblendungen erscheinen (je Charakter gemerkt).
+* **Anlegen per Rechtsklick** geschieht nur, wenn es gerade möglich ist: nicht im Kampf, nicht als Toter, das Item liegt noch
+  in den Taschen und ist noch eine Verbesserung. Sonst sagt der Chat, warum nicht, und nichts wird angefasst. Das Item kommt in
+  den Platz, den die Karte nennt (bei Ringen und Schmuck der schwächere der beiden); das bisher Getragene landet im Taschenplatz
+  des neuen Items. Bindet das Item beim Anlegen, fragt das Spiel wie immer nach; lehnt das Spiel ab, sagt es das selbst, und
+  die Karte bleibt stehen. Der Weg ist der des Ausrüstungsmanagers des Spiels.
+* Eine Karte verschwindet, sobald ihr Item keine Verbesserung in deinen Taschen mehr ist - du hast es angelegt (über die Karte
+  oder in den Taschen), verkauft, in die Bank gelegt oder etwas Besseres angezogen.
 * Höchstens drei stehen untereinander; weitere warten (von mehr als acht Wartenden fallen die ältesten weg).
 * *Optionen > AddOns > EasyGear > Einblendung* schaltet sie und stellt die Sekunden ein (3 bis 60). Per Chat: `/eg toast on|off`,
   `/eg toast 20`, `/eg toast test` (zeigt ein Beispiel - die beste Verbesserung in den Taschen, sonst etwas Angelegtes - zum
@@ -884,7 +910,7 @@ aus der Post oder einem Handel -, erscheint für **15 Sekunden** eine Karte in F
   das du gerade angeklickt hast -, bleibt aber unter den Rückfragen des Spiels (Bestätigungen und dergleichen): eine Karte
   verdeckt nie einen Knopf einer Rückfrage. Klickst du ein Fenster an, während eine Karte steht, legt es sich davor - wie bei
   zwei Fenstern.
-* EasyGear legt nichts an: die Karte weist nur auf das Item hin.
+* EasyGear legt nichts von selbst an: nur dein Rechtsklick auf eine Karte tut das.
 
 ## Loot Feed von EllesmereUI
 

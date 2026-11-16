@@ -5,7 +5,8 @@
       * je Ausruestungsplatz der beste Kandidat
       * die beste Questbelohnung
 
-    Das Addon empfiehlt nur: es legt nichts an und tauscht nichts aus.
+    Dieses Modul empfiehlt nur: es legt nichts an und tauscht nichts aus (Recommend.Find sagt Toast.lua, wo ein
+    Gegenstand liegt - angelegt wird dort, und nur auf einen Rechtsklick hin).
 -----------------------------------------------------------------------------]]
 
 local _, EG = ...
@@ -69,6 +70,16 @@ function Recommend.BagGear()
         end
     end
     return counts
+end
+
+-- Wo ein Gegenstand in den Taschen liegt (genau dieser Link, ohne Bank): Tasche, Fach - oder nil
+function Recommend.Find(link)
+    for _, bag in ipairs(Recommend.ContainerIDs(false)) do
+        for slot = 1, NumSlots(bag) do
+            if ItemLink(bag, slot) == link then return bag, slot end
+        end
+    end
+    return nil
 end
 
 --[[ Alle echten Upgrades in den Taschen, groesster Zugewinn zuerst.

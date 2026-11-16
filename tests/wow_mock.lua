@@ -578,10 +578,14 @@ function Mock.new(opts)
     }
 
     ------------------------------------------------------------ cursor
+    -- an item on the cursor stays in its bag slot until it is dropped somewhere; ClearCursor lets go of it
     env.GetCursorInfo = function()
         if self.cursor then return "item", self.cursor.id, self.cursor.link end
     end
     env.ClearCursor = function() self.cursor = nil end
+    env.CursorHasItem = function() return self.cursor ~= nil end
+    env.InCombatLockdown = function() return self.lockdown or false end
+    env.UnitIsDeadOrGhost = function() return self.dead or false end
 
     ------------------------------------------------------------ item data
     local function itemFromAny(linkOrId)
@@ -751,9 +755,53 @@ function Mock.new(opts)
             if not link then return nil end
             local it = itemFromAny(link)
             return { hyperlink = link, itemID = it and it.id, quality = it and it.quality,
-                     isBound = (b.bound and b.bound[slot]) and true or false }
+                     isBound = (b.bound and b.bound[slot]) and true or false,
+                     isLocked = (b.locked and b.locked[slot]) and true or false }
+        end,
+        -- takes the item of a bag slot onto the cursor; a locked one (it is being moved) stays where it is. With
+        -- something on the cursor already the two change places: what was held is dropped into that slot
+        -- (self.dropped lists such drops).
+        PickupContainerItem = function(bag, slot)
+            local b = self.bags[bag]
+            local link = b and b.items[slot]
+            if not link or (b.locked and b.locked[slot]) then return end
+            if self.cursor then self.dropped[#self.dropped + 1] = { link = self.cursor.link, bag = bag, slot = slot } end
+            local _, id = itemFromAny(link)
+            self.cursor = { id = id, link = link, bag = bag, slot = slot }
         end,
     }
+    --[[ Equipping the item on the cursor. The slots an item may go to follow its kind; the client only asks the
+         server - until the answer comes (H.serverAnswers) the item and the slot are locked and nothing has changed.
+         self.equipRequests lists what was asked: { link, slot, bag, bagSlot }.                                      ]]
+    local SLOTS_OF = {
+        INVTYPE_HEAD = { 1 }, INVTYPE_NECK = { 2 }, INVTYPE_SHOULDER = { 3 }, INVTYPE_BODY = { 4 }, INVTYPE_CHEST = { 5 },
+        INVTYPE_ROBE = { 5 }, INVTYPE_WAIST = { 6 }, INVTYPE_LEGS = { 7 }, INVTYPE_FEET = { 8 }, INVTYPE_WRIST = { 9 },
+        INVTYPE_HAND = { 10 }, INVTYPE_FINGER = { 11, 12 }, INVTYPE_TRINKET = { 13, 14 }, INVTYPE_CLOAK = { 15 },
+        INVTYPE_WEAPON = { 16, 17 }, INVTYPE_2HWEAPON = { 16 }, INVTYPE_WEAPONMAINHAND = { 16 }, INVTYPE_WEAPONOFFHAND = { 17 },
+        INVTYPE_SHIELD = { 17 }, INVTYPE_HOLDABLE = { 17 }, INVTYPE_RANGED = { 16 }, INVTYPE_RANGEDRIGHT = { 16 },
+    }
+    self.equipRequests, self.lockedSlots, self.dropped = {}, {}, {}
+    env.C_PaperDollInfo = {
+        CursorCanGoInSlot = function(slot)
+            local it = self.cursor and itemFromAny(self.cursor.link)
+            for _, s in ipairs(it and SLOTS_OF[it.equipLoc] or {}) do
+                if s == slot then return true end
+            end
+            return false
+        end,
+    }
+    env.IsInventoryItemLocked = function(slot) return self.lockedSlots[slot] or false end
+    env.EquipCursorItem = function(slot)
+        local c = self.cursor
+        if not (c and c.bag) then return end
+        if not env.C_PaperDollInfo.CursorCanGoInSlot(slot) then return end      -- the item stays on the cursor
+        self.cursor = nil
+        local b = self.bags[c.bag]
+        b.locked = b.locked or {}
+        b.locked[c.slot] = true
+        self.lockedSlots[slot] = true
+        self.equipRequests[#self.equipRequests + 1] = { link = c.link, slot = slot, bag = c.bag, bagSlot = c.slot }
+    end
     env.GetInventoryItemLink = function(unit, slot)
         if unit ~= "player" then return nil end
         return self.equipped[slot]
@@ -1049,6 +1097,34 @@ function Mock.new(opts)
         return def.link, def
     end
     function H.equip(slot, link) self.equipped[slot] = link end
+    --[[ The server answers the oldest equip request. With `yes` the item is worn: what was in the slot lies in the bag
+         slot the new item came from, a two-hand weapon sends the off hand to the first free bag slot; the client
+         then tells of the equipment and of the bags. Without, the locks go and nothing has changed.                ]]
+    function H.serverAnswers(yes)
+        local r = table.remove(self.equipRequests, 1)
+        if not r then return false end
+        local b = self.bags[r.bag]
+        b.locked[r.bagSlot] = nil
+        self.lockedSlots[r.slot] = nil
+        if yes == false then return true end
+        local old = self.equipped[r.slot]
+        self.equipped[r.slot] = r.link
+        b.items[r.bagSlot] = old
+        local it = self.itemFromAny(r.link)
+        if it and it.equipLoc == "INVTYPE_2HWEAPON" and self.equipped[17] then
+            for slot = 1, b.size do
+                if not b.items[slot] then
+                    b.items[slot] = self.equipped[17]
+                    break
+                end
+            end
+            self.equipped[17] = nil
+            H.fire("PLAYER_EQUIPMENT_CHANGED", 17, true)
+        end
+        H.fire("PLAYER_EQUIPMENT_CHANGED", r.slot, false)
+        H.fire("BAG_UPDATE_DELAYED")
+        return true
+    end
     function H.bag(bag, size, items)
         self.bags[bag] = { size = size, items = items or {} }
     end

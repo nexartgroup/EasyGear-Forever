@@ -1,10 +1,11 @@
 --[[---------------------------------------------------------------------------
-    EasyGear 4.5.0 - Forever
+    EasyGear 4.6.0 - Forever
     Ausruestungsbewertung, Upgrade-Erkennung und Vergleich fuer WoW Forever
 
-    Dieses Addon vergleicht und empfiehlt, mehr nicht: es verschickt keine
-    Befehle, legt nichts an und braucht kein weiteres Addon. Es benutzt nur
-    die Standard-Oberflaeche des Forever-Clients.
+    Dieses Addon vergleicht und empfiehlt: es verschickt keine Befehle,
+    legt von selbst nichts an (nur auf den Rechtsklick auf eine Einblendung
+    hin, Toast.lua) und braucht kein weiteres Addon. Es benutzt nur die
+    Standard-Oberflaeche des Forever-Clients.
 
     Dateien (Ladereihenfolge siehe EasyGear.toc):
       Locales/*.lua      Texte, eine Datei je Clientsprache
@@ -52,7 +53,7 @@ do
     if C_AddOns and C_AddOns.GetAddOnMetadata then
         meta = C_AddOns.GetAddOnMetadata(EG.name, "Version")
     end
-    EG.version = meta or "4.5.0"
+    EG.version = meta or "4.6.0"
 end
 
 -- WoW Forever meldet sich ueber WOW_PROJECT_ID == WOW_PROJECT_CAMELOT (Blizzard_ProjectConstants).

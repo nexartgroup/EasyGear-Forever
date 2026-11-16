@@ -10,13 +10,16 @@
         ============------         (eine Linie laeuft ab)
 
     Die Karte nimmt Farbe und Form der Markierung "Verbesserung" (Optionen). Unter der Maus bleibt sie stehen
-    und zeigt den Tooltip; Klick oeffnet den Vergleich, Rechtsklick schliesst sie, Ziehen verschiebt den Platz
-    aller Einblendungen. Hoechstens drei stehen zugleich, weitere warten.
+    und zeigt den Tooltip; Klick oeffnet den Vergleich, Rechtsklick legt den Gegenstand an, Umschalt + Rechtsklick
+    schliesst sie, Ziehen verschiebt den Platz aller Einblendungen. Hoechstens drei stehen zugleich, weitere warten.
+
+    Anlegen: nur auf diesen Rechtsklick hin, und nur wenn es gerade geht (nicht im Kampf, nicht tot, der Gegenstand
+    liegt noch in den Taschen und ist noch eine Verbesserung). Sonst sagt der Chat, warum nicht. Eine Karte, deren
+    Gegenstand keine Verbesserung mehr ist - er wurde angelegt, hier oder in den Taschen -, verschwindet.
 
     Was als "neu" gilt: die Zahl der Faecher, die einen Gegenstand halten, ist seit dem letzten Blick in die
     Taschen gestiegen (BAG_UPDATE_DELAYED). Nicht neu ist, was beim Anmelden schon da war, was gerade abgelegt
     wurde (es war angelegt), was nur seinen Link wechselt (verzaubert) und was aus der offenen Bank kommt.
-    EasyGear legt nichts an: die Einblendung weist nur hin.
 
     Die Karten liegen in der Ebene der eigenen Fenster (HIGH) und werden beim Erscheinen nach vorn geholt: ueber
     die Fenster, auch ueber eines, das gerade angeklickt wurde - aber unter die Rueckfragen des Spiels (DIALOG).
@@ -32,6 +35,7 @@ local Items, Score, Recommend, Marks, UI = EG.Items, EG.Score, EG.Recommend, EG.
 
 local ipairs, pairs, tonumber = ipairs, pairs, tonumber
 local tremove, tconcat = table.remove, table.concat
+local sformat = string.format
 local mmax, mmin = math.max, math.min
 
 local WIDTH, HEIGHT, GAP = 320, 64, 6
@@ -159,13 +163,49 @@ local function OnLeave(self)
     if GameTooltip then GameTooltip:Hide() end
 end
 
-local function OnClick(self, button)
-    local link = self.data and self.data.link
-    if button == "RightButton" then
-        Release(self)
-    elseif link and EG.Window then
-        EG.Window.SetItem(link)
+--[[ Den Gegenstand anlegen - nur auf den Rechtsklick auf seine Karte hin, und nur wenn es gerade geht. Der Weg ist
+     der des Ausruestungsmanagers des Spiels (EquipmentManager_EquipContainerItem): Mauszeiger leeren, den Gegenstand
+     aus seinem Fach aufnehmen, pruefen, ob er in den Platz darf, anlegen. Was dort lag, legt das Spiel in das frei
+     gewordene Fach; bindet der Gegenstand beim Anlegen, fragt das Spiel selbst nach; lehnt der Server ab, sagt es
+     das Spiel. Rueckgabe: true - oder false, der Grund als Text, und ob die Karte damit hinfaellig ist.          ]]
+function Toast.Equip(link)
+    if InCombatLockdown() then return false, sformat(L.TOAST_EQUIP_COMBAT, link), false end
+    if UnitIsDeadOrGhost("player") then return false, sformat(L.TOAST_EQUIP_DEAD, link), false end
+    local bag, slot = Recommend.Find(link)
+    if not bag then return false, sformat(L.TOAST_EQUIP_GONE, link), true end
+    -- der Platz, in den er kaeme - nach dem Stand von jetzt, nicht dem der Einblendung
+    local result = Score.Compare(link)
+    if not (result and result.isUpgrade and result.candSlot) then return false, sformat(L.TOAST_EQUIP_STALE, link), true end
+    local target = result.candSlot
+    ClearCursor()
+    C_Container.PickupContainerItem(bag, slot)
+    -- nicht aufgenommen (gesperrt: er wird gerade bewegt), er darf nicht in den Platz, oder der Platz ist gesperrt
+    if not CursorHasItem() or not C_PaperDollInfo.CursorCanGoInSlot(target) or IsInventoryItemLocked(target) then
+        ClearCursor()                   -- zurueck in sein Fach
+        return false, sformat(L.TOAST_EQUIP_FAILED, link), false
     end
+    -- Danach nichts mehr anfassen (wie der Ausruestungsmanager): bindet der Gegenstand beim Anlegen, wartet das Spiel
+    -- jetzt mit seiner Rueckfrage - den Mauszeiger zu leeren koennte sie abbrechen.
+    EquipCursorItem(target)
+    return true
+end
+
+local function OnClick(self, button)
+    local data = self.data
+    local link = data and data.link
+    if button ~= "RightButton" then
+        if link and EG.Window then EG.Window.SetItem(link) end
+        return
+    end
+    -- Umschalt + Rechtsklick schliesst; das Beispiel (etwas Angelegtes) laesst sich nur schliessen
+    if IsShiftKeyDown() or not link or data.sample then
+        Release(self)
+        return
+    end
+    local ok, why, pointless = Toast.Equip(link)
+    if not ok then EG:Print(why) end
+    -- angelegt verschwindet die Karte von selbst (Recheck): ihr Gegenstand ist dann keine Verbesserung mehr
+    if pointless then Release(self) end
 end
 
 local function NewFrame()
@@ -282,7 +322,8 @@ function Toast.Show(link)
     if not item then return false end
     local result = item.isGear and Score.Compare(item) or nil
     if not result then return false end
-    Push({ link = item.link or link, name = item.name, texture = item.texture, quality = item.quality,
+    -- der Link, wie er in den Taschen liegt (nicht der bereinigte der Gegenstandsdaten): an ihm wird er wiedergefunden
+    Push({ link = link, name = item.name, texture = item.texture, quality = item.quality,
            detail = Detail(result) })
     return true
 end
@@ -295,7 +336,7 @@ function Toast.Test()
         local item = Items.Equipped(slot)
         if item then
             Push({ link = item.link, name = item.name, texture = item.texture, quality = item.quality,
-                   caption = L.TOAST_SAMPLE, detail = L.TOAST_SAMPLE_TEXT })
+                   caption = L.TOAST_SAMPLE, detail = L.TOAST_SAMPLE_TEXT, sample = true })
             return true
         end
     end
@@ -367,23 +408,48 @@ local function Consider(link)
     if Toast.Show(link) then lastShown[link] = now end
 end
 
+--[[ Was steht und wartet, noch einmal pruefen: eine Karte, deren Gegenstand nicht mehr in den Taschen liegt (angelegt,
+     verkauft, in die Bank gelegt) oder keine Verbesserung mehr ist (etwas Besseres wird getragen), verschwindet.
+     Das Beispiel bleibt; was noch laedt, auch.                                                                    ]]
+local function Stale(data)
+    if data.sample then return false end
+    if counts and not counts[data.link] then return true end
+    local state, loading = Score.UpgradeState(data.link)
+    return not loading and state ~= "UPGRADE"
+end
+
+local function Recheck()
+    for i = #queue, 1, -1 do
+        if Stale(queue[i]) then tremove(queue, i) end
+    end
+    for i = #shown, 1, -1 do
+        local f = shown[i]
+        if f and f.data and Stale(f.data) then Release(f) end
+    end
+end
+
 local function OnBags()
     local now = Recommend.BagGear()
     local before, idsBefore, seen = counts, ids, wornSeen
     local worn = NoteWorn()             -- hebt seen auf den Stand von jetzt: seen[id] >= worn[id]
     counts, ids, wornSeen = now, ByID(now), worn
-    if not before or not Toast.Enabled() or bankOpen or Now() < quietUntil then return end
-    for link, n in pairs(now) do
-        local id = Items.IDFromLink(link) or link
-        -- neu in den Taschen, abzueglich dessen, was nur abgelegt wurde (ein zweites Stueck eines angelegten Rings zaehlt)
-        local gained = (ids[id] or 0) - (idsBefore[id] or 0) - ((seen[id] or 0) - (worn[id] or 0))
-        if n > (before[link] or 0) and gained > 0 then Consider(link) end
+    if before and Toast.Enabled() and not bankOpen and Now() >= quietUntil then
+        for link, n in pairs(now) do
+            local id = Items.IDFromLink(link) or link
+            -- neu in den Taschen, abzueglich dessen, was nur abgelegt wurde (ein zweites Stueck eines angelegten Rings zaehlt)
+            local gained = (ids[id] or 0) - (idsBefore[id] or 0) - ((seen[id] or 0) - (worn[id] or 0))
+            if n > (before[link] or 0) and gained > 0 then Consider(link) end
+        end
     end
+    Recheck()               -- was die Taschen verlassen hat, braucht keine Karte mehr
 end
 
 EG:On("BAG_UPDATE_DELAYED", OnBags)
--- auch was angelegt wird, ohne durch die Taschen zu gehen (aus der Bank, vom Haendler), gilt spaeter als abgelegt
-EG:On("PLAYER_EQUIPMENT_CHANGED", NoteWorn)
+EG:On("PLAYER_EQUIPMENT_CHANGED", function()
+    -- auch was angelegt wird, ohne durch die Taschen zu gehen (aus der Bank, vom Haendler), gilt spaeter als abgelegt
+    NoteWorn()
+    Recheck()
+end)
 EG:On("PLAYER_ENTERING_WORLD", function() quietUntil = Now() + QUIET end)
 EG:On("BANKFRAME_OPENED", function() bankOpen = true end)
 EG:On("BANKFRAME_CLOSED", function() bankOpen = false end)
@@ -397,9 +463,9 @@ EG:Listen("ITEMS_LOADED", function()
     for _, link in ipairs(due) do Consider(link) end
 end)
 
--- abgeschaltet: was steht, verschwindet
+-- abgeschaltet: was steht, verschwindet; sonst gilt der neue Stand (Ausruestung, Profil, Einstellungen)
 EG:Listen("INVALIDATED", function()
-    if not Toast.Enabled() and (shown[1] or queue[1]) then Toast.Clear() end
+    if Toast.Enabled() then Recheck() else Toast.Clear() end
 end)
 
 EG:Listen("GUI_RESET", Toast.ResetPosition)
